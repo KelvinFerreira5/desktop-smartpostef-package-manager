@@ -891,6 +891,8 @@ function renderPackages() {
     const device = pkg.device || 'Unknown';
     const category = pkg.category;
     const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || 'Path not determined';
+    const isManualPath = (!pkg.jfrogPath && !pkg.jfrog_path) || pkg._manualPath;
+    if (isManualPath) pkg._manualPath = true;
     const size = pkg.size || 0;
     const isSigned = pkg.isSigned || pkg.is_signed;
     const isDev = pkg.isDev || pkg.is_dev;
@@ -914,7 +916,10 @@ function renderPackages() {
           ${isS920Extract ? `<span class="package-tag special">Extract → ${extractFolder}/</span>` : ''}
           <span class="package-tag size">${formatFileSize(size)}</span>
         </div>
-        <div class="package-path">→ ${isS920Extract ? jfrogPath + extractFolder + '/' : jfrogPath}</div>
+        <div class="package-path">${isManualPath
+        ? `→ <input type="text" class="package-path-input" data-index="${index}" placeholder="Enter JFrog path (e.g., packages/app-to-app/apk/pax/a910/)" value="${jfrogPath === 'Path not determined' ? '' : jfrogPath}" />`
+        : `→ ${isS920Extract ? jfrogPath + extractFolder + '/' : jfrogPath}`
+      }</div>
         <div class="package-fields">
           ${renderSignatureField(pkg, index)}
           ${renderClientField(pkg, index)}
@@ -955,6 +960,19 @@ function renderPackages() {
       const index = parseInt(btn.dataset.index);
       frontendLog('INFO', 'DEPLOY: Retry upload clicked', `Index: ${index}`);
       await retryUpload(index);
+    });
+  });
+
+  // Attach event listeners for manual JFrog path inputs
+  container.querySelectorAll('.package-path-input').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      let value = e.target.value.trim();
+      if (value && !value.endsWith('/')) value += '/';
+      packages[index].jfrogPath = value || undefined;
+      packages[index].jfrog_path = value || undefined;
+      packages[index]._manualPath = true;
+      frontendLog('INFO', 'DEPLOY: Manual JFrog path set', `Index: ${index}, Path: ${value || '(cleared)'}`);
     });
   });
 
@@ -1977,6 +1995,7 @@ function renderReleaseSummary(release) {
           <div class="sta-device-header">
             <img src="${icon}" alt="STA" class="platform-icon" onerror="this.style.display='none'" />
             <span class="sta-device-name">${device}</span>
+            ${copyUrlBtn(devicePkgs[0].url)}
           </div>
           <div class="sta-device-variants">`;
 
@@ -1990,6 +2009,7 @@ function renderReleaseSummary(release) {
         html += `
             <div class="sta-variant-row">
               ${categoryTag}
+              ${devicePkgs.length > 1 ? copyUrlBtn(pkg.url) : ''}
               ${sigTag}
               ${clientTag}
             </div>`;
@@ -2868,6 +2888,10 @@ function initImportReleasePage(existingRelease) {
     // Editing an existing release — populate directly
     frontendLog('INFO', 'IMPORT: Editing existing release', `Version: ${existingRelease.version}, ID: ${existingRelease.id}`);
     importReleaseState.release = { ...existingRelease };
+    // Normalize: backend sends "type" but frontend uses "releaseType"
+    if (!importReleaseState.release.releaseType && importReleaseState.release.type) {
+      importReleaseState.release.releaseType = importReleaseState.release.type;
+    }
     importReleaseState.packages = [...(existingRelease.packages || [])];
     renderImportReleasePage();
   } else {
@@ -3012,7 +3036,7 @@ function parseSpfContent(content) {
           const value = valueParts.join('=').trim();
           if (key.trim() === 'version') release.version = value;
           else if (key.trim() === 'date') release.date = value;
-          else if (key.trim() === 'type') release.releaseType = value;
+          else if (key.trim() === 'type') release.releaseType = value.toLowerCase() === 'development' ? 'Development' : 'Production';
         } else if (currentSection === 'release_notes') {
           releaseNotesLines.push(line);
         } else if (currentSection === 'release_pkgs') {
@@ -3150,7 +3174,7 @@ function renderImportReleasePage() {
       <div class="form-grid form-grid-3">
         <div class="form-group">
           <label>Version *</label>
-          <input type="text" id="import-version" value="${rel.version || ''}" ${isReadOnly ? 'readonly class="readonly-field"' : ''}>
+          <input type="text" id="import-version" value="${rel.version || ''}" ${isReadOnly ? 'readonly class="readonly-field editable-on-confirm" data-confirm-field="version" style="cursor: pointer;"' : ''}>
         </div>
         <div class="form-group">
           <label>Release Date *</label>
@@ -3161,7 +3185,7 @@ function renderImportReleasePage() {
         </div>
         <div class="form-group">
           <label>Release Type *</label>
-          <select id="import-type" ${isReadOnly ? 'disabled class="readonly-field"' : ''}>
+          <select id="import-type" ${isReadOnly ? 'disabled class="readonly-field editable-on-confirm" data-confirm-field="type" style="cursor: pointer;"' : ''}>
             <option value="Production" ${rel.releaseType === 'Production' ? 'selected' : ''}>Production</option>
             <option value="Development" ${rel.releaseType === 'Development' ? 'selected' : ''}>Development</option>
           </select>
@@ -3237,6 +3261,26 @@ function renderImportReleasePage() {
 }
 
 function attachImportPageEventListeners() {
+  // Editable-on-confirm fields (version, type) - click to unlock with warning
+  document.querySelectorAll('.editable-on-confirm').forEach(field => {
+    field.addEventListener('click', async () => {
+      if (!field.readOnly && !field.disabled) return;
+      const confirmed = await showConfirmDialog(
+        'Editar campo protegido',
+        'Alterar a versão de uma release existente pode causar inconsistências. Deseja realmente prosseguir?',
+        { okLabel: 'Sim, editar', cancelLabel: 'Cancelar', kind: 'warning' }
+      );
+      if (confirmed) {
+        field.readOnly = false;
+        field.disabled = false;
+        field.classList.remove('readonly-field');
+        field.style.cursor = '';
+        field.focus();
+        frontendLog('INFO', `IMPORT: Unlocked ${field.dataset.confirmField} field for editing`);
+      }
+    });
+  });
+
   // Release notes tabs
   document.querySelectorAll('.notes-tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
@@ -3670,10 +3714,14 @@ async function handleUpdateRelease() {
   }
 
   // Gather updated fields
+  const versionInput = document.getElementById('import-version');
   const dateInput = document.getElementById('import-date');
+  const typeInput = document.getElementById('import-type');
   const notesInput = document.getElementById('import-release-notes');
 
+  if (versionInput) rel.version = versionInput.value;
   if (dateInput) rel.date = dateInput.value;
+  if (typeInput) rel.releaseType = typeInput.value;
   if (notesInput) rel.releaseNotes = notesInput.value;
 
   // Check if there are new packages to upload

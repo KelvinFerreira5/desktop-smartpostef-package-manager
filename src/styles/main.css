@@ -495,6 +495,29 @@ textarea {
   font-family: monospace;
 }
 
+.package-path-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem;
+  width: 380px;
+  max-width: 100%;
+}
+
+.package-path-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.package-path-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(72, 41, 124, 0.2);
+}
+
 .package-fields {
   display: flex;
   gap: 0.5rem;
@@ -2807,7 +2830,9 @@ body.light-mode select option:checked {
   flex-wrap: wrap;
 }
 
-.platform-package-item .btn-copy-url {
+.platform-package-item .btn-copy-url,
+.sta-device-header .btn-copy-url,
+.sta-variant-row .btn-copy-url {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -2820,16 +2845,22 @@ body.light-mode select option:checked {
   flex-shrink: 0;
 }
 
-.platform-package-item .btn-copy-url:hover {
+.platform-package-item .btn-copy-url:hover,
+.sta-device-header .btn-copy-url:hover,
+.sta-variant-row .btn-copy-url:hover {
   color: var(--primary);
   background: rgba(107, 63, 160, 0.1);
 }
 
-.platform-package-item .btn-copy-url.copied {
+.platform-package-item .btn-copy-url.copied,
+.sta-device-header .btn-copy-url.copied,
+.sta-variant-row .btn-copy-url.copied {
   color: var(--success);
 }
 
-.platform-package-item .btn-copy-url.copied:hover {
+.platform-package-item .btn-copy-url.copied:hover,
+.sta-device-header .btn-copy-url.copied:hover,
+.sta-variant-row .btn-copy-url.copied:hover {
   background: rgba(34, 197, 94, 0.1);
 }
 

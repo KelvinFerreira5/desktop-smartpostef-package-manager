@@ -5,6 +5,25 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.16] - 2026-03-27
+
+### Added
+
+- **Editable Version/Type on Import/Edit Release**: Version and Release Type fields are now editable when importing or editing an existing release. Clicking the locked field shows a warning dialog: "Alterar a versão de uma release existente pode causar inconsistências. Deseja realmente prosseguir?" — confirming unlocks the field for editing.
+
+### Fixed
+
+- **Release Type Not Detected on SPF Import**: Importing an SPF with `type=development` (lowercase) incorrectly showed "Production" because the JS parser didn't normalize casing to match the capitalized select options. Now normalizes to "Development"/"Production".
+- **Release Type Lost When Editing Existing Release**: Editing a saved release always showed "Production" because the backend sends the field as `type` but the frontend expected `releaseType`. Added field name normalization in `initImportReleasePage()`.
+- **Edited Version/Type Not Persisted on Save**: Editing version or release type fields and saving did not apply changes because `handleUpdateRelease()` was not reading those values from the DOM form inputs.
+- **Missing Copy URL Button on STA Packages**: The copy URL button was not rendered for STA device packages in the Release Summary. Now all STA variant rows include the copy button.
+
+## [3.1.15] - 2026-03-27
+
+### Added
+
+- **Manual JFrog Path Editing**: When a scanned package has an unrecognized format and shows "Path not determined", the path field now becomes an editable text input allowing the user to manually set the JFrog upload path.
+
 ## [3.1.14] - 2026-03-26
 
 ### Added
