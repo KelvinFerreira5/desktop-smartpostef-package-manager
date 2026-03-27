@@ -20,17 +20,17 @@ let invoke, dialogOpen, dialogSave, dialogMessage, dialogAsk;
 function frontendLog(level, message, details) {
   console.log(`[${level}] ${message}${details ? ' | ' + details : ''}`);
   if (invoke) {
-    invoke('log_from_frontend', { level, message, details: details || null }).catch(() => {});
+    invoke('log_from_frontend', { level, message, details: details || null }).catch(() => { });
   }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, setting up event handlers...');
-  
+
   pages = document.querySelectorAll('.page');
   navItems = document.querySelectorAll('.nav-item');
-  
+
   // Set up all event handlers immediately (no Tauri required)
   initNavigation();
   initDeployPage();
@@ -38,9 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initHtmlGenPage();
   initSettingsPage();
   initThemeToggle();
-  
+
   console.log('Event handlers set up, waiting for Tauri...');
-  
+
   // Wait for Tauri to be available, then load data
   waitForTauri();
 });
@@ -69,7 +69,7 @@ async function initTauriApis() {
   try {
     // Get API references
     invoke = window.__TAURI__.core.invoke;
-    
+
     // Dialog plugin
     if (window.__TAURI__.dialog) {
       dialogOpen = window.__TAURI__.dialog.open;
@@ -77,10 +77,10 @@ async function initTauriApis() {
       dialogMessage = window.__TAURI__.dialog.message;
       dialogAsk = window.__TAURI__.dialog.ask;
     }
-    
+
     console.log('Tauri APIs initialized');
     frontendLog('INFO', 'APPLICATION: Tauri APIs initialized successfully');
-    
+
     // Load initial data
     await loadInitialData();
   } catch (error) {
@@ -97,25 +97,25 @@ async function loadInitialData() {
     settings = await invoke('get_settings');
     frontendLog('INFO', 'APPLICATION: Settings loaded', `API key: ${settings.jfrogApiKey ? 'configured' : 'not set'}, Mappings: ${(settings.clientMappings || []).length}`);
     populateSettings();
-    
+
     releases = await invoke('get_releases');
     frontendLog('INFO', 'APPLICATION: Releases loaded', `Count: ${releases.length}`);
     renderReleases();
     populateHtmlReleaseSelect();
-    
+
     const paths = await invoke('get_app_paths');
     frontendLog('INFO', 'APPLICATION: App paths loaded');
-    
+
     const userDataEl = document.getElementById('path-user-data');
     const releasesEl = document.getElementById('path-releases');
     const htmlEl = document.getElementById('path-html');
     const logsEl = document.getElementById('path-logs');
-    
+
     if (userDataEl) userDataEl.textContent = paths.userData || paths.user_data || 'Not set';
     if (releasesEl) releasesEl.textContent = paths.releases || 'Not set';
     if (htmlEl) htmlEl.textContent = paths.html || 'Not set';
     if (logsEl) logsEl.textContent = paths.logs || 'Not set';
-    
+
     showToast('success', 'Application loaded successfully');
   } catch (error) {
     console.error('Failed to load initial data:', error);
@@ -127,15 +127,15 @@ async function loadInitialData() {
 function initThemeToggle() {
   const themeBtn = document.getElementById('btn-toggle-theme');
   if (!themeBtn) return;
-  
+
   const themeLabel = themeBtn.querySelector('.theme-label');
-  
+
   const savedTheme = localStorage.getItem('theme') || 'dark';
   if (savedTheme === 'light') {
     document.body.classList.add('light-mode');
     if (themeLabel) themeLabel.textContent = 'Dark Mode';
   }
-  
+
   themeBtn.addEventListener('click', (e) => {
     e.preventDefault();
     document.body.classList.toggle('light-mode');
@@ -174,7 +174,7 @@ function getFullVersionForSpf(pkgs, fallbackVersion) {
       const platform = pkg.platform || '';
       const category = pkg.category || '';
       const isA2A = platform === 'A2A' || category === 'A2A';
-      
+
       if (isA2A) {
         // A2A version format: X.X.X.A2A.HASH
         return `${ver}.A2A.${hash}`;
@@ -193,15 +193,15 @@ let datePickerInitialized = false;
 function initializeDatePicker() {
   const dateInput = document.getElementById('deploy-date');
   const datePickerBtn = document.getElementById('btn-date-picker');
-  
+
   if (!dateInput || !datePickerBtn) return;
-  
+
   const today = new Date();
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
   dateInput.value = `${year}-${month}-${day}`;
-  
+
   if (!datePickerInitialized) {
     datePickerBtn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -215,7 +215,7 @@ function initializeDatePicker() {
 // Navigation
 function initNavigation() {
   if (!navItems) return;
-  
+
   navItems.forEach((item) => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
@@ -230,7 +230,7 @@ function switchPage(pageName) {
   frontendLog('INFO', 'NAVIGATION: Page switched', `Page: ${pageName}`);
   navItems.forEach(item => item.classList.toggle('active', item.dataset.page === pageName));
   pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageName}`));
-  
+
   // Initialize page-specific logic
   if (pageName === 'tools') initToolsPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
@@ -239,7 +239,7 @@ function switchPage(pageName) {
 // Deploy Page
 function initDeployPage() {
   console.log('Initializing deploy page...');
-  
+
   // Purpose selection
   const purposeBtns = document.querySelectorAll('.deploy-purpose-btn');
   purposeBtns.forEach(btn => {
@@ -249,14 +249,14 @@ function initDeployPage() {
       frontendLog('INFO', 'DEPLOY: Purpose selected', `Purpose: ${currentDeployPurpose}`);
       const purposeSelection = document.getElementById('deploy-purpose-selection');
       const deployContent = document.getElementById('deploy-content');
-      
+
       if (purposeSelection) purposeSelection.style.display = 'none';
       if (deployContent) deployContent.style.display = 'block';
-      
+
       const releaseInfoCard = document.getElementById('release-info-card');
       const uploadOnlyCard = document.getElementById('upload-only-info-card');
       const btnGenerateSpf = document.getElementById('btn-generate-spf');
-      
+
       if (currentDeployPurpose === 'import') {
         // Navigate to the Import Release page
         if (purposeSelection) purposeSelection.style.display = 'block';
@@ -266,7 +266,7 @@ function initDeployPage() {
         initImportReleasePage();
         return;
       }
-      
+
       if (currentDeployPurpose === 'release') {
         if (releaseInfoCard) releaseInfoCard.style.display = 'block';
         if (uploadOnlyCard) uploadOnlyCard.style.display = 'none';
@@ -279,7 +279,7 @@ function initDeployPage() {
       }
     });
   });
-  
+
   // Change purpose button
   const btnChangePurpose = document.getElementById('btn-change-purpose');
   if (btnChangePurpose) {
@@ -294,11 +294,11 @@ function initDeployPage() {
       if (deployContent) deployContent.style.display = 'none';
     });
   }
-  
+
   // Version inputs (version is now auto-detected from scanned packages)
   const deployVersionInput = document.getElementById('deploy-version');
   const uploadVersionInput = document.getElementById('upload-version');
-  
+
   // Deploy mode buttons (Scan Folder / Add Manually)
   const deployModeBtns = document.querySelectorAll('.deploy-mode-btn');
   deployModeBtns.forEach(btn => {
@@ -308,10 +308,10 @@ function initDeployPage() {
       currentDeployMode = mode;
       frontendLog('INFO', 'DEPLOY: Deploy mode changed', `Mode: ${mode}`);
       deployModeBtns.forEach(b => b.classList.toggle('active', b === btn));
-      
+
       const folderContent = document.getElementById('deploy-mode-folder');
       const manualContent = document.getElementById('deploy-mode-manual');
-      
+
       if (mode === 'folder') {
         if (folderContent) folderContent.classList.add('active');
         if (manualContent) manualContent.classList.remove('active');
@@ -321,7 +321,7 @@ function initDeployPage() {
       }
     });
   });
-  
+
   // Select folder button
   const btnSelectFolder = document.getElementById('btn-select-folder');
   if (btnSelectFolder) {
@@ -331,7 +331,7 @@ function initDeployPage() {
       await handleSelectFolder();
     });
   }
-  
+
   // Cancel folder button
   const btnCancelFolder = document.getElementById('btn-cancel-folder');
   if (btnCancelFolder) {
@@ -343,13 +343,13 @@ function initDeployPage() {
       renderPackages();
       updateSummary();
       updateActionButtons();
-      
+
       const selectedFolderDiv = document.querySelector('.selected-folder');
       if (selectedFolderDiv) selectedFolderDiv.style.display = 'none';
       if (btnCancelFolder) btnCancelFolder.style.display = 'none';
     });
   }
-  
+
   // Add package button (manual mode)
   const btnAddPackage = document.getElementById('btn-add-package');
   if (btnAddPackage) {
@@ -359,7 +359,7 @@ function initDeployPage() {
       await handleAddManual();
     });
   }
-  
+
   // Upload all button
   const btnUploadAll = document.getElementById('btn-upload-all');
   if (btnUploadAll) {
@@ -369,7 +369,7 @@ function initDeployPage() {
       await handleUploadAll();
     });
   }
-  
+
   // Generate SPF button (kept for backward compatibility, but hidden in new flow)
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   if (btnGenerateSpf) {
@@ -379,7 +379,7 @@ function initDeployPage() {
       await handleGenerateSpf();
     });
   }
-  
+
   // Finalize Release button (shown after all uploads complete)
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
   if (btnFinalizeRelease) {
@@ -389,7 +389,7 @@ function initDeployPage() {
       await handleFinalizeRelease();
     });
   }
-  
+
   // Clear all button
   const btnClearAll = document.getElementById('btn-clear-all');
   if (btnClearAll) {
@@ -399,19 +399,19 @@ function initDeployPage() {
       clearPackages();
     });
   }
-  
+
   // Release notes tabs (Edit/Preview)
   const noteTabs = document.querySelectorAll('.tab-btn');
   noteTabs.forEach(tab => {
     tab.addEventListener('click', (e) => {
       e.preventDefault();
       const tabName = tab.dataset.tab;
-      
+
       noteTabs.forEach(t => t.classList.toggle('active', t === tab));
-      
+
       const editor = document.getElementById('deploy-notes');
       const preview = document.getElementById('deploy-notes-preview');
-      
+
       if (tabName === 'edit') {
         if (editor) editor.classList.add('active');
         if (preview) preview.classList.remove('active');
@@ -429,7 +429,7 @@ function initDeployPage() {
       }
     });
   });
-  
+
   console.log('Deploy page initialized');
 }
 
@@ -441,26 +441,26 @@ async function handleSelectFolder() {
     showToast('error', 'File dialog not available');
     return;
   }
-  
+
   try {
     const selected = await dialogOpen({
       directory: true,
       multiple: false,
       title: 'Select Packages Folder'
     });
-    
+
     if (selected) {
       selectedFolderPath = selected;
       frontendLog('INFO', 'FOLDER: Folder selected', `Path: ${selected}`);
-      
+
       const selectedFolderSpan = document.getElementById('selected-folder');
       const selectedFolderDiv = document.querySelector('.selected-folder');
       const btnCancelFolder = document.getElementById('btn-cancel-folder');
-      
+
       if (selectedFolderSpan) selectedFolderSpan.textContent = selected;
       if (selectedFolderDiv) selectedFolderDiv.style.display = 'flex';
       if (btnCancelFolder) btnCancelFolder.style.display = 'inline-flex';
-      
+
       showToast('info', 'Scanning folder for packages...');
       await scanSelectedFolder();
     } else {
@@ -479,11 +479,11 @@ async function scanSelectedFolder() {
     showToast('warning', 'Please select a folder first');
     return;
   }
-  
+
   try {
     frontendLog('INFO', 'SCAN: Starting folder scan', `Path: ${selectedFolderPath}`);
     const scanResult = await invoke('scan_folder', { folderPath: selectedFolderPath });
-    
+
     // Check for version error (multiple different versions in folder)
     if (scanResult.versionError) {
       showToast('error', scanResult.versionError);
@@ -494,37 +494,37 @@ async function scanSelectedFolder() {
       updateActionButtons();
       return;
     }
-    
+
     // Set packages from scan result
     packages = scanResult.packages || [];
-    
+
     // Show companion file warnings
     if (scanResult.companionWarnings && scanResult.companionWarnings.length > 0) {
       for (const warning of scanResult.companionWarnings) {
         showToast('warning', warning);
       }
     }
-    
+
     // Auto-fill version if detected
     if (scanResult.detectedVersion) {
       const deployVersionInput = document.getElementById('deploy-version');
       const uploadVersionInput = document.getElementById('upload-version');
-      
+
       if (deployVersionInput) {
         deployVersionInput.value = scanResult.detectedVersion;
       }
       if (uploadVersionInput) {
         uploadVersionInput.value = scanResult.detectedVersion;
       }
-      
+
       console.log('Auto-detected version:', scanResult.detectedVersion);
     }
-    
+
     renderPackages();
     updateSummary();
     updateActionButtons();
     autoDetectReleaseType();
-    
+
     if (packages.length > 0) {
       frontendLog('INFO', 'SCAN: Folder scan completed', `Packages found: ${packages.length}`);
       showToast('success', `Found ${packages.length} packages`);
@@ -542,11 +542,11 @@ async function scanSelectedFolder() {
 // Auto-detect release type based on packages
 function autoDetectReleaseType() {
   if (packages.length === 0) return;
-  
+
   const devCount = packages.filter(p => p.isDev || p.is_dev).length;
   const prodCount = packages.filter(p => !(p.isDev || p.is_dev)).length;
   frontendLog('INFO', 'AUTO_DETECT: Detecting release type', `Dev packages: ${devCount}, Prod packages: ${prodCount}`);
-  
+
   const typeSelect = document.getElementById('deploy-type');
   if (typeSelect) {
     if (devCount > 0 && prodCount === 0) {
@@ -572,7 +572,7 @@ async function handleAddManual() {
     showToast('error', 'File dialog not available');
     return;
   }
-  
+
   try {
     const selected = await dialogOpen({
       multiple: true,
@@ -581,10 +581,10 @@ async function handleAddManual() {
       ],
       title: 'Select Package Files'
     });
-    
+
     if (selected) {
       const files = Array.isArray(selected) ? selected : [selected];
-      
+
       if (files.length > 0 && invoke) {
         frontendLog('INFO', 'MANUAL_ADD: Scanning selected files', `Files: ${files.length}`);
         const scannedPackages = await invoke('scan_files', { filePaths: files });
@@ -592,12 +592,12 @@ async function handleAddManual() {
         renderPackages();
         updateSummary();
         updateActionButtons();
-        
+
         // In "New Release" mode, auto-detect version from added files
         if (currentDeployPurpose === 'release') {
           autoDetectVersionFromPackages();
         }
-        
+
         frontendLog('INFO', 'MANUAL_ADD: Packages added', `Count: ${scannedPackages.length}`);
         showToast('success', `Added ${scannedPackages.length} packages`);
       }
@@ -612,7 +612,7 @@ async function handleAddManual() {
 // Extract base version from full version string
 function extractBaseVersion(version) {
   if (!version) return null;
-  
+
   // Handle A2A versions: X.X.X.A2A.HASH -> X.X.X
   if (version.includes('.A2A.')) {
     const parts = version.split('.A2A.');
@@ -620,7 +620,7 @@ function extractBaseVersion(version) {
       return parts[0];
     }
   }
-  
+
   // Handle STA/TEF versions: X.X.X.HASH or X.X.X -> X.X.X
   const parts = version.split('.');
   if (parts.length >= 3) {
@@ -629,19 +629,19 @@ function extractBaseVersion(version) {
       return `${parts[0]}.${parts[1]}.${parts[2]}`;
     }
   }
-  
+
   return null;
 }
 
 // Auto-detect version from current packages
 function autoDetectVersionFromPackages() {
   const baseVersions = new Set();
-  
+
   for (const pkg of packages) {
     // Skip companion files (but not S920 unsigned which have extract-s920-root)
     const handling = pkg.specialHandling || pkg.special_handling || '';
     if (handling && handling !== 'extract-s920-root') continue;
-    
+
     const version = pkg.version;
     if (version) {
       const baseVersion = extractBaseVersion(version);
@@ -650,12 +650,12 @@ function autoDetectVersionFromPackages() {
       }
     }
   }
-  
+
   if (baseVersions.size === 1) {
     const detectedVersion = [...baseVersions][0];
     const deployVersionInput = document.getElementById('deploy-version');
     const uploadVersionInput = document.getElementById('upload-version');
-    
+
     // Only auto-fill if the field is empty
     if (deployVersionInput && !deployVersionInput.value) {
       deployVersionInput.value = detectedVersion;
@@ -663,7 +663,7 @@ function autoDetectVersionFromPackages() {
     if (uploadVersionInput && !uploadVersionInput.value) {
       uploadVersionInput.value = detectedVersion;
     }
-    
+
     frontendLog('INFO', 'AUTO_DETECT: Version detected from packages', `Version: ${detectedVersion}`);
   } else if (baseVersions.size > 1) {
     frontendLog('WARNING', 'AUTO_DETECT: Multiple versions detected', `Versions: ${[...baseVersions].join(', ')}`);
@@ -674,14 +674,14 @@ function autoDetectVersionFromPackages() {
 // Validate that the entered version matches detected package versions
 async function validateVersionMatch(enteredVersion) {
   if (!enteredVersion || packages.length === 0) return null;
-  
+
   const detectedVersions = new Set();
-  
+
   for (const pkg of packages) {
     // Skip companion files (but not S920 unsigned which have extract-s920-root)
     const handling = pkg.specialHandling || pkg.special_handling || '';
     if (handling && handling !== 'extract-s920-root') continue;
-    
+
     const version = pkg.version;
     if (version) {
       const baseVersion = extractBaseVersion(version);
@@ -690,17 +690,17 @@ async function validateVersionMatch(enteredVersion) {
       }
     }
   }
-  
+
   if (detectedVersions.size === 0) return null;
-  
+
   // Check if entered version matches any detected version
   const enteredBase = extractBaseVersion(enteredVersion) || enteredVersion;
-  
+
   if (!detectedVersions.has(enteredBase)) {
     const detectedList = [...detectedVersions].join(', ');
     return `The entered version "${enteredVersion}" does not match the detected package version(s): ${detectedList}`;
   }
-  
+
   return null;
 }
 
@@ -710,10 +710,10 @@ function showConfirmDialog(title, message, options = {}) {
   const cancelLabel = options.cancelLabel || 'Cancel';
   const kind = options.kind || 'info'; // 'info', 'warning', 'error'
   const isDelete = kind === 'error' || title.toLowerCase().includes('delete');
-  
+
   // Determine button style based on kind
   const okBtnClass = isDelete ? 'btn btn-danger' : 'btn btn-primary';
-  
+
   // Icon SVGs
   const icons = {
     delete: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40">
@@ -733,18 +733,18 @@ function showConfirmDialog(title, message, options = {}) {
       <line x1="12" y1="8" x2="12.01" y2="8"/>
     </svg>`
   };
-  
+
   const iconSvg = isDelete ? icons.delete : (kind === 'warning' ? icons.warning : icons.info);
   const gradientClass = isDelete ? 'confirm-header-danger' : (kind === 'warning' ? 'confirm-header-warning' : 'confirm-header-info');
-  
+
   frontendLog('INFO', 'UI: Confirm dialog shown', `Title: ${title}, Kind: ${kind}`);
-  
+
   return new Promise((resolve) => {
     // Create modal overlay using the existing .modal CSS class system
     const overlay = document.createElement('div');
     overlay.className = 'modal active';
     overlay.style.zIndex = '2000';
-    
+
     overlay.innerHTML = `
       <div class="modal-content confirm-dialog" style="max-width: 420px; padding: 0;">
         <div class="confirm-header ${gradientClass}">
@@ -760,18 +760,18 @@ function showConfirmDialog(title, message, options = {}) {
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(overlay);
-    
+
     const cancelBtn = overlay.querySelector('#confirm-cancel');
     const okBtn = overlay.querySelector('#confirm-ok');
-    
+
     const cleanup = (result) => {
       frontendLog('INFO', 'UI: Confirm dialog result', `Title: ${title}, Result: ${result ? 'confirmed' : 'cancelled'}`);
       overlay.remove();
       resolve(result);
     };
-    
+
     cancelBtn.addEventListener('click', () => cleanup(false));
     okBtn.addEventListener('click', () => cleanup(true));
     overlay.addEventListener('click', (e) => {
@@ -831,7 +831,7 @@ function sortPackages() {
     'Documentation': 6,
     'Unknown': 99
   };
-  
+
   const platformOrder = {
     'Windows': 1,
     'Linux32': 2,
@@ -839,23 +839,23 @@ function sortPackages() {
     'Android': 4,
     'Unknown': 99
   };
-  
+
   packages.sort((a, b) => {
     const catA = a.category || 'Unknown';
     const catB = b.category || 'Unknown';
     const platA = a.platform || 'Unknown';
     const platB = b.platform || 'Unknown';
-    
+
     // First sort by category
     const catOrderA = categoryOrder[catA] || 99;
     const catOrderB = categoryOrder[catB] || 99;
     if (catOrderA !== catOrderB) return catOrderA - catOrderB;
-    
+
     // Then by platform within same category
     const platOrderA = platformOrder[platA] || 99;
     const platOrderB = platformOrder[platB] || 99;
     if (platOrderA !== platOrderB) return platOrderA - platOrderB;
-    
+
     // Then alphabetically by filename
     const nameA = (a.fileName || a.file_name || a.name || '').toLowerCase();
     const nameB = (b.fileName || b.file_name || b.name || '').toLowerCase();
@@ -867,10 +867,10 @@ function sortPackages() {
 function renderPackages() {
   const container = document.getElementById('packages-list');
   if (!container) return;
-  
+
   // Sort packages before rendering
   sortPackages();
-  
+
   if (packages.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -884,7 +884,7 @@ function renderPackages() {
     `;
     return;
   }
-  
+
   container.innerHTML = packages.map((pkg, index) => {
     const fileName = pkg.fileName || pkg.file_name || pkg.name || 'Unknown';
     const platform = pkg.platform || 'Unknown';
@@ -898,7 +898,7 @@ function renderPackages() {
     const extractFolder = pkg.extractFolder || pkg.extract_folder || '';
     const isS920Extract = specialHandling === 'extract-s920-root';
     const isCompanionExtract = specialHandling && !isS920Extract;
-    
+
     return `
     <div class="package-item ${isDev ? 'dev-package' : ''}" data-index="${index}">
       <div class="package-info">
@@ -933,7 +933,7 @@ function renderPackages() {
     </div>
   `;
   }).join('');
-  
+
   // Attach event listeners for remove buttons
   container.querySelectorAll('.btn-remove-package').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -947,7 +947,7 @@ function renderPackages() {
       updateActionButtons();
     });
   });
-  
+
   // Attach event listeners for retry buttons
   container.querySelectorAll('.btn-retry').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -957,7 +957,7 @@ function renderPackages() {
       await retryUpload(index);
     });
   });
-  
+
   // Attach event listeners for field inputs
   container.querySelectorAll('.package-field-input').forEach(input => {
     input.addEventListener('change', (e) => {
@@ -966,7 +966,7 @@ function renderPackages() {
       packages[index][field] = e.target.value;
     });
   });
-  
+
   // Attach event listeners for add field buttons
   container.querySelectorAll('.add-field-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -992,20 +992,20 @@ function showAddFieldModal(index, field) {
       <button class="btn btn-primary" id="modal-save">Save</button>
     </div>
   `);
-  
+
   const modalInput = document.getElementById('modal-field-value');
   const modalSave = document.getElementById('modal-save');
   const modalCancel = document.getElementById('modal-cancel');
-  
+
   if (modalInput) modalInput.focus();
-  
+
   if (modalSave) {
     modalSave.addEventListener('click', () => {
       const value = modalInput ? modalInput.value : '';
       if (value) {
         frontendLog('INFO', `DEPLOY: ${field} value saved`, `Package index: ${index}, Value: ${value}`);
         packages[index][field] = value;
-        
+
         // If client field was added, update the JFrog path to include client name
         if (field === 'client') {
           const pkg = packages[index];
@@ -1022,13 +1022,13 @@ function showAddFieldModal(index, field) {
             }
           }
         }
-        
+
         renderPackages();
         closeModal();
       }
     });
   }
-  
+
   if (modalCancel) {
     modalCancel.addEventListener('click', closeModal);
   }
@@ -1042,7 +1042,7 @@ function showModal(title, content) {
   if (existingModal) {
     existingModal.remove();
   }
-  
+
   const modal = document.createElement('div');
   modal.id = 'modal';
   modal.className = 'modal active';
@@ -1057,7 +1057,7 @@ function showModal(title, content) {
     </div>
   `;
   document.body.appendChild(modal);
-  
+
   // Attach event listeners
   modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
   modal.querySelector('#modal-close-btn').addEventListener('click', closeModal);
@@ -1074,26 +1074,26 @@ function closeModal() {
 function updateSummary() {
   const summary = document.getElementById('release-summary');
   const content = document.getElementById('summary-content');
-  
+
   if (!summary || !content) return;
-  
+
   if (packages.length === 0) {
     summary.style.display = 'none';
     return;
   }
-  
+
   summary.style.display = 'block';
-  
+
   // Count by platform
   const platforms = {};
   packages.forEach(pkg => {
     const platform = pkg.platform || 'Unknown';
     platforms[platform] = (platforms[platform] || 0) + 1;
   });
-  
+
   // Calculate total size
   const totalSize = packages.reduce((sum, pkg) => sum + (pkg.size || 0), 0);
-  
+
   content.innerHTML = `
     <div class="summary-item">
       <h4>Total Packages</h4>
@@ -1116,15 +1116,15 @@ function updateSummary() {
 function updateActionButtons() {
   const hasPackages = packages.length > 0;
   const allUploaded = hasPackages && packages.every(p => p.uploaded);
-  
+
   const btnUploadAll = document.getElementById('btn-upload-all');
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
   const btnClearAll = document.getElementById('btn-clear-all');
-  
+
   if (btnUploadAll) btnUploadAll.disabled = !hasPackages || allUploaded;
   if (btnClearAll) btnClearAll.style.display = hasPackages ? 'inline-flex' : 'none';
-  
+
   // In "New Release" mode: Generate SPF is always hidden; show "Finalize Release" after all uploads
   if (currentDeployPurpose === 'release') {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
@@ -1146,15 +1146,15 @@ function clearPackages() {
   packages = [];
   uploadedUrls = {};
   selectedFolderPath = null;
-  
+
   const selectedFolderDiv = document.querySelector('.selected-folder');
   const btnCancelFolder = document.getElementById('btn-cancel-folder');
   const selectedFolderSpan = document.getElementById('selected-folder');
-  
+
   if (selectedFolderDiv) selectedFolderDiv.style.display = 'none';
   if (btnCancelFolder) btnCancelFolder.style.display = 'none';
   if (selectedFolderSpan) selectedFolderSpan.textContent = 'No folder selected';
-  
+
   renderPackages();
   updateSummary();
   updateActionButtons();
@@ -1168,44 +1168,44 @@ async function handleUploadAll() {
     showToast('warning', 'No packages to upload');
     return;
   }
-  
+
   if (!invoke) {
     frontendLog('ERROR', 'UPLOAD: Backend not available');
     showToast('error', 'Backend not available');
     return;
   }
-  
+
   if (!settings.jfrogApiKey) {
     frontendLog('ERROR', 'UPLOAD: JFrog API key not configured');
     showToast('error', 'Please configure JFrog API key in Settings');
     return;
   }
-  
+
   const btnUploadAll = document.getElementById('btn-upload-all');
   if (btnUploadAll) btnUploadAll.disabled = true;
-  
+
   let successCount = 0;
   let failCount = 0;
-  
+
   for (let i = 0; i < packages.length; i++) {
     const pkg = packages[i];
     if (pkg.uploaded) {
       successCount++;
       continue;
     }
-    
+
     pkg.uploading = true;
     pkg.error = null;
     renderPackages();
-    
+
     try {
       const filePath = pkg.filePath || pkg.file_path;
       const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
       const specialHandling = pkg.specialHandling || pkg.special_handling;
       const extractFolder = pkg.extractFolder || pkg.extract_folder;
-      
+
       let result;
-      
+
       // Check if this package needs special handling (extract ZIP and upload folder)
       if (specialHandling === 'extract-s920-root' && extractFolder) {
         // S920 unsigned: extract ZIP root to named folder and upload folder
@@ -1231,7 +1231,7 @@ async function handleUploadAll() {
           apiKey: settings.jfrogApiKey
         });
       }
-      
+
       if (result.success) {
         pkg.uploaded = true;
         pkg.url = result.url;
@@ -1248,13 +1248,13 @@ async function handleUploadAll() {
       failCount++;
       showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${error}`);
     }
-    
+
     pkg.uploading = false;
     renderPackages();
   }
-  
+
   updateActionButtons();
-  
+
   if (failCount === 0) {
     frontendLog('INFO', 'UPLOAD: All packages uploaded successfully', `Count: ${successCount}`);
     showToast('success', `All ${successCount} packages uploaded successfully!`);
@@ -1269,19 +1269,19 @@ async function retryUpload(index) {
   const pkg = packages[index];
   if (!pkg || !invoke) return;
   frontendLog('INFO', 'UPLOAD: Retrying upload', `Package: ${pkg.fileName || pkg.file_name}, Index: ${index}`);
-  
+
   pkg.uploading = true;
   pkg.error = null;
   renderPackages();
-  
+
   try {
     const filePath = pkg.filePath || pkg.file_path;
     const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
     const specialHandling = pkg.specialHandling || pkg.special_handling;
     const extractFolder = pkg.extractFolder || pkg.extract_folder;
-    
+
     let result;
-    
+
     // Check if this package needs special handling (extract ZIP and upload folder)
     if (specialHandling === 'extract-s920-root' && extractFolder) {
       // S920 unsigned: extract ZIP root to named folder and upload folder
@@ -1307,7 +1307,7 @@ async function retryUpload(index) {
         apiKey: settings.jfrogApiKey
       });
     }
-    
+
     if (result.success) {
       pkg.uploaded = true;
       pkg.url = result.url;
@@ -1321,7 +1321,7 @@ async function retryUpload(index) {
     pkg.error = error.toString();
     showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${error}`);
   }
-  
+
   pkg.uploading = false;
   renderPackages();
   updateActionButtons();
@@ -1334,19 +1334,19 @@ async function handleGenerateSpf() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
-  
+
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
-  
+
   if (!version || !date) {
     frontendLog('WARNING', 'SPF: Missing version or date');
     showToast('error', 'Please fill in version and date');
     return;
   }
   frontendLog('INFO', 'SPF: Generating SPF', `Version: ${version}, Date: ${date}, Type: ${type}, Packages: ${packages.length}`);
-  
+
   // Validate version matches detected package versions
   const versionMismatch = await validateVersionMatch(version);
   if (versionMismatch) {
@@ -1361,12 +1361,12 @@ async function handleGenerateSpf() {
     }
     frontendLog('INFO', 'SPF: User chose to continue despite version mismatch');
   }
-  
+
   if (!invoke) {
     showToast('error', 'Backend not available');
     return;
   }
-  
+
   // Filter out online companion packages (they shouldn't be in SPF)
   // Online companions are: Linux_64-Gui-Installer.zip, Linux_i386-Installer.zip, x86.zip
   // Note: S920 unsigned packages have specialHandling='extract-s920-root' but should NOT be filtered out
@@ -1374,16 +1374,16 @@ async function handleGenerateSpf() {
     const fileName = pkg.fileName || pkg.file_name || '';
     const handling = pkg.specialHandling || pkg.special_handling || '';
     const isOnlineCompanion = fileName === 'Linux_64-Gui-Installer.zip' ||
-                              fileName === 'Linux_i386-Installer.zip' ||
-                              fileName === 'x86.zip' ||
-                              (handling && handling !== 'extract-s920-root');
+      fileName === 'Linux_i386-Installer.zip' ||
+      fileName === 'x86.zip' ||
+      (handling && handling !== 'extract-s920-root');
     return !isOnlineCompanion;
   });
-  
+
   // Build the full version for SPF header from package data
   // SPF version should include the full version with hash (e.g., "2.5.1.289844" or "2.4.1.A2A.99807")
   const spfVersion = getFullVersionForSpf(spfPackages, version);
-  
+
   const releaseData = {
     id: `${version}-${Date.now()}`,
     version: spfVersion,
@@ -1400,22 +1400,22 @@ async function handleGenerateSpf() {
     })),
     createdAt: new Date().toISOString()
   };
-  
+
   try {
     // Generate SPF content
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
-    
+
     // Generate filename: release_<fullversion>-YYYY-MM-DD-<prod/dev>.spf
     const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
     const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
-    
+
     // Ask user where to save
     if (dialogSave) {
       const savePath = await dialogSave({
         defaultPath: spfFileName,
         filters: [{ name: 'SPF Files', extensions: ['spf'] }]
       });
-      
+
       if (savePath) {
         await invoke('save_spf_file', { content: spfContent, filePath: savePath });
         frontendLog('INFO', 'SPF: SPF file saved', `Path: ${savePath}`);
@@ -1424,14 +1424,14 @@ async function handleGenerateSpf() {
         frontendLog('INFO', 'SPF: User cancelled save dialog');
       }
     }
-    
+
     // Save release to local storage
     frontendLog('INFO', 'SPF: Saving release to local storage');
     await invoke('save_release', { release: releaseData });
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
-    
+
     frontendLog('INFO', 'SPF: Release saved successfully', `Version: ${spfVersion}`);
     showToast('success', 'Release saved successfully');
   } catch (error) {
@@ -1448,23 +1448,23 @@ async function handleFinalizeRelease() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
-  
+
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
-  
+
   if (!version || !date) {
     frontendLog('WARNING', 'FINALIZE: Missing version or date');
     showToast('error', 'Please fill in version and date');
     return;
   }
-  
+
   if (!invoke) {
     showToast('error', 'Backend not available');
     return;
   }
-  
+
   // Validate version matches detected package versions
   const versionMismatch = await validateVersionMatch(version);
   if (versionMismatch) {
@@ -1479,26 +1479,26 @@ async function handleFinalizeRelease() {
     }
     frontendLog('INFO', 'FINALIZE: User chose to continue despite version mismatch');
   }
-  
+
   // Disable the button to prevent double-click
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
   if (btnFinalizeRelease) btnFinalizeRelease.disabled = true;
-  
+
   // Filter out online companion packages
   // Note: S920 unsigned packages have specialHandling='extract-s920-root' but should NOT be filtered out
   const spfPackages = packages.filter(pkg => {
     const fileName = pkg.fileName || pkg.file_name || '';
     const handling = pkg.specialHandling || pkg.special_handling || '';
     const isOnlineCompanion = fileName === 'Linux_64-Gui-Installer.zip' ||
-                              fileName === 'Linux_i386-Installer.zip' ||
-                              fileName === 'x86.zip' ||
-                              (handling && handling !== 'extract-s920-root');
+      fileName === 'Linux_i386-Installer.zip' ||
+      fileName === 'x86.zip' ||
+      (handling && handling !== 'extract-s920-root');
     return !isOnlineCompanion;
   });
-  
+
   // Build the full version for SPF header from package data
   const spfVersion = getFullVersionForSpf(spfPackages, version);
-  
+
   const releaseData = {
     id: `${version}-${Date.now()}`,
     version: spfVersion,
@@ -1516,20 +1516,20 @@ async function handleFinalizeRelease() {
     })),
     createdAt: new Date().toISOString()
   };
-  
+
   try {
     // Step 1: Save release to local storage
     frontendLog('INFO', 'FINALIZE: Step 1 - Saving release');
     await invoke('save_release', { release: releaseData });
     frontendLog('INFO', 'FINALIZE: Release saved successfully', `Version: ${spfVersion}`);
-    
+
     // Step 2: Generate and auto-save SPF file
     frontendLog('INFO', 'FINALIZE: Step 2 - Generating SPF file');
     try {
       const spfContent = await invoke('generate_spf_content', { release: releaseData });
       const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
       const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
-      
+
       // Auto-save to app's data folder
       const paths = await invoke('get_app_paths');
       const spfSavePath = `${paths.userData}/${spfFileName}`;
@@ -1539,7 +1539,7 @@ async function handleFinalizeRelease() {
       frontendLog('ERROR', 'FINALIZE: Failed to generate/save SPF', spfError.toString());
       showToast('warning', 'Release saved but SPF generation failed: ' + spfError);
     }
-    
+
     // Step 3: Generate HTML file
     frontendLog('INFO', 'FINALIZE: Step 3 - Generating HTML file');
     try {
@@ -1549,13 +1549,13 @@ async function handleFinalizeRelease() {
       frontendLog('ERROR', 'FINALIZE: Failed to generate HTML', htmlError.toString());
       showToast('warning', 'Release saved but HTML generation failed: ' + htmlError);
     }
-    
+
     // Step 4: Refresh releases list
     frontendLog('INFO', 'FINALIZE: Step 4 - Refreshing releases list');
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
-    
+
     // Step 5: Clear deploy screen
     frontendLog('INFO', 'FINALIZE: Step 5 - Clearing deploy screen');
     clearPackages();
@@ -1567,21 +1567,21 @@ async function handleFinalizeRelease() {
     // Also clear the release notes preview
     const notesPreview = document.getElementById('deploy-notes-preview');
     if (notesPreview) notesPreview.innerHTML = '';
-    
+
     // Reset purpose selection
     currentDeployPurpose = null;
     const purposeSelection = document.getElementById('deploy-purpose-selection');
     const deployContent = document.getElementById('deploy-content');
     if (purposeSelection) purposeSelection.style.display = 'block';
     if (deployContent) deployContent.style.display = 'none';
-    
+
     // Step 6: Navigate to Releases page
     frontendLog('INFO', 'FINALIZE: Step 6 - Navigating to Releases page');
     switchPage('releases');
-    
+
     showToast('success', `Release ${spfVersion} finalized successfully! SPF and HTML files generated.`);
     frontendLog('INFO', 'FINALIZE: Release finalization completed', `Version: ${spfVersion}`);
-    
+
   } catch (error) {
     console.error('Failed to finalize release:', error);
     frontendLog('ERROR', 'FINALIZE: Failed to finalize release', error.toString());
@@ -1598,7 +1598,7 @@ function initReleasesPage() {
 function renderReleases() {
   const container = document.getElementById('releases-list');
   if (!container) return;
-  
+
   if (!releases || releases.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -1611,20 +1611,20 @@ function renderReleases() {
     `;
     return;
   }
-  
+
   container.innerHTML = releases.map(release => {
     const releaseType = (release.releaseType || release.type || 'Unknown').toLowerCase();
     const releaseTypeDisplay = releaseType === 'production' ? 'Production' : 'Development';
     const pkgCount = (release.packages || []).length;
     const createdAt = release.createdAt ? new Date(release.createdAt).toLocaleString() : '';
-    
+
     // Check if release contains unsigned packages (URL contains /unsigned/)
     const hasUnsigned = (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
-    
+
     // Count unique platforms
     const platforms = new Set((release.packages || []).map(p => p.platform));
     const platformCount = platforms.size;
-    
+
     return `
     <div class="release-card-expandable" data-id="${release.id}">
       <div class="release-card-header">
@@ -1706,7 +1706,7 @@ function renderReleases() {
     </div>
   `;
   }).join('');
-  
+
   // Attach event listeners
   attachReleaseEventListeners(container);
 }
@@ -1714,7 +1714,7 @@ function renderReleases() {
 function renderReleaseSummary(release) {
   const pkgs = release.packages || [];
   if (pkgs.length === 0) return '<p class="no-packages">No packages in this release</p>';
-  
+
   // Group packages by platform
   const platformGroups = {};
   pkgs.forEach(pkg => {
@@ -1722,7 +1722,7 @@ function renderReleaseSummary(release) {
     if (!platformGroups[platform]) platformGroups[platform] = [];
     platformGroups[platform].push(pkg);
   });
-  
+
   // Icon map - use new platform SVG icons
   const getPlatformIcon = (platform, pkg) => {
     // Handle A2A types
@@ -1759,22 +1759,34 @@ function renderReleaseSummary(release) {
     };
     return `assets/images/${iconMap[platform] || 'platform-pkgs.svg'}`;
   };
-  
+
   // Helper to create a tag badge
   const makeTag = (text, color) => {
     if (!text) return '';
     return `<span class="summary-tag summary-tag-${color}">${text}</span>`;
   };
-  
+
+  // Helper to create copy URL button
+  const copyUrlBtn = (url) => {
+    if (!url) return '';
+    const safeUrl = url.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<button class="btn-copy-url" title="Copy JFrog URL" onclick="copyPkgUrl(this, '${safeUrl}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+    </button>`;
+  };
+
   let html = '<div class="release-summary-content">';
-  
+
   // ---- PLATFORM PACKAGES (Windows, Linux, Embedded, A2A) ----
   const platformTypes = ['Windows', 'Linux64', 'Linux32', 'Embedded', 'A2A'];
   const hasPlatformPkgs = platformTypes.some(p => platformGroups[p] && platformGroups[p].length > 0);
-  
+
   if (hasPlatformPkgs) {
     html += '<h5 class="platform-packages-title">PLATFORM PACKAGES</h5>';
-    
+
     // Windows packages
     if (platformGroups['Windows']) {
       platformGroups['Windows'].forEach(pkg => {
@@ -1799,10 +1811,11 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="Windows" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
       });
     }
-    
+
     // Linux64 packages
     if (platformGroups['Linux64']) {
       platformGroups['Linux64'].forEach(pkg => {
@@ -1827,10 +1840,11 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="Linux64" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
       });
     }
-    
+
     // Linux32 packages
     if (platformGroups['Linux32']) {
       platformGroups['Linux32'].forEach(pkg => {
@@ -1855,10 +1869,11 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="Linux32" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
       });
     }
-    
+
     // Embedded packages
     if (platformGroups['Embedded']) {
       platformGroups['Embedded'].forEach(pkg => {
@@ -1868,30 +1883,32 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="Embedded" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
       });
     }
-    
+
     // A2A packages - Group into SDK/Doc, Device APKs, and Examples
     if (platformGroups['A2A']) {
       const a2aPkgs = platformGroups['A2A'];
-      
+
       // Classify A2A packages
-      const sdkDocs = a2aPkgs.filter(p => ['Doc', 'AAR', 'SDK', 'Documentation'].includes(p.device) || 
-                                          p.category?.toLowerCase()?.includes('sdk'));
-      const examples = a2aPkgs.filter(p => p.category?.toLowerCase()?.includes('example') || 
-                                           p.device?.toLowerCase()?.includes('example'));
+      const sdkDocs = a2aPkgs.filter(p => ['Doc', 'AAR', 'SDK', 'Documentation', 'SDK Integration'].includes(p.device) ||
+        p.category?.toLowerCase()?.includes('sdk') ||
+        p.category === 'AAR' || p.category === 'Documentation');
+      const examples = a2aPkgs.filter(p => p.category?.toLowerCase()?.includes('example') ||
+        p.device?.toLowerCase()?.includes('example'));
       const deviceApks = a2aPkgs.filter(p => !sdkDocs.includes(p) && !examples.includes(p) && p.device);
-      
+
       // SDK/Documentation
       if (sdkDocs.length > 0) {
         sdkDocs.forEach(pkg => {
           const icon = getPlatformIcon('A2A', pkg);
           let name = '';
-          if (pkg.device === 'Doc' || pkg.device === 'Documentation') {
+          if (pkg.category === 'Documentation' || pkg.device === 'Doc' || pkg.device === 'Documentation') {
             name = 'SDK Documentation';
-          } else if (pkg.device === 'AAR') {
-            name = 'SDK (AAR)';
+          } else if (pkg.category === 'AAR' || pkg.device === 'AAR') {
+            name = 'SDK Integration';
           } else {
             name = pkg.device || 'SDK';
           }
@@ -1899,10 +1916,11 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
         });
       }
-      
+
       // Examples - extract device name from URL
       if (examples.length > 0) {
         examples.forEach(pkg => {
@@ -1919,10 +1937,11 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
         });
       }
-      
+
       // Device APKs - list each device individually
       if (deviceApks.length > 0) {
         deviceApks.forEach(pkg => {
@@ -1932,16 +1951,17 @@ function renderReleaseSummary(release) {
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${deviceName}</span>
+            ${copyUrlBtn(pkg.url)}
           </div>`;
         });
       }
     }
   }
-  
+
   // ---- STA DEVICES ----
   if (platformGroups['STA'] && platformGroups['STA'].length > 0) {
     html += '<h5 class="platform-packages-title sta-title">STA DEVICES</h5>';
-    
+
     // Group STA packages by device
     const staDevices = {};
     platformGroups['STA'].forEach(pkg => {
@@ -1949,7 +1969,7 @@ function renderReleaseSummary(release) {
       if (!staDevices[device]) staDevices[device] = [];
       staDevices[device].push(pkg);
     });
-    
+
     for (const [device, devicePkgs] of Object.entries(staDevices)) {
       const icon = getPlatformIcon('STA', devicePkgs[0]);
       html += `
@@ -1959,14 +1979,14 @@ function renderReleaseSummary(release) {
             <span class="sta-device-name">${device}</span>
           </div>
           <div class="sta-device-variants">`;
-      
+
       // Group variants by category (Launcher, App)
       devicePkgs.forEach(pkg => {
         const category = pkg.category || 'Package';
         const categoryTag = makeTag(category, 'gray');
         const sigTag = pkg.signature ? makeTag(pkg.signature, 'blue') : '';
         const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
-        
+
         html += `
             <div class="sta-variant-row">
               ${categoryTag}
@@ -1974,13 +1994,13 @@ function renderReleaseSummary(release) {
               ${clientTag}
             </div>`;
       });
-      
+
       html += `
           </div>
         </div>`;
     }
   }
-  
+
   // ---- Other platforms not covered above ----
   const handledPlatforms = ['Windows', 'Linux64', 'Linux32', 'Embedded', 'A2A', 'STA'];
   for (const [platform, platformPkgs] of Object.entries(platformGroups)) {
@@ -1995,7 +2015,7 @@ function renderReleaseSummary(release) {
         </div>`;
     });
   }
-  
+
   html += '</div>';
   return html;
 }
@@ -2008,7 +2028,7 @@ function attachReleaseEventListeners(container) {
       const card = btn.closest('.release-card-expandable');
       const body = card.querySelector('.release-card-body');
       const isExpanded = body.style.display !== 'none';
-      
+
       body.style.display = isExpanded ? 'none' : 'block';
       frontendLog('INFO', 'RELEASES: Release card toggled', `ID: ${btn.dataset.id}, Action: ${isExpanded ? 'collapsed' : 'expanded'}`);
       btn.innerHTML = isExpanded ? `
@@ -2024,7 +2044,7 @@ function attachReleaseEventListeners(container) {
       `;
     });
   });
-  
+
   // Generate HTML
   container.querySelectorAll('.btn-generate-html').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2034,7 +2054,7 @@ function attachReleaseEventListeners(container) {
       await generateHtmlForRelease(id);
     });
   });
-  
+
   // Export SPF
   container.querySelectorAll('.btn-export-spf').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2044,7 +2064,7 @@ function attachReleaseEventListeners(container) {
       await exportSpfForRelease(id);
     });
   });
-  
+
   // View release notes
   container.querySelectorAll('.btn-view-notes').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2054,7 +2074,7 @@ function attachReleaseEventListeners(container) {
       viewReleaseNotes(id);
     });
   });
-  
+
   // Edit release
   container.querySelectorAll('.btn-edit-release').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2068,7 +2088,7 @@ function attachReleaseEventListeners(container) {
       }
     });
   });
-  
+
   // Delete release
   container.querySelectorAll('.btn-delete-release').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2084,7 +2104,7 @@ function attachReleaseEventListeners(container) {
 async function generateHtmlForRelease(id) {
   const release = releases.find(r => r.id === id);
   if (!release || !invoke) return;
-  
+
   frontendLog('INFO', 'HTML_GEN: Generating HTML for release', `Version: ${release.version}, ID: ${id}`);
   try {
     const result = await invoke('generate_html', { release });
@@ -2101,7 +2121,7 @@ async function exportSpfForRelease(id) {
   const release = releases.find(r => r.id === id);
   if (!release || !invoke) return;
   frontendLog('INFO', 'SPF_EXPORT: Exporting SPF for release', `Version: ${release.version}, ID: ${id}`);
-  
+
   try {
     // Filter out online companion packages
     // Note: S920 unsigned packages have specialHandling='extract-s920-root' but should NOT be filtered out
@@ -2110,25 +2130,25 @@ async function exportSpfForRelease(id) {
       const isOnlineCompanion = handling && handling !== 'extract-s920-root';
       return !isOnlineCompanion;
     });
-    
+
     const spfRelease = {
       ...release,
       packages: spfPackages
     };
-    
+
     const spfContent = await invoke('generate_spf_content', { release: spfRelease });
-    
+
     // Generate filename: release_<version>-YYYY-MM-DD-<prod/dev>.spf
     const releaseType = (release.releaseType || release.type || 'development').toLowerCase();
     const typeShort = releaseType === 'production' ? 'prod' : 'dev';
     const spfFileName = `release_${release.version}-${release.date}-${typeShort}.spf`;
-    
+
     if (dialogSave) {
       const savePath = await dialogSave({
         defaultPath: spfFileName,
         filters: [{ name: 'SPF Files', extensions: ['spf'] }]
       });
-      
+
       if (savePath) {
         await invoke('save_spf_file', { content: spfContent, filePath: savePath });
         frontendLog('INFO', 'SPF_EXPORT: SPF file saved', `Path: ${savePath}`);
@@ -2148,7 +2168,7 @@ function viewReleaseNotes(id) {
   const release = releases.find(r => r.id === id);
   if (!release) return;
   frontendLog('INFO', 'RELEASES: Viewing release notes', `Version: ${release.version}`);
-  
+
   const rawNotes = release.releaseNotes || '*No release notes available.*';
   let renderedNotes;
   if (typeof marked !== 'undefined') {
@@ -2157,7 +2177,7 @@ function viewReleaseNotes(id) {
     // Fallback: basic newline-to-br conversion
     renderedNotes = rawNotes.replace(/\n/g, '<br>');
   }
-  
+
   showModal(`Release Notes - ${release.version}`, `
     <div class="release-notes-content">
       <div class="markdown-content">${renderedNotes}</div>
@@ -2169,7 +2189,7 @@ function viewReleaseNotes(id) {
 async function viewRelease(id) {
   const release = releases.find(r => r.id === id);
   if (!release) return;
-  
+
   const packagesHtml = (release.packages || []).map(pkg => `
     <div class="release-package-item">
       <span class="platform">${pkg.platform}</span>
@@ -2185,7 +2205,7 @@ async function viewRelease(id) {
       </a>` : ''}
     </div>
   `).join('');
-  
+
   showModal(`Release ${release.version}`, `
     <div class="release-details">
       <p><strong>Date:</strong> ${release.date}</p>
@@ -2203,13 +2223,13 @@ async function viewRelease(id) {
 async function deleteRelease(id) {
   if (!invoke) return;
   frontendLog('INFO', 'RELEASES: Delete release requested', `Release ID: ${id}`);
-  
+
   const confirmed = await showConfirmDialog(
     'Confirm Delete',
     'Are you sure you want to delete this release?\n\nThis action cannot be undone.',
     { okLabel: 'Delete', kind: 'error' }
   );
-  
+
   if (confirmed) {
     frontendLog('INFO', 'RELEASES: Delete confirmed', `Release ID: ${id}`);
     try {
@@ -2233,13 +2253,13 @@ function initHtmlGenPage() {
   const selectEl = document.getElementById('html-release-select');
   const btnGenerate = document.getElementById('btn-generate-html');
   const btnOpenFolder = document.getElementById('btn-open-html-folder');
-  
+
   if (selectEl) {
     selectEl.addEventListener('change', () => {
       if (btnGenerate) btnGenerate.disabled = !selectEl.value;
     });
   }
-  
+
   if (btnGenerate) {
     btnGenerate.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -2247,7 +2267,7 @@ function initHtmlGenPage() {
       await generateHtml();
     });
   }
-  
+
   if (btnOpenFolder) {
     btnOpenFolder.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -2260,7 +2280,7 @@ function initHtmlGenPage() {
 function populateHtmlReleaseSelect() {
   const selectEl = document.getElementById('html-release-select');
   if (!selectEl) return;
-  
+
   selectEl.innerHTML = '<option value="">-- Select a release --</option>' +
     releases.map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
 }
@@ -2271,21 +2291,21 @@ async function generateHtml() {
     showToast('warning', 'Please select a release');
     return;
   }
-  
+
   const release = releases.find(r => r.id === selectEl.value);
   if (!release) {
     showToast('error', 'Release not found');
     return;
   }
-  
+
   if (!invoke) {
     showToast('error', 'Tauri invoke not available');
     return;
   }
-  
+
   frontendLog('INFO', 'HTML_PAGE: Generating HTML', `Version: ${release.version}`);
   showToast('info', 'Generating HTML...');
-  
+
   try {
     const result = await invoke('generate_html', { release });
     frontendLog('INFO', 'HTML_PAGE: HTML generated successfully', `Output: ${result}`);
@@ -2299,7 +2319,7 @@ async function generateHtml() {
 async function openHtmlFolder() {
   if (!invoke) return;
   frontendLog('INFO', 'HTML_PAGE: Opening HTML folder');
-  
+
   try {
     const paths = await invoke('get_app_paths');
     await invoke('open_path', { path: paths.html });
@@ -2314,18 +2334,18 @@ function initSettingsPage() {
   // Tab navigation
   const settingsTabs = document.querySelectorAll('.settings-tab');
   const settingsPanels = document.querySelectorAll('.settings-content');
-  
+
   settingsTabs.forEach(tab => {
     tab.addEventListener('click', (e) => {
       e.preventDefault();
       const tabName = tab.dataset.tab;
-      
+
       frontendLog('INFO', 'SETTINGS: Tab switched', `Tab: ${tabName}`);
       settingsTabs.forEach(t => t.classList.toggle('active', t === tab));
       settingsPanels.forEach(p => p.classList.toggle('active', p.id === `settings-${tabName}`));
     });
   });
-  
+
   // Save settings button
   const btnSaveSettings = document.getElementById('btn-save-settings');
   if (btnSaveSettings) {
@@ -2335,7 +2355,7 @@ function initSettingsPage() {
       await saveSettings();
     });
   }
-  
+
   // Add mapping button
   const btnAddMapping = document.getElementById('btn-add-mapping');
   if (btnAddMapping) {
@@ -2345,7 +2365,7 @@ function initSettingsPage() {
       addClientMapping();
     });
   }
-  
+
   // View logs button
   const btnViewLogs = document.getElementById('btn-view-logs');
   if (btnViewLogs) {
@@ -2355,7 +2375,7 @@ function initSettingsPage() {
       await viewLogs();
     });
   }
-  
+
   // Export data button
   const btnExportData = document.getElementById('btn-export-data');
   if (btnExportData) {
@@ -2365,7 +2385,7 @@ function initSettingsPage() {
       await exportData();
     });
   }
-  
+
   // Import data button
   const btnImportData = document.getElementById('btn-import-data');
   if (btnImportData) {
@@ -2375,7 +2395,7 @@ function initSettingsPage() {
       await importData();
     });
   }
-  
+
   // Open path buttons
   document.querySelectorAll('.btn-open-path').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2394,7 +2414,7 @@ function initSettingsPage() {
       }
     });
   });
-  
+
   // API Key toggle visibility
   const btnToggleApiKey = document.getElementById('btn-toggle-api-key');
   if (btnToggleApiKey) {
@@ -2423,7 +2443,7 @@ function populateSettings() {
   if (apiKeyInput && settings.jfrogApiKey) {
     apiKeyInput.value = settings.jfrogApiKey;
   }
-  
+
   // JFrog Base URL and Default Repo
   const baseUrlInput = document.getElementById('jfrog-base-url');
   const defaultRepoInput = document.getElementById('jfrog-default-repo');
@@ -2433,18 +2453,18 @@ function populateSettings() {
   if (defaultRepoInput && settings.jfrogDefaultRepo) {
     defaultRepoInput.value = settings.jfrogDefaultRepo;
   }
-  
+
   // Portal settings
   const portalTitleInput = document.getElementById('portal-title');
   const companyNameInput = document.getElementById('company-name');
-  
+
   if (portalTitleInput && settings.portalSettings?.portalTitle) {
     portalTitleInput.value = settings.portalSettings.portalTitle;
   }
   if (companyNameInput && settings.portalSettings?.companyName) {
     companyNameInput.value = settings.portalSettings.companyName;
   }
-  
+
   // Client mappings
   renderClientMappings();
 }
@@ -2452,14 +2472,14 @@ function populateSettings() {
 function renderClientMappings() {
   const container = document.getElementById('client-mappings-list');
   if (!container) return;
-  
+
   const mappings = settings.clientMappings || [];
-  
+
   if (mappings.length === 0) {
     container.innerHTML = '<p class="empty-text">No client mappings configured. Add mappings to automatically detect client names from version numbers.</p>';
     return;
   }
-  
+
   container.innerHTML = mappings.map((mapping, index) => `
     <div class="mapping-item">
       <input type="text" class="mapping-number" value="${mapping.number}" placeholder="Number" data-index="${index}" data-field="number">
@@ -2472,7 +2492,7 @@ function renderClientMappings() {
       </button>
     </div>
   `).join('');
-  
+
   // Attach event listeners
   container.querySelectorAll('.mapping-number, .mapping-name').forEach(input => {
     input.addEventListener('change', (e) => {
@@ -2483,7 +2503,7 @@ function renderClientMappings() {
       }
     });
   });
-  
+
   container.querySelectorAll('.btn-remove-mapping').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2511,15 +2531,15 @@ async function saveSettings() {
     showToast('error', 'Backend not available');
     return;
   }
-  
+
   // Gather settings from form
   const apiKeyInput = document.getElementById('jfrog-api-key');
   const portalTitleInput = document.getElementById('portal-title');
   const companyNameInput = document.getElementById('company-name');
-  
+
   const baseUrlInput = document.getElementById('jfrog-base-url');
   const defaultRepoInput = document.getElementById('jfrog-default-repo');
-  
+
   settings.jfrogApiKey = apiKeyInput ? apiKeyInput.value : '';
   settings.jfrogBaseUrl = baseUrlInput ? baseUrlInput.value : '';
   settings.jfrogDefaultRepo = defaultRepoInput ? defaultRepoInput.value : '';
@@ -2527,10 +2547,10 @@ async function saveSettings() {
     portalTitle: portalTitleInput ? portalTitleInput.value : '',
     companyName: companyNameInput ? companyNameInput.value : ''
   };
-  
+
   // Filter out empty mappings
   settings.clientMappings = (settings.clientMappings || []).filter(m => m.number && m.name);
-  
+
   try {
     await invoke('save_settings', { settings });
     frontendLog('INFO', 'SETTINGS: Settings saved successfully');
@@ -2544,11 +2564,11 @@ async function saveSettings() {
 async function viewLogs() {
   if (!invoke) return;
   frontendLog('INFO', 'SETTINGS: Opening log viewer');
-  
+
   try {
     const paths = await invoke('get_app_paths');
     const logsPath = paths.logs;
-    
+
     // Try to read log files from the logs directory
     let logContent = '';
     try {
@@ -2562,7 +2582,7 @@ async function viewLogs() {
     } catch (e) {
       logContent = 'No log files found or unable to read logs.';
     }
-    
+
     // Show log viewer modal
     showModal('Application Logs', `
       <div class="log-viewer">
@@ -2574,7 +2594,7 @@ async function viewLogs() {
         </div>
       </div>
     `);
-    
+
     document.getElementById('btn-close-logs')?.addEventListener('click', closeModal);
     document.getElementById('btn-open-logs-folder')?.addEventListener('click', async () => {
       try {
@@ -2591,16 +2611,16 @@ async function viewLogs() {
 async function exportData() {
   if (!invoke) return;
   frontendLog('INFO', 'SETTINGS: Starting data export');
-  
+
   try {
     const data = await invoke('export_data');
-    
+
     if (dialogSave) {
       const savePath = await dialogSave({
         defaultPath: `smartpostef-backup-${new Date().toISOString().split('T')[0]}.json`,
         filters: [{ name: 'JSON Files', extensions: ['json'] }]
       });
-      
+
       if (savePath) {
         await invoke('write_file_content', { filePath: savePath, content: data });
         frontendLog('INFO', 'SETTINGS: Data exported successfully', `Path: ${savePath}`);
@@ -2616,26 +2636,26 @@ async function exportData() {
 async function importData() {
   if (!invoke || !dialogOpen) return;
   frontendLog('INFO', 'SETTINGS: Starting data import');
-  
+
   try {
     const selected = await dialogOpen({
       multiple: false,
       filters: [{ name: 'JSON Files', extensions: ['json'] }],
       title: 'Select Backup File'
     });
-    
+
     if (selected) {
       const content = await invoke('read_file_content', { filePath: selected });
       await invoke('import_data', { data: content });
-      
+
       // Reload data
       settings = await invoke('get_settings');
       releases = await invoke('get_releases');
-      
+
       populateSettings();
       renderReleases();
       populateHtmlReleaseSelect();
-      
+
       frontendLog('INFO', 'SETTINGS: Data imported successfully');
       showToast('success', 'Data imported successfully');
     }
@@ -2659,24 +2679,24 @@ function showToast(type, message, options = {}) {
     container.className = 'toast-container';
     document.body.appendChild(container);
   }
-  
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  
+
   const icons = {
     success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
     error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
     warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
   };
-  
+
   const titles = {
     success: 'Success',
     error: 'Error',
     warning: 'Warning',
     info: 'Info'
   };
-  
+
   // Build action buttons HTML if filePath is provided
   let actionsHtml = '';
   if (options.filePath) {
@@ -2709,34 +2729,34 @@ function showToast(type, message, options = {}) {
     <button class="toast-close" aria-label="Close notification">&times;</button>
     <div class="toast-progress"></div>
   `;
-  
+
   // Add to container at the top (newest first)
   container.insertBefore(toast, container.firstChild);
-  
+
   // Play notification sound for errors and warnings
   if (type === 'error' || type === 'warning') {
     playNotificationSound(type);
   }
-  
+
   // Auto remove: 10 seconds for toasts with action buttons, 6 seconds for regular
   const dismissTime = options.filePath ? 10000 : 6000;
   const autoRemoveTimeout = setTimeout(() => {
     toast.classList.add('toast-fade-out');
     setTimeout(() => toast.remove(), 300);
   }, dismissTime);
-  
+
   // Close button
   toast.querySelector('.toast-close').addEventListener('click', () => {
     clearTimeout(autoRemoveTimeout);
     toast.classList.add('toast-fade-out');
     setTimeout(() => toast.remove(), 300);
   });
-  
+
   // Action buttons (Open / Find)
   if (options.filePath) {
     const openBtn = toast.querySelector('.toast-btn-open');
     const findBtn = toast.querySelector('.toast-btn-find');
-    
+
     if (openBtn) {
       openBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -2748,7 +2768,7 @@ function showToast(type, message, options = {}) {
         }
       });
     }
-    
+
     if (findBtn) {
       findBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -2761,17 +2781,17 @@ function showToast(type, message, options = {}) {
       });
     }
   }
-  
+
   // Pause auto-dismiss on hover
   let remainingTime = dismissTime;
   let startTime = Date.now();
-  
+
   toast.addEventListener('mouseenter', () => {
     remainingTime -= (Date.now() - startTime);
     clearTimeout(autoRemoveTimeout);
     toast.querySelector('.toast-progress').style.animationPlayState = 'paused';
   });
-  
+
   toast.addEventListener('mouseleave', () => {
     startTime = Date.now();
     setTimeout(() => {
@@ -2788,10 +2808,10 @@ function playNotificationSound(type) {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
+
     // Different sounds for different types
     if (type === 'error') {
       oscillator.frequency.value = 200;
@@ -2806,7 +2826,7 @@ function playNotificationSound(type) {
       oscillator.type = 'sine';
       gainNode.gain.value = 0.05;
     }
-    
+
     oscillator.start();
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
     oscillator.stop(audioContext.currentTime + 0.3);
@@ -2833,7 +2853,7 @@ let importReleaseState = {
 function initImportReleasePage(existingRelease) {
   const content = document.getElementById('import-release-content');
   if (!content) return;
-  
+
   // Reset state
   importReleaseState = {
     release: null,
@@ -2843,7 +2863,7 @@ function initImportReleasePage(existingRelease) {
     isEditing: !!existingRelease,
     spfContent: null
   };
-  
+
   if (existingRelease) {
     // Editing an existing release — populate directly
     frontendLog('INFO', 'IMPORT: Editing existing release', `Version: ${existingRelease.version}, ID: ${existingRelease.id}`);
@@ -2878,7 +2898,7 @@ function renderSpfDropZone(container) {
       </div>
     </div>
   `;
-  
+
   // Drag & drop handlers
   const dropZone = document.getElementById('spf-drop-zone');
   if (dropZone) {
@@ -2904,7 +2924,7 @@ function renderSpfDropZone(container) {
       }
     });
   }
-  
+
   // Browse button
   const btnBrowse = document.getElementById('btn-browse-spf');
   if (btnBrowse) {
@@ -2934,25 +2954,25 @@ function renderSpfDropZone(container) {
 function handleSpfImport(spfContent, fileName) {
   frontendLog('INFO', 'IMPORT: Processing SPF file', `File: ${fileName}`);
   importReleaseState.spfContent = spfContent;
-  
+
   // Parse SPF content
   const parsed = parseSpfContent(spfContent);
   if (!parsed) {
     showToast('error', 'Failed to parse SPF file. Invalid format.');
     return;
   }
-  
+
   importReleaseState.release = parsed.release;
   importReleaseState.packages = parsed.packages;
   importReleaseState.isEditing = true;
-  
+
   // Check if this release already exists locally
   const existingRelease = releases.find(r => r.version === parsed.release.version);
   if (existingRelease) {
     importReleaseState.originalRelease = existingRelease;
     frontendLog('INFO', 'IMPORT: Found existing local release', `Version: ${existingRelease.version}`);
   }
-  
+
   renderImportReleasePage();
   showToast('success', `SPF file imported: ${fileName}`);
 }
@@ -2962,18 +2982,18 @@ function parseSpfContent(content) {
   try {
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return null;
-    
+
     let release = { version: '', date: '', releaseType: 'Production', releaseNotes: '' };
     let packages = [];
-    
+
     // Check for sectioned format
     const hasReleaseInfo = lines.some(l => l === '<release_info>');
-    
+
     if (hasReleaseInfo) {
       // New sectioned format
       let currentSection = null;
       let releaseNotesLines = [];
-      
+
       for (const line of lines) {
         if (line.startsWith('<') && line.endsWith('>') && !line.startsWith('</')) {
           currentSection = line.replace(/[<>]/g, '');
@@ -2986,7 +3006,7 @@ function parseSpfContent(content) {
           currentSection = null;
           continue;
         }
-        
+
         if (currentSection === 'release_info') {
           const [key, ...valueParts] = line.split('=');
           const value = valueParts.join('=').trim();
@@ -3029,7 +3049,7 @@ function parseSpfContent(content) {
       }
       release.date = new Date().toLocaleDateString('en-CA');
     }
-    
+
     return { release, packages };
   } catch (err) {
     frontendLog('ERROR', 'IMPORT: SPF parse error', err.toString());
@@ -3042,17 +3062,17 @@ function detectPackageFromUrl(url) {
   const fileName = url.split('/').filter(s => s.length > 0).pop() || '';
   const lowerUrl = url.toLowerCase();
   const lowerName = fileName.toLowerCase();
-  
+
   let platform = 'Unknown', device = '', category = '', signature = '', client = '';
-  
+
   // Detect signature
   if (lowerName.includes('_sign.') || lowerName.includes('_sign/')) {
     signature = 'Signed';
   }
-  
+
   // Detect unsigned
   const isUnsigned = lowerUrl.includes('/unsigned/');
-  
+
   // Platform detection
   if (lowerUrl.includes('/windows/') || lowerName.includes('windows') || lowerName.endsWith('.exe') || lowerName.endsWith('.dll')) {
     platform = 'Windows';
@@ -3100,7 +3120,7 @@ function detectPackageFromUrl(url) {
       category = typeMatch[1].toUpperCase() === 'LP' ? 'Launcher' : 'App';
     }
   }
-  
+
   // Detect client from client mappings
   if (settings.clientMappings && settings.clientMappings.length > 0) {
     for (const mapping of settings.clientMappings) {
@@ -3110,19 +3130,19 @@ function detectPackageFromUrl(url) {
       }
     }
   }
-  
+
   return { platform, device, category, signature, client, url };
 }
 
 function renderImportReleasePage() {
   const content = document.getElementById('import-release-content');
   if (!content) return;
-  
+
   const rel = importReleaseState.release;
   if (!rel) return;
-  
+
   const isReadOnly = importReleaseState.isEditing;
-  
+
   content.innerHTML = `
     <!-- Basic Information -->
     <div class="card">
@@ -3208,10 +3228,10 @@ function renderImportReleasePage() {
       </button>
     </div>
   `;
-  
+
   // Attach event listeners
   attachImportPageEventListeners();
-  
+
   // Render package accordions
   renderImportAccordions();
 }
@@ -3223,10 +3243,10 @@ function attachImportPageEventListeners() {
       e.preventDefault();
       const tabName = tab.dataset.tab;
       document.querySelectorAll('.notes-tab').forEach(t => t.classList.toggle('active', t === tab));
-      
+
       const editPane = document.getElementById('import-notes-edit');
       const previewPane = document.getElementById('import-notes-preview');
-      
+
       if (tabName === 'edit') {
         if (editPane) editPane.classList.add('active');
         if (previewPane) previewPane.classList.remove('active');
@@ -3242,7 +3262,7 @@ function attachImportPageEventListeners() {
       }
     });
   });
-  
+
   // Cancel button
   const btnCancel = document.getElementById('btn-import-cancel');
   if (btnCancel) {
@@ -3254,7 +3274,7 @@ function attachImportPageEventListeners() {
       switchPage('releases');
     });
   }
-  
+
   // Add Packages button
   const btnAddPkgs = document.getElementById('btn-import-add-packages');
   if (btnAddPkgs) {
@@ -3264,7 +3284,7 @@ function attachImportPageEventListeners() {
       await handleImportAddPackages();
     });
   }
-  
+
   // Update/Save Release button
   const btnUpdate = document.getElementById('btn-import-update-release');
   if (btnUpdate) {
@@ -3311,22 +3331,22 @@ function hideLoadingModal() {
 async function handleDeleteFromJfrog(packageIndex) {
   const pkg = importReleaseState.packages[packageIndex];
   if (!pkg) return;
-  
+
   const fileName = pkg.url ? pkg.url.split('/').filter(s => s.length > 0).pop() : 'Unknown';
   frontendLog('INFO', 'IMPORT: Delete requested', `Package: ${fileName}, URL: ${pkg.url}`);
-  
+
   // Confirm with user
   const confirmed = await showConfirmDialog(
     'Delete Package from JFrog',
     `Are you sure you want to delete this package from JFrog?\n\n${fileName}\n\nThis action cannot be undone.`,
     { okLabel: 'Delete', kind: 'error' }
   );
-  
+
   if (!confirmed) {
     frontendLog('INFO', 'IMPORT: Delete cancelled by user');
     return;
   }
-  
+
   if (!pkg.url) {
     frontendLog('WARNING', 'IMPORT: Package has no URL, removing from list only');
     // Also remove from newPackages if it's there
@@ -3339,23 +3359,23 @@ async function handleDeleteFromJfrog(packageIndex) {
     showToast('success', 'Package removed from release');
     return;
   }
-  
+
   // Verify URL before sending delete command
   if (!settings.jfrogApiKey) {
     showToast('error', 'JFrog API key not configured. Go to Settings.');
     return;
   }
-  
+
   showLoadingModal('Deleting package from JFrog...');
-  
+
   try {
     const result = await invoke('delete_from_jfrog', {
       url: pkg.url,
       apiKey: settings.jfrogApiKey
     });
-    
+
     hideLoadingModal();
-    
+
     if (result.success) {
       frontendLog('INFO', 'IMPORT: Package deleted successfully', `URL: ${pkg.url}`);
       // Also remove from newPackages if it's there
@@ -3394,26 +3414,26 @@ async function handleImportAddPackages() {
     showToast('error', 'File dialog not available');
     return;
   }
-  
+
   const selected = await dialogOpen({
     multiple: true
   });
-  
+
   if (!selected || (Array.isArray(selected) && selected.length === 0)) return;
-  
+
   const files = Array.isArray(selected) ? selected : [selected];
   frontendLog('INFO', 'IMPORT: Adding packages', `Count: ${files.length}`);
-  
+
   // Get the current release base version (Major.Minor.Medium without Patch)
   const releaseVersion = importReleaseState.release ? importReleaseState.release.version : '';
   const releaseBaseVersion = extractBaseVersion(releaseVersion);
-  
+
   for (const filePath of files) {
     const fileName = filePath.split(/[/\\]/).pop() || '';
-    
+
     // Detect package info from filename
     const pkg = detectPackageFromFileName(fileName, filePath);
-    
+
     // Version validation: compare package version with release version
     if (releaseBaseVersion && pkg.version) {
       const pkgBaseVersion = extractBaseVersion(pkg.version);
@@ -3429,17 +3449,17 @@ async function handleImportAddPackages() {
         }
       }
     }
-    
+
     // Mark as new (needs upload)
     pkg.isNew = true;
     pkg.filePath = filePath;
     pkg.fileName = fileName;
-    
+
     importReleaseState.newPackages.push(pkg);
     importReleaseState.packages.push(pkg);
     frontendLog('INFO', 'IMPORT: Package added', `File: ${fileName}, Platform: ${pkg.platform}, Device: ${pkg.device}`);
   }
-  
+
   renderImportReleasePage();
   showToast('success', `Added ${files.length} package(s)`);
 }
@@ -3448,7 +3468,7 @@ async function handleImportAddPackages() {
 function normalizeDeviceName(deviceRaw) {
   if (!deviceRaw) return '';
   const upper = deviceRaw.toUpperCase();
-  
+
   // Known device name mappings
   const mappings = {
     'P2LITESE': 'P2 Lite',
@@ -3465,9 +3485,9 @@ function normalizeDeviceName(deviceRaw) {
     'L3': 'L3',
     'S920': 'S920'
   };
-  
+
   if (mappings[upper]) return mappings[upper];
-  
+
   // Default: replace underscores with spaces
   return deviceRaw.replace(/_/g, ' ');
 }
@@ -3475,25 +3495,25 @@ function normalizeDeviceName(deviceRaw) {
 // Detect package info from filename (for locally added files)
 function detectPackageFromFileName(fileName, filePath) {
   const lowerName = fileName.toLowerCase();
-  
+
   let platform = 'Unknown', device = '', category = '', signature = '', client = '', version = '';
-  
+
   // Detect signature
   if (lowerName.includes('_sign.')) {
     signature = 'Signed';
   }
-  
+
   // Extract version from filename
   const versionMatch = fileName.match(/(\d+\.\d+\.\d+\.\d+)/);
   if (versionMatch) version = versionMatch[1];
-  
+
   // Platform detection
   // Windows TEF Library: AditumTefLibrary-{P|D}-{version}-{hash}.zip
   if (lowerName.startsWith('aditumteflibrary-') && lowerName.endsWith('.zip')) {
     platform = 'Windows';
     device = 'TEF Library';
     category = '';
-  // Windows: must have .exe/.dll extension or contain 'windows'
+    // Windows: must have .exe/.dll extension or contain 'windows'
   } else if (lowerName.endsWith('.exe') || lowerName.endsWith('.dll') || lowerName.includes('windows')) {
     platform = 'Windows';
     if (lowerName.includes('dll') || lowerName.endsWith('.dll')) {
@@ -3505,7 +3525,7 @@ function detectPackageFromFileName(fileName, filePath) {
       else if (lowerName.includes('offline')) category = 'Offline';
       else category = 'Installer';
     }
-  // Linux 64-bit: detect by architecture pattern (x86_64, amd64) - covers files without extension
+    // Linux 64-bit: detect by architecture pattern (x86_64, amd64) - covers files without extension
   } else if (lowerName.includes('x86_64') || lowerName.includes('amd64')) {
     platform = 'Linux64';
     const isLibrary64 = lowerName.includes('lib') || lowerName.includes('.so');
@@ -3519,7 +3539,7 @@ function detectPackageFromFileName(fileName, filePath) {
     } else {
       category = 'Installer';
     }
-  // Linux 32-bit: detect by architecture pattern (i386)
+    // Linux 32-bit: detect by architecture pattern (i386)
   } else if (lowerName.includes('i386')) {
     platform = 'Linux32';
     const isLibrary32 = lowerName.includes('lib') || lowerName.includes('.so');
@@ -3533,7 +3553,7 @@ function detectPackageFromFileName(fileName, filePath) {
     } else {
       category = 'Installer';
     }
-  // Linux fallback: detect by 'linux' keyword or Linux-specific extensions
+    // Linux fallback: detect by 'linux' keyword or Linux-specific extensions
   } else if (lowerName.includes('linux') || lowerName.endsWith('.deb') || lowerName.endsWith('.rpm') || lowerName.endsWith('.sh') || lowerName.endsWith('.run')) {
     if (lowerName.includes('x64') || lowerName.includes('64')) {
       platform = 'Linux64';
@@ -3555,10 +3575,10 @@ function detectPackageFromFileName(fileName, filePath) {
     platform = 'Embedded';
     device = 'S920';
     category = 'Package';
-  // A2A: packages with .A2A. pattern in filename
+    // A2A: packages with .A2A. pattern in filename
   } else if (lowerName.includes('.a2a.')) {
     platform = 'A2A';
-    
+
     // .aar files are SDK Integration libraries
     if (lowerName.endsWith('.aar')) {
       device = 'AAR';
@@ -3610,7 +3630,7 @@ function detectPackageFromFileName(fileName, filePath) {
       device = 'Android';
       category = 'Package';
     }
-    
+
     // Extract signature from filename (e.g., TecToy, Entrepay before -release)
     const sigMatch = fileName.match(/-([A-Za-z]+)-release/i);
     if (sigMatch && !['P', 'D', 'sign'].includes(sigMatch[1].toUpperCase())) {
@@ -3627,7 +3647,7 @@ function detectPackageFromFileName(fileName, filePath) {
       category = (prefix === 'LP' || prefix === 'LD') ? 'Launcher' : 'App';
     }
   }
-  
+
   // Detect client from client mappings
   if (settings.clientMappings && settings.clientMappings.length > 0) {
     for (const mapping of settings.clientMappings) {
@@ -3637,7 +3657,7 @@ function detectPackageFromFileName(fileName, filePath) {
       }
     }
   }
-  
+
   return { platform, device, category, signature, client, url: '', version, filePath };
 }
 
@@ -3648,33 +3668,33 @@ async function handleUpdateRelease() {
     showToast('error', 'No release data available');
     return;
   }
-  
+
   // Gather updated fields
   const dateInput = document.getElementById('import-date');
   const notesInput = document.getElementById('import-release-notes');
-  
+
   if (dateInput) rel.date = dateInput.value;
   if (notesInput) rel.releaseNotes = notesInput.value;
-  
+
   // Check if there are new packages to upload
   const newPkgs = importReleaseState.newPackages.filter(p => !p.uploaded);
-  
+
   if (newPkgs.length > 0) {
     if (!settings.jfrogApiKey) {
       showToast('error', 'JFrog API key not configured. Go to Settings.');
       return;
     }
-    
+
     showLoadingModal(`Uploading ${newPkgs.length} new package(s)...`);
-    
+
     let successCount = 0;
     let failCount = 0;
-    
+
     for (const pkg of newPkgs) {
       try {
         let filePath = pkg.filePath;
         let uploadFileName = pkg.fileName;
-        
+
         // STA APK→ZIP rule: For STA dev or prod-signed, APK must be zipped
         const needsZip = shouldZipApk(pkg);
         if (needsZip && filePath) {
@@ -3688,16 +3708,16 @@ async function handleUpdateRelease() {
             throw new Error(`Failed to zip APK: ${zipResult.message}`);
           }
         }
-        
+
         // Determine JFrog path
         const jfrogPath = buildJfrogPath(pkg, uploadFileName);
-        
+
         const result = await invoke('upload_to_jfrog', {
           filePath: filePath,
           jfrogPath: jfrogPath,
           apiKey: settings.jfrogApiKey
         });
-        
+
         if (result.success) {
           pkg.uploaded = true;
           pkg.url = result.url;
@@ -3712,16 +3732,16 @@ async function handleUpdateRelease() {
         frontendLog('ERROR', 'IMPORT: Upload failed', `File: ${pkg.fileName}, Error: ${err}`);
       }
     }
-    
+
     hideLoadingModal();
-    
+
     if (failCount > 0) {
       showToast('warning', `Uploaded ${successCount}, failed ${failCount}. Fix errors and try again.`);
       renderImportReleasePage();
       return;
     }
   }
-  
+
   // Build release data
   const releaseData = {
     id: importReleaseState.originalRelease ? importReleaseState.originalRelease.id : `${rel.version}-${Date.now()}`,
@@ -3740,33 +3760,33 @@ async function handleUpdateRelease() {
     createdAt: importReleaseState.originalRelease ? importReleaseState.originalRelease.createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  
+
   showLoadingModal('Saving release...');
-  
+
   try {
     // Generate SPF content and save internally
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
-    
+
     // Save SPF to internal releases folder
     const typeShort = (rel.releaseType || 'Production').toLowerCase() === 'production' ? 'prod' : 'dev';
     const spfFileName = `release_${rel.version}-${rel.date}-${typeShort}.spf`;
     await invoke('save_internal_spf', { content: spfContent, fileName: spfFileName });
-    
+
     // Save release to releases.json (cache/index)
     releaseData.spfFileName = spfFileName;
     await invoke('save_release', { release: releaseData });
-    
+
     // Refresh releases list
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
-    
+
     hideLoadingModal();
-    
+
     // Reset state and navigate to releases
     importReleaseState = { release: null, originalRelease: null, packages: [], newPackages: [], isEditing: false, spfContent: null };
     switchPage('releases');
-    
+
     showToast('success', `Release ${rel.version} saved successfully!`);
     frontendLog('INFO', 'IMPORT: Release saved', `Version: ${rel.version}`);
   } catch (err) {
@@ -3784,15 +3804,15 @@ function shouldZipApk(pkg) {
   const lowerName = pkg.fileName.toLowerCase();
   if (!lowerName.endsWith('.apk')) return false;
   if (pkg.platform !== 'STA') return false;
-  
+
   // Check if this is a prod-unsigned package
   const releaseType = importReleaseState.release ? importReleaseState.release.releaseType : 'Production';
   const isSigned = pkg.signature === 'Signed' || lowerName.includes('_sign.');
   const isProd = releaseType === 'Production';
-  
+
   // Prod unsigned APKs go as-is
   if (isProd && !isSigned) return false;
-  
+
   // Dev APKs and Prod signed APKs must be zipped
   return true;
 }
@@ -3801,13 +3821,13 @@ function shouldZipApk(pkg) {
 function buildJfrogPath(pkg, fileName) {
   const baseUrl = settings.jfrogBaseUrl || 'https://artifactory.aditum.com.br/artifactory';
   const repo = settings.jfrogDefaultRepo || 'packages';
-  
+
   // Check if this is a dev package (from filename or release type)
-  const isDev = pkg.isDev || pkg.is_dev || 
-                fileName.toLowerCase().includes('-d-') || 
-                (importReleaseState.release && importReleaseState.release.releaseType === 'development');
+  const isDev = pkg.isDev || pkg.is_dev ||
+    fileName.toLowerCase().includes('-d-') ||
+    (importReleaseState.release && importReleaseState.release.releaseType === 'development');
   const devPrefix = isDev ? 'dev/' : '';
-  
+
   // Return directory path only - the Rust backend appends the filename
   if (pkg.platform === 'Windows') {
     return `${repo}/${devPrefix}windows/`;
@@ -3835,17 +3855,17 @@ function buildJfrogPath(pkg, fileName) {
 
 function initToolsPage() {
   frontendLog('INFO', 'TOOLS: Initializing Tools page');
-  
+
   // Set default date to today
   const dateInput = document.getElementById('pwd-date');
   if (dateInput) {
     dateInput.value = new Date().toISOString().split('T')[0];
   }
-  
+
   // Version input - no default value, just placeholder guidance
   const versionInput = document.getElementById('pwd-app-version');
   // No default value - user must enter the portal version
-  
+
   // Generate button
   const btnGenerate = document.getElementById('btn-generate-password');
   if (btnGenerate) {
@@ -3853,7 +3873,7 @@ function initToolsPage() {
       e.preventDefault();
       const version = document.getElementById('pwd-app-version')?.value || '2.0.7';
       const dateStr = document.getElementById('pwd-date')?.value;
-      
+
       let targetDate;
       if (dateStr) {
         const parts = dateStr.split('-');
@@ -3861,31 +3881,31 @@ function initToolsPage() {
       } else {
         targetDate = new Date();
       }
-      
+
       const password = generateDailyPassword(version, targetDate);
-      
+
       const resultDiv = document.getElementById('password-result');
       const valueSpan = document.getElementById('password-value');
       const metaDiv = document.getElementById('password-meta');
-      
+
       if (resultDiv && valueSpan) {
         resultDiv.style.display = 'block';
         valueSpan.textContent = password;
-        
+
         const dd = targetDate.getDate();
         const MM = targetDate.getMonth() + 1;
         const yyyy = targetDate.getFullYear();
         const versionInt = parseInt(version.replace(/\./g, ''), 10) || 1;
-        
+
         if (metaDiv) {
           metaDiv.innerHTML = `Date: ${yyyy}-${String(MM).padStart(2, '0')}-${String(dd).padStart(2, '0')} &nbsp;|&nbsp; Version: ${version} (seed: ${versionInt}) &nbsp;|&nbsp; Algorithm: v3.1 Hash-based`;
         }
       }
-      
+
       frontendLog('INFO', 'TOOLS: Password generated', `Version: ${version}, Date: ${dateStr}`);
     });
   }
-  
+
   // Copy button
   const btnCopy = document.getElementById('btn-copy-password');
   if (btnCopy) {
@@ -3917,39 +3937,39 @@ function generateDailyPassword(appVersion, date) {
   const dd = now.getDate();
   const MM = now.getMonth() + 1;
   const yyyy = now.getFullYear();
-  
+
   const versionStr = appVersion.replace(/\./g, '');
   const version = parseInt(versionStr, 10) || 1;
-  
+
   // Step 1: Create initial seed
   let hash = (dd * 13) + (MM * 397) + (yyyy * 7919) + (version * 2953);
-  
+
   // Step 2: First mixing round
   hash = Math.imul(hash, 0x45d9f3b);
   hash = hash ^ (hash >>> 16);
-  
+
   // Step 3: Date mixing
   const dateMix = (yyyy << 9) ^ (MM << 5) ^ dd;
   hash = hash ^ dateMix;
-  
+
   // Step 4: Second mixing round
   hash = Math.imul(hash, 0x119de1f3);
   hash = hash ^ (hash >>> 15);
-  
+
   // Step 5: Version mixing
   const versionMix = Math.imul(version, 0x85ebca6b) ^ Math.imul(dd * MM, 0x1b873593);
   hash = hash ^ versionMix;
-  
+
   // Step 6: Final mixing
   hash = Math.imul(hash, 0xc2b2ae35);
   hash = hash ^ (hash >>> 13);
   hash = Math.imul(hash, 0x27d4eb2d);
   hash = hash ^ (hash >>> 15);
-  
+
   // Step 7: Bound and convert
   const unsignedHash = hash >>> 0;
   const result = (unsignedHash % 0xF00000) + 0x100000;
-  
+
   return result.toString(16).toUpperCase();
 }
 
@@ -3959,21 +3979,21 @@ function generateDailyPassword(appVersion, date) {
 
 function initAdvancedOptionsPage() {
   frontendLog('INFO', 'ADVANCED: Initializing Advanced Options page');
-  
+
   // Ensure customPlatforms array exists in settings
   if (!settings.customPlatforms) {
     settings.customPlatforms = [];
   }
-  
+
   renderCustomDevices();
-  
+
   // Add device button
   const btnAdd = document.getElementById('btn-add-custom-device');
   if (btnAdd) {
     // Remove old listeners by cloning
     const newBtn = btnAdd.cloneNode(true);
     btnAdd.parentNode.replaceChild(newBtn, btnAdd);
-    
+
     newBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       await handleAddCustomDevice();
@@ -3984,9 +4004,9 @@ function initAdvancedOptionsPage() {
 function renderCustomDevices() {
   const container = document.getElementById('custom-devices-list');
   if (!container) return;
-  
+
   const devices = settings.customPlatforms || [];
-  
+
   if (devices.length === 0) {
     container.innerHTML = `
       <div class="empty-state" style="padding: 2rem;">
@@ -3997,7 +4017,7 @@ function renderCustomDevices() {
     `;
     return;
   }
-  
+
   let html = '';
   devices.forEach((device, index) => {
     html += `
@@ -4015,7 +4035,7 @@ function renderCustomDevices() {
       </div>
     `;
   });
-  
+
   container.innerHTML = html;
 }
 
@@ -4023,50 +4043,50 @@ async function handleAddCustomDevice() {
   const nameInput = document.getElementById('cd-name');
   const typeSelect = document.getElementById('cd-type');
   const identifierInput = document.getElementById('cd-identifier');
-  
+
   const name = nameInput?.value?.trim() || '';
   const type = typeSelect?.value || 'Platform';
   const identifier = identifierInput?.value?.trim()?.toLowerCase() || '';
-  
+
   // Validation
   if (!name) {
     showToast('error', 'Device name is required');
     nameInput?.focus();
     return;
   }
-  
+
   if (!identifier) {
     showToast('error', 'URL identifier is required');
     identifierInput?.focus();
     return;
   }
-  
+
   // Check for duplicates
   if (!settings.customPlatforms) settings.customPlatforms = [];
-  
+
   const duplicate = settings.customPlatforms.find(
     d => d.identifier.toLowerCase() === identifier || d.name.toLowerCase() === name.toLowerCase()
   );
-  
+
   if (duplicate) {
     showToast('error', `A device with this name or identifier already exists: ${duplicate.name}`);
     return;
   }
-  
+
   // Add to settings
   const newDevice = { name, type, identifier };
   settings.customPlatforms.push(newDevice);
-  
+
   // Save settings
   try {
     await invoke('save_settings', { settings: settings });
     frontendLog('INFO', 'ADVANCED: Custom device added', `Name: ${name}, Type: ${type}, Identifier: ${identifier}`);
     showToast('success', `Custom device "${name}" added successfully`);
-    
+
     // Clear form
     if (nameInput) nameInput.value = '';
     if (identifierInput) identifierInput.value = '';
-    
+
     // Re-render list
     renderCustomDevices();
   } catch (err) {
@@ -4080,19 +4100,19 @@ async function handleAddCustomDevice() {
 async function handleDeleteCustomDevice(index) {
   const devices = settings.customPlatforms || [];
   if (index < 0 || index >= devices.length) return;
-  
+
   const device = devices[index];
-  
+
   const confirmed = await showConfirmDialog(
     'Delete Custom Device',
     `Are you sure you want to delete "${device.name}"?\n\nType: ${device.type}\nIdentifier: ${device.identifier}`,
     { okLabel: 'Delete', kind: 'error' }
   );
-  
+
   if (!confirmed) return;
-  
+
   devices.splice(index, 1);
-  
+
   try {
     await invoke('save_settings', { settings: settings });
     frontendLog('INFO', 'ADVANCED: Custom device deleted', `Name: ${device.name}`);
@@ -4184,7 +4204,7 @@ function renderImportAccordions() {
     const newCount = pkgs.filter(p => newPkgUrls.has(p.url) || newPkgUrls.has(p.filePath)).length;
 
     // Use SVG icon if available, otherwise fall back to text badge
-    const iconHtml = meta.svg 
+    const iconHtml = meta.svg
       ? `<img src="${meta.svg}" alt="${escapeHtml(meta.label)}" class="accordion-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" /><div class="accordion-icon ${meta.css}" style="display:none">${meta.icon}</div>`
       : `<div class="accordion-icon ${meta.css}">${meta.icon}</div>`;
 
@@ -4309,7 +4329,7 @@ function renderPackageTable(pkgs) {
     const category = pkg.category || '';
     const device = pkg.device || '';
     const title = device || category || fileName;
-    
+
     // Build badges HTML
     let badgesHtml = '';
     // Skip category badge for Library packages or if category is None/empty
@@ -4400,14 +4420,14 @@ function renderA2ACards(pkgs) {
   if (!pkgs || pkgs.length === 0) return '<p class="accordion-empty">No A2A packages</p>';
 
   // Classify A2A packages
-  const sdkDocs = pkgs.filter(p => ['Doc', 'AAR', 'SDK', 'Documentation', 'TefSdk'].includes(p.device) || 
-                                    p.category?.toLowerCase()?.includes('sdk'));
-  const examples = pkgs.filter(p => p.category?.toLowerCase()?.includes('example') || 
-                                     p.device?.toLowerCase()?.includes('example'));
+  const sdkDocs = pkgs.filter(p => ['Doc', 'AAR', 'SDK', 'Documentation', 'TefSdk'].includes(p.device) ||
+    p.category?.toLowerCase()?.includes('sdk'));
+  const examples = pkgs.filter(p => p.category?.toLowerCase()?.includes('example') ||
+    p.device?.toLowerCase()?.includes('example'));
   const deviceApks = pkgs.filter(p => !sdkDocs.includes(p) && !examples.includes(p) && p.device);
-  
+
   let html = '';
-  
+
   // SDK/Documentation section
   if (sdkDocs.length > 0) {
     html += '<div class="a2a-section"><div class="a2a-section-title">SDK</div>';
@@ -4429,7 +4449,7 @@ function renderA2ACards(pkgs) {
     });
     html += '</div></div>';
   }
-  
+
   // Device APKs section
   if (deviceApks.length > 0) {
     html += '<div class="a2a-section"><div class="a2a-section-title">A2A (Device APKs)</div>';
@@ -4441,7 +4461,7 @@ function renderA2ACards(pkgs) {
     });
     html += '</div></div>';
   }
-  
+
   // Examples section
   if (examples.length > 0) {
     html += '<div class="a2a-section"><div class="a2a-section-title">Examples</div>';
@@ -4459,7 +4479,7 @@ function renderA2ACards(pkgs) {
     });
     html += '</div></div>';
   }
-  
+
   return html || '<p class="accordion-empty">No A2A packages</p>';
 }
 
@@ -4558,4 +4578,21 @@ function renderCustomPlatformAccordion(pkgs) {
  */
 function renderGenericPackageTable(pkgs) {
   return renderPackageTable(pkgs);
+}
+
+// Copy package JFrog URL to clipboard (called from Release Summary)
+function copyPkgUrl(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.classList.add('copied');
+    const origSvg = btn.innerHTML;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>`;
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = origSvg;
+    }, 1500);
+  }).catch(() => {
+    showToast('error', 'Failed to copy URL');
+  });
 }

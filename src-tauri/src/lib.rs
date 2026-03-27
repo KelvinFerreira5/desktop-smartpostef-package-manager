@@ -1051,7 +1051,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
             pkg.jfrog_path = Some(if pkg.is_dev {
                 format!("packages/dev/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
             } else {
-                format!("packages/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+                format!("packages/unsigned/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
             });
         }
         
@@ -1072,7 +1072,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.jfrog_path = Some(if pkg.is_dev {
             "packages/dev/app-to-app/payment_example/".to_string()
         } else {
-            "packages/app-to-app/payment_example/".to_string()
+            "packages/unsigned/app-to-app/payment_example/".to_string()
         });
         
         return pkg;
@@ -1123,7 +1123,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
             pkg.jfrog_path = Some(if pkg.is_dev {
                 format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             } else {
-                format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+                format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             });
         }
         

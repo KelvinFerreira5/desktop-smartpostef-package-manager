@@ -5,52 +5,80 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.14] - 2026-03-26
+
+### Added
+
+- **Copy URL Button in Release Summary**: Added a copy button next to each package in the Release Summary list to quickly copy the JFrog URL to clipboard.
+
+## [3.1.13] - 2026-03-26
+
+### Fixed
+
+- **A2A SDK Integration Duplicate Name**: Fixed Release Summary showing identical "SDK Integration" name for both AAR and Documentation A2A packages. Now correctly displays "SDK Integration" for the AAR and "SDK Documentation" for the Doc package by using `category` field to distinguish them.
+
+## [3.1.12] - 2026-03-26
+
+### Fixed
+
+- **A2A Unsigned Package Paths**: Fixed production unsigned A2A packages (Device APKs and PaymentExample) incorrectly using signed paths like `packages/app-to-app/apk/.../` instead of `packages/unsigned/app-to-app/apk/.../`.
+
 ## [3.1.11] - 2026-02-13
 
 ### Fixed
+
 - **New Deploy Release Notes Missing**: Fixed v3.1.7 CSS regression that caused release notes textarea to disappear on New Deploy page. Removed conflicting `.notes-content { display: none }` rules that were added for Import Release page but broke New Deploy page.
 
 ## [3.1.10] - 2026-02-13
 
 ### Fixed
+
 - **Windows TEF Library Category**: Fixed Windows library packages (`AditumTefLibrary-*.zip`) getting "DLL" category. Libraries now have empty category like Linux libraries.
 
 ## [3.1.9] - 2026-02-12
 
 ### Fixed
+
 - **Linux TEF Library Category**: Fixed Linux library packages (`AditumTEFLib-*.zip`) incorrectly getting "Installer" category. Libraries now have empty category as expected in SPF output.
 
 ## [3.1.8] - 2026-02-12
 
 ### Fixed
+
 - **Windows TEF Library Detection**: Fixed `AditumTefLibrary-{P|D}-*.zip` files being detected as Unknown/STA instead of Windows TEF Library. Added explicit pattern match in frontend detection before the generic `.zip` fallback.
 
 ## [3.1.7] - 2026-02-12
 
 ### Fixed
+
 - **Duplicate Release Notes Tabs**: Fixed v3.1.5 CSS regression that caused both Write and Preview tabs to display simultaneously in Import/Edit Release page. Unified the HTML structure to use consistent `.notes-content > .tab-content.active` pattern for both pages.
 
 ## [3.1.6] - 2026-02-12
 
 ### Fixed
+
 - **S920 Dev Package Extraction**: Fixed bug where Dev S920 packages (`SmartPosTef-D-S920-*.zip`) were incorrectly being extracted like Production unsigned packages. Now only Production unsigned S920 packages are extracted; Dev packages are uploaded directly.
 
 ## [3.1.5] - 2026-02-12
 
 ### Fixed
+
 - **Release Notes Textarea Missing**: Fixed CSS rule that was hiding the release notes textarea in the New Deploy page. Changed `.notes-content` from `display: none` to `display: block`.
 
 ## [3.1.4] - 2026-02-12
 
 ### Added
+
 - **JFrog Path Info Tooltip**: Added an italic "i" info icon on package cards that shows the full JFrog path on hover. For pending uploads, shows "(pending upload: filename)".
 - **Device Name Normalization**: Added `normalizeDeviceName()` function to normalize device names for display (e.g., `P2LITESE` → `P2 Lite`, `L3_2024` → `L3 2024`). Applied to both A2A and STA packages.
 
 ### Changed
+
 - **PaymentExample Card Titles**: Examples now show device name in the title (e.g., "DX8000 PaymentExample" instead of just "PaymentExample").
 - **TefSdk Classification**: TefSdk packages are now grouped in the SDK section (not Device APKs) with architecture in title (e.g., "TefSdk v7a", "TefSdk v8a").
 
 ### Fixed
+
 - **A2A Package Detection**: Rewrote A2A detection with proper pattern-based extraction for device, category, and signature from filenames.
 - **Deleted Packages Still Uploaded**: Fixed bug where packages removed from the import list were still being uploaded. Now properly removes from both `packages` and `newPackages` arrays.
 - **JFrog URL Duplication**: Fixed `buildJfrogPath()` to return directory path only (without filename), since Rust backend appends the filename.
@@ -58,11 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.3] - 2026-02-12
 
 ### Fixed
+
 - **Linux Package Detection**: Added explicit checks for `x86_64`/`amd64` and `i386` architecture patterns as primary Linux detection, fixing issues with Linux packages being detected as "Unknown" when they lack the "linux" keyword or Linux-specific extensions.
 
 ## [3.1.2] - 2026-02-11
 
 ### Fixed
+
 - **Version Display in UI**: Updated sidebar footer version from hardcoded v3.0.0 to v3.1.2.
 - **Browse Files Button Alignment**: Centered the "Browse Files" button in the Import Release drop zone using flexbox.
 - **JFrog Upload Path for Dev Packages**: Fixed `buildJfrogPath()` to use `/dev/` path prefix for development packages. Also fixed Linux64/Linux32 paths and A2A path (`/app-to-app/` instead of `/android/a2a/`).
@@ -72,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.1] - 2026-02-11
 
 ### Fixed
+
 - **Delete Dialog Button Alignment**: Fixed misaligned Cancel/Delete buttons in confirmation dialogs by adding consistent button height and flex alignment.
 - **Added Badge for New Packages**: Packages without a URL (newly added, not yet uploaded) now show a green "Added" badge with checkmark icon instead of a "-" placeholder.
 - **File Picker Filter Removed**: The file picker for adding packages no longer filters by extension, allowing selection of any file (including Linux builds without extensions).
@@ -79,15 +110,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.1.0] - 2026-02-12
 
 ### Added
+
 - **Download Button on Package Cards**: Replaced URL text links with a clear "Download" button and a copy-to-clipboard button in package cards. Provides better UX with visual feedback on URL copy.
 - **A2A Section Grouping**: A2A packages in accordions are now organized into three sub-sections: SDK (Documentation, AAR), A2A (Device APKs), and Examples (PaymentExample). Each section has a clear title header.
 - **Confirm Dialog Redesign**: Confirmation dialogs (delete, warnings) now feature a centered icon, gradient header, and improved styling. Danger dialogs use a red gradient, warning dialogs use yellow/orange, and info dialogs use blue.
 - **Linux Package Extensions**: File picker filters now include Linux package formats: `.deb`, `.rpm`, `.tar`, `.gz`, `.sh`, `.run`.
 
 ### Changed
+
 - **Platform Tab Contrast (Dark Mode)**: Improved text contrast for platform tabs with brighter colors (#b8b8d0 for inactive, #ffffff on hover, #e879a9 for active).
 - **Package Card Grid Spacing**: Added `margin-top: 0.75rem` to `.pkg-cards` for better visual separation from platform tabs.
-- **Icon Improvements**: 
+- **Icon Improvements**:
   - Windows DLL packages now use `dll.svg` icon
   - Windows/Linux libraries use `lib.svg` icon  
   - STA device groups use `android.svg` icon
@@ -97,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Linux Platform Detection**: Improved detection to distinguish Linux64/Linux32 platforms and recognize `.deb`, `.rpm`, `.sh`, `.run` files.
 
 ### Fixed
+
 - **SPF Import Parsing**: Fixed semicolon delimiter detection and added header row skip to correctly parse SPF files (previously used comma delimiter, causing "0 packages found").
 - **URL Link Contrast (Dark Mode)**: Changed URL link color to #e879a9 for better visibility in dark mode.
 - **Tools Page Version Placeholder**: Removed hardcoded "2.0.7" placeholder from the version input field.
@@ -104,6 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.0.0] - 2026-02-11
 
 ### Added
+
 - **Import Release Feature**: Complete SPF-centric import workflow allowing users to import existing `.spf` files or edit saved releases. Includes drag-and-drop SPF import, full release editing (version, date, type, notes), and package management with accordion-based UI.
 - **Package Management Accordions**: Platform-grouped collapsible sections (Windows, Linux64, Linux32, Embedded, STA, A2A, Custom) with tabbed sub-views for TEF platforms, device-grouped STA lists, A2A card grid, and custom platform rows. Each package shows category, signature, client, URL, and delete button.
 - **Delete from JFrog**: Backend command to delete individual packages from JFrog Artifactory with HEAD check + DELETE request, handling 204/200/404 status codes.
@@ -117,6 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SPF Directory**: New `spf/` directory in app data for storing generated SPF files.
 
 ### Changed
+
 - **Export Data (v2)**: Now includes `version: 2` marker, collects and embeds SPF file contents in the export JSON under `spfFiles` map for complete portability.
 - **Import Data (v2)**: Restores SPF files from exported `spfFiles` map, or regenerates them from release data if not available. Ensures SPF directory exists.
 - **Version Bump**: Major version bump from 2.0.41 to 3.0.0 reflecting the significant new Import Release feature.
@@ -124,17 +160,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.41] - 2026-02-09
 
 ### Changed
+
 - **Per-Execution Rotative Logging**: Log files are now created per application execution instead of per day. The new filename pattern is `adtpkgmngr-<YYYYMMDD-HHMMSS>-<counter>.log`, where the timestamp reflects when the execution started and the counter increments for each execution on the same day. When a log file reaches 50MB, it is renamed with a `-f` suffix (e.g., `adtpkgmngr-20260209-143022-1-f.log`) and a new file is created with an incremented counter. This replaces the previous daily log file pattern (`YYYY-MM-DD.log`).
 
 ### Added
+
 - **"Não assinados" Badge on Unsigned Releases**: Releases that contain packages with `/unsigned/` in their JFrog URL now display a red "Não assinados" badge next to the release type badge (Production/Development) in the Releases list. This makes it immediately visible which releases contain unsigned packages. The badge uses a red color scheme in both dark and light modes.
 
 ### Fixed
+
 - **S920 Folder Download Links in HTML**: Fixed an issue where S920 unsigned packages (which are uploaded as folders) had blank/missing link text in the generated HTML documentation. The `extract_filename` function now correctly handles URLs ending with `/` by stripping the trailing slash before extracting the folder name, and appending `/` to indicate it is a folder (e.g., `SmartPosTef-P-S920-2.5.1.138693/` instead of an empty string).
 
 ## [2.0.40] - 2026-02-09
 
 ### Fixed
+
 - **Markdown Rendering in Release Notes**: Restored the `lib/marked.min.js` library (v12.0.2) which was missing from the project, causing release notes to render as plain text instead of formatted markdown. This affects both the preview in the New Release creation screen and the modal when viewing release notes from the Releases page.
 - **Modal Background Too Dark**: Improved modal visibility by changing the modal content background from `#1e1e36` to `#252545` (lighter), reducing the overlay opacity from 0.8 to 0.5, and adding `position: relative; z-index: 1` to ensure the modal content sits above the backdrop. Also consolidated duplicate `.modal` CSS definitions.
 - **HTML Favicon**: Updated the base64-encoded favicon in the generated HTML files to use the correct icon (6984 chars vs previous truncated 4202 chars).
@@ -142,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.39] - 2026-02-09
 
 ### Fixed
+
 - **Toast Cascade Z-Index and Opacity**: Toast notifications now stack correctly with the newest toast always on top (highest z-index). Removed opacity reduction on stacked toasts so they are fully opaque and cannot be seen through. Background changed from `var(--bg-card)` to solid `#16162a` (dark mode) / `#ffffff` (light mode) and removed `backdrop-filter: blur()` to eliminate any transparency.
 - **Online/Offline Tag Colors in Release Summary**: The category tags for platform packages now use distinct colors: **Offline** tags are yellow and **Online** tags are green, instead of both being gray. Added `summary-tag-yellow` CSS class with light mode variant.
 - **Modal Width for Release Notes and Logs**: The Release Notes and Application Logs modals now use 80% of the window width with no max-width cap, providing much more readable content display.
@@ -149,19 +190,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.38] - 2026-02-09
 
 ### Fixed
+
 - **STA Device Tags in Release Summary**: Category (Launcher, App), signature, and client values in the STA Devices section of the Release Summary now render as styled tag badges (gray for category, blue for signature, green for client) instead of plain text. This matches the styled tags used in the Platform Packages section.
 - **S920 Unsigned ZIP Extraction**: The `extract_root_and_upload_to_jfrog` function now always produces a flat destination folder containing only files (no subdirectories). Whether the ZIP contains files at root level or inside a subfolder like `PAX_S920/`, all files are extracted directly to the root of the destination folder (named after the ZIP without extension). The uploaded structure is always `SmartPosTef-P-S920-{version}.{hash}/{files}` with no intermediate directories.
 
 ### Added
+
 - **Open/Find Buttons on Data Export Toast**: The success notification after exporting data from Settings > Data Export/Import now includes Open and Find action buttons, consistent with HTML and SPF generation notifications.
 
 ## [2.0.37] - 2026-02-09
 
 ### Added
+
 - **S920 Unsigned Package Extract & Upload**: Unsigned S920 packages (both new `SmartPosTef-{P|D}-S920-{version}.{hash}.zip` and legacy `SmartPosTef-{P|D}-{version}.{hash}.zip` formats) are now extracted before upload. The ZIP root contents are placed into a folder named after the file (without `.zip` extension), and the entire folder is uploaded to JFrog. For example, `SmartPosTef-P-S920-2.5.1.138693.zip` is extracted to `SmartPosTef-P-S920-2.5.1.138693/` and uploaded to `packages/unsigned/pax/s920/SmartPosTef-P-S920-2.5.1.138693/`. Development unsigned packages go to `packages/dev/pax/s920/{folder}/`.
 - **New Rust Command `extract_root_and_upload_to_jfrog`**: Dedicated backend command for extracting ZIP root contents into a named folder and uploading all files preserving directory structure. Used specifically for unsigned S920 packages.
 
 ### Changed
+
 - **Package Card Display for S920 Unsigned**: The package card now shows `Extract → {folder_name}/` tag and the full JFrog path including the folder name for unsigned S920 packages, making the extract-and-upload behavior clearly visible.
 - **SPF Export Filters Updated**: All SPF export filters (export SPF, finalize release, releases page export) now correctly distinguish between online companion packages (which should be excluded from SPF) and S920 unsigned packages (which should be included). Previously, any package with `specialHandling` was excluded from SPF.
 - **Version Detection Filters Updated**: Auto-detect version and version validation now correctly include S920 unsigned packages in version analysis, instead of skipping them as companion files.
@@ -169,64 +214,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.36] - 2026-02-09
 
 ### Fixed
+
 - **S920 Package Detection (New Format)**: Added support for the current S920 filename format `SmartPosTef-{P|D}-S920-{version}.{hash}.zip` (with "S920" in the name). Previously only the legacy format `SmartPosTef-{P|D}-{version}.{hash}.zip` was recognized, causing new S920 packages to show as "Unknown" platform with "Path not determined". Both signed (`_sign.zip`) and unsigned (`.zip`) variants of the new format are now correctly detected as Embedded/S920 with proper JFrog paths (`packages/pax/s920/`, `packages/dev/pax/s920/`, `packages/unsigned/pax/s920/`). The legacy format remains supported for backward compatibility.
 
 ## [2.0.35] - 2026-02-09
 
 ### Added
+
 - **Toast Action Buttons (Open / Find)**: File generation notifications (HTML and SPF) now include two action buttons: **Open** (opens the generated file in the default application/browser) and **Find** (reveals the file in the system file manager). This applies to all HTML generation and SPF export operations across the application. Toasts with action buttons have an extended auto-dismiss time of 10 seconds.
 - **Rust Backend Commands**: Added `open_file_in_default_app` and `show_in_folder` commands to support the new toast action buttons across Windows, Linux, and macOS.
 
 ### Changed
+
 - **API Key Encryption in Export**: The JFrog API key is now encrypted using AES-256-GCM before being written to the exported JSON file. On import, the key is automatically decrypted. Old (plaintext) exports are still supported for backward compatibility. The exported key is prefixed with `ENC:` to distinguish encrypted values.
 - **Release Summary Redesign**: The release summary shown when expanding a release card now displays packages with proper structure: platform packages show category tags (e.g., Online, Offline) as badges next to the package name; STA devices are grouped by terminal with variants listed below, each showing category, signature (blue badge), and client (green badge) tags. This matches the layout of the web project HTML output.
 - **Eye Toggle Button Styling**: The API key visibility toggle button in Settings > JFrog no longer shows a purple square background when active. Instead, it now properly switches between an open-eye and closed-eye icon, with a subtle color change to indicate the current state.
 
 ### Fixed
+
 - **Eye Toggle Icon**: The toggle visibility button now uses two distinct SVG icons (eye-open and eye-closed) that swap on click, instead of a single icon with a distracting purple background highlight.
 
 ## [2.0.34] - 2026-02-06
 
 ### Fixed
+
 - **NSIS Installer Icon**: Configured the NSIS Windows installer to use the application icon (`icon.ico`) via the `installerIcon` setting in `tauri.conf.json`. Previously the installer used the default NSIS icon.
 - **NSIS Installer Version**: Fixed the installer filename showing version `2.0.24` instead of the current version. The `version` field in `tauri.conf.json` was not being updated alongside `Cargo.toml` and `index.html`. Now all three version sources are synchronized.
 
 ### Changed
+
 - **Version Synchronization**: The `tauri.conf.json` version is now kept in sync with `Cargo.toml`, `index.html`, and `CHANGELOG.md` for every release.
 
 ## [2.0.33] - 2026-02-06
 
 ### Fixed
+
 - **Windows Taskbar Icon Resolution**: Regenerated `icon.ico` with all required sizes (16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256). Previously the ICO file only contained 16x16 and 32x32, causing a blurry/pixelated icon in the Windows taskbar and Alt+Tab.
 - **Windows Dropdown Select Styling**: Fixed the `<select>` dropdown elements showing a repeating triangle pattern on Windows (WebView2). The issue was caused by `background-image` and `background-repeat` being set separately, allowing the background shorthand from general input styling to override the repeat setting. Now uses the `background` shorthand with explicit `background-size` to prevent tiling on all platforms.
 
 ## [2.0.32] - 2026-02-06
 
 ### Fixed
+
 - **HTML Release Notes Markdown Rendering**: The generated HTML release page now properly renders Markdown in the Release Notes section using `marked.js` (loaded from CDN). Previously, release notes were displayed as raw text with `<br>` line breaks instead of rendered Markdown. Headings, lists, bold, code blocks, links, and all other Markdown formatting now display correctly in the exported HTML file.
 
 ### Added
+
 - **Complete Build Guide in README**: Added comprehensive build instructions for both Linux native builds and Windows cross-compilation from Linux, including all required dependencies (`clang`, `nsis`, `lld`, `llvm`, `cargo-xwin`), step-by-step commands, output paths, and a troubleshooting table for common build errors.
 
 ## [2.0.31] - 2026-02-06
 
 ### Fixed
+
 - **Generate SPF Button Hidden in Release Mode**: The "Generate SPF" button is now completely hidden when the deploy purpose is "New Release". Only the "Finalize Release" button appears after all uploads complete, preventing confusion.
 - **Release Notes Not Cleared**: The release notes text area and its preview are now properly cleared when the deploy screen is reset after finalizing a release.
 - **SPF Auto-Save Path Error**: Fixed `undefined` path error when auto-saving SPF during finalize. The code was using `paths.data` which doesn't exist; corrected to `paths.userData`.
 
 ### Changed
+
 - **Cascade Toast Notifications**: Toast notifications are now smaller and more compact. When multiple toasts appear simultaneously, they stack in a cascade (overlapping with slight offset and progressive scaling/opacity). Hovering over the toast area expands all toasts into a full list for easy reading.
 
 ### Added
+
 - **Open Folder Buttons in Settings**: Each path entry in the Settings > Paths & Logs tab now has an "Open" button that opens the corresponding folder in the system file manager.
 
 ## [2.0.30] - 2026-02-06
 
 ### Fixed
+
 - **Release Notes Markdown Rendering**: The "View Release Notes" modal in the Releases page now properly renders Markdown content using `marked.parse()` instead of displaying raw Markdown text. Headings, lists, bold, code blocks, and other Markdown formatting are now correctly rendered.
 
 ### Changed
+
 - **Finalize Release Workflow**: Replaced the "Generate SPF" button with a new **"Finalize Release"** button that appears after all packages are uploaded. Clicking "Finalize Release" performs all steps automatically in sequence:
   1. Saves the release to local storage
   2. Generates and auto-saves the SPF file to the app's data folder
@@ -240,9 +299,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.29] - 2026-02-06
 
 ### Fixed
+
 - **Delete Confirmation Dialog**: Fixed broken delete button that stopped working after switching from native OS dialog to in-app modal. The modal overlay now uses proper CSS classes and inline styles to ensure correct rendering and interactivity.
 
 ### Added
+
 - **Comprehensive Frontend Logging**: Every user action in the frontend now generates a log entry sent to the backend log file via the new `log_from_frontend` command. Logged actions include: page navigation, theme toggle, purpose selection, deploy mode switch, folder selection/cancel, package add/remove, upload all, retry upload, SPF generation/export, release expand/collapse, release delete (with confirm/cancel), HTML generation, settings save, client mapping add/remove, data export/import, API key visibility toggle, modal show/close, auto-detection of release type and version, and all error/warning toasts.
 - **Comprehensive Backend Logging**: All Tauri commands now include logging: `get_app_paths`, `get_settings`, `save_settings`, `get_releases`, `calculate_md5`, `create_zip`, `generate_spf_content`, `save_spf_file`, `export_data`, `import_data`, `read_file_content`, `write_file_content`, `get_file_size`, `open_path`, and application startup.
 - **Frontend Log Bridge**: New `log_from_frontend` Tauri command allows the frontend to write log entries to the same backend log file, providing a unified log stream for all application events.
@@ -251,14 +312,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.28] - 2026-02-06
 
 ### Fixed
+
 - **Delete Confirmation Dialog**: Replaced native OS dialog (`dialogAsk`) with in-app modal dialog (`showConfirmDialog`) for delete release confirmation. The native OS dialog could be hidden behind the main application window on Linux, making it appear as if the app had frozen. The in-app modal overlay is always visible within the application window and cannot be lost.
 
 ### Changed
+
 - **Confirmation Dialog Enhancements**: `showConfirmDialog` now supports customizable button labels (`okLabel`, `cancelLabel`) and dialog kind (`info`, `warning`, `error`). Delete dialogs use a red "Delete" button, and version mismatch warnings use a "Continue Anyway" button.
 
 ## [2.0.27] - 2026-02-06
 
 ### Fixed
+
 - **Release Summary - A2A Display Names**: Removed redundant "A2A" prefix from package names in the release summary since the platform is already indicated by the section grouping (e.g., "SDK Integration Documentation" instead of "A2A SDK Integration Documentation")
 - **Release Summary - A2A Icons**: AAR packages now display the `aar.svg` icon and Documentation packages now display the `doc-integration.svg` icon instead of the generic Android icon
 - **Online Installer Companion Warnings**: Fixed false warnings about missing online installers when companion zip files (x86.zip, Linux_64-Gui-Installer.zip, Linux_i386-Installer.zip) are present alongside their extracted online installers. The validation was incorrectly checking `category` instead of `device` field for installer detection.
@@ -266,6 +330,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.26] - 2026-02-06
 
 ### Fixed
+
 - **SPF Generation - A2A AAR**: Was `A2A;SDK Integration;AAR;;;url`, now correctly `A2A;AAR;;;;url`
 - **SPF Generation - A2A Doc**: Was `A2A;SDK Integration;Documentation;;;url`, now correctly `A2A;Doc;;;;url`
 - **SPF Generation - A2A PaymentExample (generic)**: Was `A2A;Generic;Payment Example;;;url`, now correctly `A2A;;Example;;;url`
@@ -279,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SPF Embedded Category**: Embedded S920 packages now correctly have empty category instead of any default value
 
 ### Added
+
 - `transform_to_spf_format()` function in Rust backend to convert internal UI values to SPF-spec format
 - `normalize_device_name_for_spf()` function for proper device name formatting (P2_LITE_SE → P2 Lite, DX4000 → Dx4000)
 - `getFullVersionForSpf()` function in frontend to build full version string from package version+hash data
@@ -286,6 +352,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.25] - 2026-02-05
 
 ### Changed
+
 - **Folder Selection No Longer Requires Version**: Removed the requirement to enter a version before selecting a folder or adding packages manually. The version is now auto-detected from scanned files and auto-filled into the version input field.
 - The "Select Packages Folder" and "Add Package" buttons are now always enabled
 - Version hints are hidden by default (no longer show "Enter the Main Version above to enable...")
@@ -293,6 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.24] - 2026-02-05
 
 ### Added
+
 - **Automatic Version Detection**: The app now automatically detects the version from scanned package filenames
   - Extracts base version (Major.Minor.Patch) from STA versions (X.X.X.HASH) and A2A versions (X.X.X.A2A.HASH)
   - Auto-fills the version input field when all packages have the same base version
@@ -304,6 +372,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Version Mismatch Warning**: When generating SPF or saving release, validates that the entered version matches detected package versions. Shows confirmation dialog if mismatch detected.
 
 ### Changed
+
 - `scan_folder` command now returns a `ScanResult` object containing:
   - `packages`: List of detected packages
   - `detectedVersion`: Auto-detected base version (if all packages match)
@@ -314,23 +383,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.23] - 2026-02-05
 
 ### Added
+
 - **PaymentExample Generic APK Support**: APKs without device name (e.g., `PaymentExample-D-2.4.1.A2A.454359-release.apk`) now correctly detected and routed to `packages/[dev/]app-to-app/payment_example/`
 - **Favicon in Generated HTML**: HTML files now include the SmartPosTEF favicon embedded as base64
 
 ### Fixed
+
 - **HTML Generation Page**: The "Generate HTML" button on the HTML Generation page now works correctly (was showing "not yet implemented" message)
 
 ## [2.0.22] - 2026-01-28
 
 ### Changed
+
 - Version bump for release
 
 ## [2.0.21] - 2026-01-28
 
 ### Fixed
+
 - **HTML Generation**: Release notes section now appears before the packages list (as per reference format)
 - **Data Folder Path**: Changed from "SmartPosTEF Package Manager" to "smartpostef-package-manager" for better cross-platform compatibility
-- **Release Notes Modal**: 
+- **Release Notes Modal**:
   - Increased modal width from 600px to 800px for better readability
   - Fixed close button not working - modal now properly closes when clicking X or outside the modal
   - Modal is now recreated each time to ensure fresh event listeners
@@ -338,6 +411,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.20] - 2026-01-28
 
 ### Fixed
+
 - **HTML Generation**: Completely rewritten to match the reference format from package-manager-portal
   - Uses Tailwind CSS via CDN with proper dark/light mode toggle
   - Gradient backgrounds (#1a0b2e to #16213e for dark, #f5f7fa to #c3cfe2 for light)
@@ -352,6 +426,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.19] - 2026-01-27
 
 ### Changed
+
 - **Releases Page Redesign** - Completely redesigned the Releases page to match the reference portal design:
   - Expandable release cards (collapsed by default) instead of modal view
   - Action buttons in card header: Generate HTML, Export SPF, Expand/Collapse, Delete
@@ -361,25 +436,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created timestamp display
 
 ### Added
+
 - **Generate HTML Command** - New backend command to generate HTML release pages directly from the Releases page
 - **Export SPF from Releases** - Export SPF files directly from each release card
 - **Platform Icons** - Added platform icons (Windows, Linux64, Linux32, Embedded, STA, A2A) for visual package identification
 
 ### Fixed
+
 - **Modal Close** - Fixed modal not closing when clicking outside or on the X button
 - **Download Button** - Changed "View" button to "Download" with icon in package listings
 
 ## [2.0.18] - 2026-01-27
 
 ### Changed
+
 - **SPF Filename Pattern** - Changed SPF filename to `release_<version>-YYYY-MM-DD-<prod/dev>.spf` (e.g., `release_2.5.1.289844-2025-12-12-prod.spf`)
 
 ### Fixed
+
 - **Exclude Online Companions from SPF** - Online companion packages (Linux_64-Gui-Installer.zip, Linux_i386-Installer.zip, x86.zip) are now excluded from the SPF file as they are not part of the release packages
 
 ## [2.0.17] - 2026-01-27
 
 ### Fixed
+
 - **SPF File Format** - Fixed SPF file generation to use the correct format (NOT JSON). The SPF format is a custom text-based format with XML-like sections:
   - `<release_info>` section with key=value pairs (version, date, type)
   - `<release_notes>` section with markdown content
@@ -388,11 +468,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.16] - 2026-01-27
 
 ### Changed
+
 - **ZIP Companion Partial Upload Success** - When uploading ZIP companion files (Linux_64-Gui-Installer.zip, etc.), if some files upload successfully but others fail, the package is now marked as "Uploaded" instead of "Failed". The message includes a list of which files failed to upload for user information.
 
 ## [2.0.15] - 2026-01-27
 
 ### Fixed
+
 - **ZIP Companion Files Nested Structure** - Fixed extraction of ZIP files with nested folder structures. The extraction now recursively searches for the target folder (x86_64, i386, x86) within the ZIP contents:
   - `Linux_64-Gui-Installer.zip` contains `Linux_64-Gui-Installer/x86_64/` → finds and uploads `x86_64/`
   - `Linux_i386-Installer.zip` contains `Linux_i386-Installer/i386/` → finds and uploads `i386/`
@@ -401,6 +483,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.14] - 2026-01-27
 
 ### Fixed
+
 - **SPF Generation Error** - Fixed "missing field `type`" error when generating SPF files. The frontend was sending `releaseType` but the Rust backend expected `type` (matching the serde rename attribute)
 
 - **ZIP Companion Files Upload** - Fixed upload of online installer companion ZIP files (Linux_64-Gui-Installer.zip, Linux_i386-Installer.zip, x86.zip). These files now properly extract and upload only the specific folder contents:
@@ -409,14 +492,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `x86.zip` → Extracts and uploads `x86/` folder to `packages/[dev/]windows/`
 
 ### Added
+
 - **New Backend Command**: `extract_and_upload_to_jfrog` - Extracts ZIP file, finds target folder, and uploads all files in that folder to JFrog with detailed logging
 
 ## [2.0.13] - 2026-01-26
 
 ### Changed
+
 - **JFrog URL Updated** - Changed upload URL from `aditum.jfrog.io` to `artifactory.aditum.com.br/artifactory/`
 
 ### Added
+
 - **Enhanced Logging** - Comprehensive detailed logging throughout the application:
   - Folder scanning logs include: timestamp, folder path, settings loaded, client mappings, each package detected with full details (platform, device, category, version, hash, size in MB, JFrog path, signature, client, special handling), skipped files, package type analysis (dev/prod counts), total size summary, platform breakdown
   - Manual file scanning logs include: file list, each package details, missing files, total size
@@ -439,25 +525,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 6-second auto-dismiss (increased from 5s)
 
 ### Fixed
+
 - Toast notifications now use correct class names (`toast-success`, `toast-error`, etc.)
 
 ## [2.0.12] - 2026-01-26
 
 ### Fixed
+
 - **Upload 413 Payload Too Large** - Changed to use chunked transfer encoding (Transfer-Encoding: chunked) instead of Content-Length header to bypass nginx proxy size limits
 
 ### Changed
+
 - Removed Content-Length header from upload requests to enable chunked transfer
 - Upload now uses streaming body without pre-declaring file size
 
 ## [2.0.11] - 2026-01-26
 
 ### Fixed
+
 - **Upload 413 Payload Too Large** - Implemented streaming upload using tokio-util ReaderStream instead of loading entire file into memory
 - **File logging** - Implemented proper file logging system that writes to daily log files in the logs directory
 - **Upload timeout** - Increased upload timeout to 10 minutes for large files
 
 ### Added
+
 - **Streaming upload** - Uses reqwest Body::wrap_stream for memory-efficient uploads of large files
 - **Content-Length header** - Added proper Content-Length header for uploads
 - **Comprehensive logging** - Added logging for:
@@ -468,21 +559,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Release creation/update/deletion
 
 ### Changed
+
 - Upgraded reqwest to use `stream` feature instead of `blocking`
 - Added chrono and tokio-util dependencies for logging and streaming
 
 ## [2.0.10] - 2026-01-23
 
 ### Fixed
+
 - **Package card layout** - Reverted to v2.0.6 simple style with status badge and delete button in a right-aligned actions column
 - **Window/taskbar icons** - Regenerated all icon sizes (32x32, 128x128, 256x256) from original icon-192.png for proper display
 
 ### Changed
+
 - Simplified package item CSS to use flex row layout instead of complex header/footer structure
 
 ## [2.0.9] - 2026-01-23
 
 ### Fixed
+
 - **App icon** - Restored original SmartPosTEF icon from Electron project for sidebar and window title bar
 - **Package card layout** - Repositioned elements:
   - Pending/status tag now in top-right corner
@@ -490,11 +585,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Footer now has left and right sections for better organization
 
 ### Changed
+
 - Updated all icon files (icon.png, icon.ico) with original branding
 
 ## [2.0.8] - 2026-01-23
 
 ### Fixed
+
 - **API Key visibility toggle** - Fixed eye button click handler to toggle password visibility
 - **Add Mapping button** - Fixed client mappings container ID mismatch (`client-mappings` → `client-mappings-list`)
 - **View Logs** - Changed from opening folder to showing a log viewer modal with log content
@@ -503,12 +600,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Package item layout** - Restructured with header and footer sections for better organization
 
 ### Added
+
 - **Log viewer modal** - Shows log file content with option to open folder
 - **list_log_files command** - Backend command to list log files sorted by modification time
 
 ## [2.0.7] - 2026-01-23
 
 ### Fixed
+
 - **Settings tabs not switching** - Fixed data attribute mismatch (`data-settings-tab` → `data-tab`) and selector mismatch (`.settings-panel` → `.settings-content`)
 - **Version display** - Updated sidebar footer to show correct version (v2.0.7)
 - **Package sorting** - Implemented proper sort order: Library (Win/Linux) → Installer (Win/Linux) → STA (Launcher then App), alphabetically within each category
@@ -516,6 +615,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.6] - 2026-01-23
 
 ### Added
+
 - **Comprehensive Package Detection** - Ported all regex patterns from Electron version:
   - **STA Packages**: Detects SmartPosTef and AditumTef Android packages with LP/LD/AP/AD prefixes
   - **Device Detection**: Automatically identifies devices (P2, DX4000, A910, D200, etc.)
@@ -551,12 +651,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Modal Dialogs**: For adding signature and client values to packages
 
 ### Fixed
+
 - Package detection now properly identifies all SmartPosTEF package types
 - Client mapping works with map numbers in version strings, not simple prefixes
 - UI matches Electron version layout and functionality
 - Unknown packages now show proper "Unknown" tags instead of crashing
 
 ### Technical
+
 - Rewrote `lib.rs` with comprehensive regex patterns using `lazy_static` and `regex` crates
 - Rewrote `app.js` with Electron-style `renderPackageItem()` and `updateSummary()` functions
 - Added CSS for package tags (.tag-unsigned, .tag-signed, .tag-dev, .tag-special)
@@ -565,6 +667,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.5] - 2026-01-23
 
 ### Fixed
+
 - Fixed dropdown/select elements rendering with checkered pattern (removed problematic CSS)
 - Fixed folder scanning - now properly scans and displays packages after folder selection
 - Fixed "View Logs" and "Open Output Folder" buttons using new `open_path` Rust command
@@ -574,12 +677,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `scan_folder` parameter name mismatch between frontend and backend
 
 ### Changed
+
 - Client mappings now start empty - user should configure their own mappings
 - Improved error handling and console logging for debugging
 
 ## [2.0.4] - 2026-01-23
 
 ### Fixed
+
 - **Critical fix for button click handlers** - Rewrote JavaScript initialization
 - Added `withGlobalTauri: true` configuration for proper Tauri API exposure
 - Implemented polling-based Tauri API initialization to prevent race conditions
@@ -588,6 +693,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Tauri v2 API access using `window.__TAURI__` global object
 
 ### Technical
+
 - Event handlers now attach immediately on DOMContentLoaded
 - Tauri APIs are accessed after polling confirms availability
 - All button clicks now properly execute their handlers
@@ -595,6 +701,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.3] - 2026-01-23
 
 ### Fixed
+
 - Fixed file dialog not working - updated Tauri v2 plugin API usage
 - Fixed dropdown styling (white background issue) with proper dark theme CSS
 - Fixed client mapping field - changed "Prefix" to "Map Number" with digits-only validation
@@ -605,6 +712,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.2] - 2026-01-23
 
 ### Fixed
+
 - Fixed JavaScript/Tauri IPC communication - clicks now work properly
 - Fixed Tauri v2 API imports with proper initialization
 - Updated window icon configuration
@@ -615,6 +723,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.1] - 2026-01-23
 
 ### Fixed
+
 - Fixed duplicate Tauri command definitions causing build errors
 - Moved all commands to a dedicated module to prevent macro conflicts
 - Removed Cargo.lock to ensure fresh dependency resolution
@@ -622,6 +731,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-01-23
 
 ### Changed
+
 - **Complete rewrite using Tauri framework** - Migrated from Electron to Tauri
 - Bundle size reduced from ~170MB to ~18MB (89% reduction)
 - Memory usage reduced from ~200MB to ~50MB (75% reduction)
@@ -629,7 +739,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved security with Rust backend
 
 ### Features Preserved
+
 All functionality from Electron v1.4.3 maintained:
+
 - New Deploy with two modes (New Release / Upload Only)
 - Package scanning (folder and manual file selection)
 - JFrog upload with automatic path generation
@@ -642,6 +754,7 @@ All functionality from Electron v1.4.3 maintained:
 - Date picker with native format
 
 ### Technical
+
 - **Frontend**: HTML, CSS, JavaScript (same as Electron version)
 - **Backend**: Rust (replaces Node.js/Electron)
 - **IPC**: Tauri invoke system (replaces Electron IPC)
@@ -652,49 +765,62 @@ All functionality from Electron v1.4.3 maintained:
 ## Previous Versions (Electron)
 
 ### [1.4.3] - 2026-01-22
+
 - Native date input with styled purple calendar button
 - Date format based on system locale
 
 ### [1.4.2] - 2026-01-22
+
 - Fixed date picker initialization timing
 
 ### [1.4.1] - 2026-01-22
+
 - Date format changed to dd/mm/yyyy
 - Restored styled calendar button
 
 ### [1.4.0] - 2026-01-22
+
 - Switched to native HTML5 date input
 
 ### [1.3.9] - 2026-01-22
+
 - Fixed date input initialization
 
 ### [1.3.8] - 2026-01-22
+
 - Build optimization (portable only)
 
 ### [1.3.7] - 2026-01-22
+
 - Dark/Light mode toggle
 - Sidebar redesign with footer
 - Date format dd/mm/yyyy
 
 ### [1.3.6] - 2026-01-22
+
 - APK-to-ZIP conversion for dev/unsigned packages
 - JFrog upload implementation
 
 ### [1.3.5] - 2026-01-22
+
 - Signature detection fix
 
 ### [1.3.0] - 2026-01-21
+
 - Upload Only mode
 - Auto-detect production/development type
 
 ### [1.2.0] - 2026-01-20
+
 - Enhanced package scanning
 - Improved UI styling
 
 ### [1.1.0] - 2026-01-19
+
 - Data Export/Import feature
 
 ### [1.0.0] - 2026-01-18
+
 - Initial release
 - Package scanning and upload
 - Release management
