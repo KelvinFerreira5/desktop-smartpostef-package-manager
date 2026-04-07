@@ -5,6 +5,67 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.23] - 2026-04-07
+
+### Changed
+
+- **STA/A2A Toggles Always Visible**: Moved "Has STA" and "Has A2A" filter toggles from the collapsible Filters panel to the main toolbar row, so they are always visible alongside the search bar and sort dropdown.
+
+## [3.1.22] - 2026-04-07
+
+### Fixed
+
+- **A2A Upload Path Missing Subcategories**: `buildJfrogPath()` now routes A2A packages to correct JFrog subpaths: `sdk_integration/` for AAR, `sdk_integration/doc/` for docs, `tef-android/{arch}/` for TefSdk, `payment_example/` for examples, `apk/{mfr}/{path}/` for device APKs. Previously all A2A packages uploaded to the generic `app-to-app/` root.
+- **Dev Release Saved as Production**: Fixed disabled `<select>` returning first option value ("Production") instead of the selected value, causing dev releases to silently change to Production when saving.
+
+### Changed
+
+- **Editable Fields in Edit Mode**: Version, date, and release type fields are now fully editable when editing an existing release. A warning toast appears when any critical field is changed instead of requiring a confirmation dialog to unlock.
+
+## [3.1.21] - 2026-04-02
+
+### Changed
+
+- **Link Icon on Package Cards**: Replaced the italic "i" info icon with a chain-link SVG icon on package cards in the Package Management section.
+- **JFrog Path Tooltip for New Packages**: Newly-added packages now show their computed JFrog upload path on hover (e.g., `packages/dev/pax/a910/launcher/bin/`) instead of showing nothing.
+- **Copy Button URL Tooltip**: The copy URL button in the Release Summary now shows the full JFrog path on hover instead of generic "Copy JFrog URL" text.
+
+## [3.1.20] - 2026-04-02
+
+### Fixed
+
+- **STA Upload Path Structure**: Rewrote `buildJfrogPath()` STA branch to construct proper JFrog paths matching the Rust backend: `packages/[dev/|unsigned/]{manufacturer}/{devicePath}/{launcher|app}/[{client}/]`. Previously used flat `packages/android/{device}/` structure which was wrong.
+- **STA Dev Packages Uploaded to Prod Path**: Added `isDev` detection for STA packages (LD/AD prefixes) in `detectPackageFromFileName()`. Previously only `-D-` was detected, missing `-LD-`/`-AD-`.
+- **Client Folder Missing from STA Upload Path**: `buildJfrogPath()` now includes the client folder (e.g., `bin/`) when a client mapping is detected from the filename.
+- **New Package JFrog Path Not Set**: `addPackagesToRelease()` now immediately computes and sets `pkg.jfrogPath` after detection, so the import preview shows the correct path.
+
+### Added
+
+- **JavaScript DEVICE_MAP**: Added a `DEVICE_MAP` constant (18 entries) matching the Rust device map, mapping device names to manufacturer and path (e.g., `A910→pax/a910`, `P2_LITE_SE→sunmi/p2litese`).
+
+## [3.1.19] - 2026-04-02
+
+### Fixed
+
+- **A2A Signature Detection (Rust)**: Fixed 4 A2A regex patterns to capture optional brand signatures (e.g., `-COTS-`) between the hash and `-release` suffix. Added `(?:-([A-Za-z][A-Za-z0-9_]*))?` capture group to Device APK and PaymentExample patterns (signed and unsigned).
+- **extract_signature() A2A Support (Rust)**: Fixed regex to handle A2A version format (`x.x.x.A2A.hash`) by adding `(?:A2A\.)?` alternate pattern.
+- **PaymentExample Generic JFrog Path (Rust)**: Fixed production PaymentExample path from `packages/unsigned/app-to-app/payment_example/` to `packages/app-to-app/payment_example/`.
+- **Device Name Normalization Corrupting URLs**: Removed `normalizeDeviceName()` from 3 data-capture locations in `detectPackageFromFileName()` where it was corrupting raw device identifiers (e.g., `X990_PRO` → `X990 PRO`) that flow into URL construction. Display normalization now only happens at render time.
+- **Light Mode Client Group Dark Background**: Added light-mode CSS overrides for `.client-group` and `.client-group-header` which were using undefined `--bg-elevated` variable.
+
+### Added
+
+- **A2A Display Name Normalizer (Rust)**: Added `normalize_a2a_display_name()` function preserving SE suffix (e.g., `P2_LITE_SE` → "P2 Lite SE", `X990_PRO` → "X990 Pro").
+- **A2A Display Name Normalizer (JS)**: Added `normalizeA2ADisplayName()` function matching the Rust version.
+- **STA/A2A Mutual Exclusive Toggles**: Checking one filter toggle now unchecks the other.
+- **Color Picker Sync Handler**: Added bidirectional sync between color swatch, color input, and text input in Settings.
+
+### Changed
+
+- **Color Picker Redesign**: Replaced standalone color inputs with swatch-preview design: rounded color preview with hidden overlay picker and monospace hex text input.
+- **Light Mode Purple Tinting**: Updated ~25 light-mode CSS rules to use a cohesive purple-tinted grey palette instead of neutral greys.
+- **Card De-nesting**: Flattened nested card elements (deploy purpose, mappings, paths, export/import, custom devices) using border-bottom separators instead of card-in-card styling.
+
 ## [3.1.16] - 2026-03-27
 
 ### Added

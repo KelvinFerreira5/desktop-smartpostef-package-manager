@@ -90,7 +90,7 @@
           <span class="theme-label">Light Mode</span>
         </button>
         <div class="footer-info">
-          <span class="version">v3.1.16</span>
+          <span class="version" id="app-version">v...</span>
           <span class="company">Aditum Pagamentos</span>
         </div>
       </div>
@@ -320,6 +320,13 @@
               </svg>
               Finalize Release
             </button>
+            <button id="btn-finalize-deploy-only" class="btn btn-success" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              Done
+            </button>
             <button id="btn-clear-all" class="btn btn-danger" style="display: none;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6" />
@@ -336,6 +343,85 @@
         <div class="page-header">
           <h2>Releases</h2>
           <p>View and manage saved releases</p>
+        </div>
+
+        <div class="releases-filter-tabs">
+          <button class="releases-filter-tab active" data-filter="all">All</button>
+          <button class="releases-filter-tab" data-filter="deploy-only">Deploys</button>
+          <button class="releases-filter-tab" data-filter="development">Development</button>
+          <button class="releases-filter-tab" data-filter="unsigned-prod">Unsigned Prod</button>
+          <button class="releases-filter-tab" data-filter="production">Production</button>
+        </div>
+
+        <div class="releases-toolbar">
+          <div class="releases-search-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" id="releases-search" placeholder="Search version, notes, package names...">
+          </div>
+          <select id="releases-sort">
+            <option value="created-desc">Created (Newest)</option>
+            <option value="created-asc">Created (Oldest)</option>
+            <option value="version-desc">Version (Newest)</option>
+            <option value="version-asc">Version (Oldest)</option>
+            <option value="date-desc">Release Date (Newest)</option>
+            <option value="date-asc">Release Date (Oldest)</option>
+          </select>
+          <button id="btn-toggle-filters" class="btn btn-outline btn-toggle-filters">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="6" y1="12" x2="18" y2="12" />
+              <line x1="8" y1="18" x2="16" y2="18" />
+            </svg>
+            Filters
+          </button>
+          <div class="toolbar-toggle-group">
+            <label class="filter-toggle-label">
+              <span class="toggle-switch">
+                <input type="checkbox" id="filter-has-sta">
+                <span class="toggle-slider"></span>
+              </span>
+              Has STA
+            </label>
+            <label class="filter-toggle-label">
+              <span class="toggle-switch">
+                <input type="checkbox" id="filter-has-a2a">
+                <span class="toggle-slider"></span>
+              </span>
+              Has A2A
+            </label>
+          </div>
+        </div>
+
+        <div id="releases-advanced-filters" class="releases-advanced-filters">
+          <div class="filter-group">
+            <label for="filter-signature">Signature</label>
+            <select id="filter-signature">
+              <option value="all">All</option>
+              <option value="signed">Signed</option>
+              <option value="unsigned">Unsigned</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-client">Client</label>
+            <select id="filter-client">
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-platform">Platform</label>
+            <select id="filter-platform">
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-device">Device</label>
+            <select id="filter-device">
+              <option value="all">All</option>
+            </select>
+          </div>
         </div>
 
         <div id="releases-list" class="releases-list">
@@ -480,14 +566,18 @@
               <div class="form-group">
                 <label for="settings-html-primary">Primary Color</label>
                 <div class="color-input">
-                  <input type="color" id="settings-html-primary" value="#48297c">
+                  <div class="color-swatch" style="background-color: #48297c">
+                    <input type="color" id="settings-html-primary" value="#48297c">
+                  </div>
                   <input type="text" id="settings-html-primary-text" value="#48297c">
                 </div>
               </div>
               <div class="form-group">
                 <label for="settings-html-secondary">Secondary Color</label>
                 <div class="color-input">
-                  <input type="color" id="settings-html-secondary" value="#9c2671">
+                  <div class="color-swatch" style="background-color: #9c2671">
+                    <input type="color" id="settings-html-secondary" value="#9c2671">
+                  </div>
                   <input type="text" id="settings-html-secondary-text" value="#9c2671">
                 </div>
               </div>

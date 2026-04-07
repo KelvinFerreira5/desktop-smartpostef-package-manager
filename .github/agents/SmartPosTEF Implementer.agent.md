@@ -1,7 +1,7 @@
 ---
 name: SmartPosTEF Implementer
 description: Implements features or bug fixes by writing and modifying code based on a plan. Has full edit and terminal access.
-tools: ["editFiles", "createFile", "search/codebase", "search/usages", "runInTerminal", "problems"]
+tools: ["edit/editFiles", "edit/createFile", "search/codebase", "search/usages", "execute/runInTerminal", "read/problems"]
 model: ["Claude Opus 4.6 (copilot)", "GPT-5.4 (copilot)"]
 handoffs:
   - label: Review This Implementation

@@ -8,6 +8,11 @@ let settings = { jfrogApiKey: '', clientMappings: [], portalSettings: {} };
 let uploadedUrls = {};
 let currentDeployMode = 'folder';
 let currentDeployPurpose = null;
+let currentReleaseFilter = 'all';
+let currentReleaseSort = 'created-desc';
+let currentReleaseSearch = '';
+let currentReleaseFilters = { signature: 'all', client: 'all', platform: 'all', device: 'all', hasSta: false, hasA2a: false };
+let releaseSearchDebounceTimer = null;
 let selectedFolderPath = null;
 
 // DOM Elements
@@ -81,6 +86,15 @@ async function initTauriApis() {
     console.log('Tauri APIs initialized');
     frontendLog('INFO', 'APPLICATION: Tauri APIs initialized successfully');
 
+    // Set footer version from backend
+    try {
+      const version = await invoke('get_app_version');
+      const versionEl = document.getElementById('app-version');
+      if (versionEl) versionEl.textContent = `v${version}`;
+    } catch (e) {
+      console.warn('Could not get app version:', e);
+    }
+
     // Load initial data
     await loadInitialData();
   } catch (error) {
@@ -102,6 +116,7 @@ async function loadInitialData() {
     frontendLog('INFO', 'APPLICATION: Releases loaded', `Count: ${releases.length}`);
     renderReleases();
     populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
 
     const paths = await invoke('get_app_paths');
     frontendLog('INFO', 'APPLICATION: App paths loaded');
@@ -387,6 +402,16 @@ function initDeployPage() {
       e.preventDefault();
       frontendLog('INFO', 'DEPLOY: Finalize Release button clicked');
       await handleFinalizeRelease();
+    });
+  }
+
+  // Finalize Deploy Only button (shown after all uploads complete in upload-only mode)
+  const btnFinalizeDeployOnly = document.getElementById('btn-finalize-deploy-only');
+  if (btnFinalizeDeployOnly) {
+    btnFinalizeDeployOnly.addEventListener('click', async (e) => {
+      e.preventDefault();
+      frontendLog('INFO', 'DEPLOY: Finalize Deploy Only button clicked');
+      await handleFinalizeDeployOnly();
     });
   }
 
@@ -907,7 +932,7 @@ function renderPackages() {
         <div class="package-name">${fileName}</div>
         <div class="package-details">
           <span class="package-tag platform">${platform}</span>
-          <span class="package-tag device">${device}</span>
+          <span class="package-tag device">${displayDeviceName(device)}</span>
           ${category ? `<span class="package-tag category">${category}</span>` : ''}
           ${isSigned === false ? `<span class="package-tag unsigned">Unsigned</span>` : ''}
           ${isSigned === true ? `<span class="package-tag signed">Signed</span>` : ''}
@@ -1138,6 +1163,7 @@ function updateActionButtons() {
   const btnUploadAll = document.getElementById('btn-upload-all');
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
+  const btnFinalizeDeployOnly = document.getElementById('btn-finalize-deploy-only');
   const btnClearAll = document.getElementById('btn-clear-all');
 
   if (btnUploadAll) btnUploadAll.disabled = !hasPackages || allUploaded;
@@ -1146,15 +1172,128 @@ function updateActionButtons() {
   // In "New Release" mode: Generate SPF is always hidden; show "Finalize Release" after all uploads
   if (currentDeployPurpose === 'release') {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
+    if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
     if (allUploaded) {
       if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'inline-flex';
     } else {
       if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
     }
   } else {
-    // Upload Only mode: no SPF or finalize buttons
+    // Upload Only mode: no SPF or finalize buttons, show "Done" after all uploads
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
     if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
+    if (allUploaded) {
+      if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'inline-flex';
+    } else {
+      if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
+    }
+  }
+}
+
+// Finalize deploy-only upload
+async function handleFinalizeDeployOnly() {
+  frontendLog('INFO', 'DEPLOY_ONLY: Starting deploy-only finalization');
+  const versionInput = document.getElementById('upload-version');
+  const version = versionInput ? versionInput.value.trim() : '';
+
+  if (!version) {
+    showToast('error', 'Please fill in the version');
+    return;
+  }
+
+  if (!invoke) {
+    showToast('error', 'Backend not available');
+    return;
+  }
+
+  // Disable the button to prevent double-click
+  const btnFinalizeDeployOnly = document.getElementById('btn-finalize-deploy-only');
+  if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.disabled = true;
+
+  // Filter out online companion packages
+  const spfPackages = packages.filter(pkg => {
+    const fileName = pkg.fileName || pkg.file_name || '';
+    const handling = pkg.specialHandling || pkg.special_handling || '';
+    const isOnlineCompanion = fileName === 'Linux_64-Gui-Installer.zip' ||
+      fileName === 'Linux_i386-Installer.zip' ||
+      fileName === 'x86.zip' ||
+      (handling && handling !== 'extract-s920-root');
+    return !isOnlineCompanion;
+  });
+
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const spfVersion = getFullVersionForSpf(spfPackages, version);
+
+  const releaseData = {
+    id: `${version}-deploy-only-${Date.now()}`,
+    version: spfVersion,
+    date,
+    type: 'deploy-only',
+    releaseType: 'deploy-only',
+    releaseNotes: '',
+    packages: spfPackages.map(pkg => ({
+      platform: pkg.platform || 'Unknown',
+      device: pkg.device || '',
+      category: pkg.category || '',
+      signature: pkg.signature || '',
+      client: pkg.client || '',
+      url: pkg.url || uploadedUrls[pkg.fileName || pkg.file_name] || ''
+    })),
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    // Step 1: Save release
+    frontendLog('INFO', 'DEPLOY_ONLY: Step 1 - Saving release');
+    await invoke('save_release', { release: releaseData });
+    frontendLog('INFO', 'DEPLOY_ONLY: Release saved', `Version: ${spfVersion}`);
+
+    // Step 2: Generate and auto-save SPF file
+    frontendLog('INFO', 'DEPLOY_ONLY: Step 2 - Generating SPF file');
+    try {
+      const spfContent = await invoke('generate_spf_content', { release: releaseData });
+      const spfFileName = `release_${spfVersion}-${date}-deploy.spf`;
+      const paths = await invoke('get_app_paths');
+      const spfSavePath = `${paths.userData}/${spfFileName}`;
+      await invoke('save_spf_file', { content: spfContent, filePath: spfSavePath });
+      frontendLog('INFO', 'DEPLOY_ONLY: SPF file auto-saved', `Path: ${spfSavePath}`);
+    } catch (spfError) {
+      frontendLog('ERROR', 'DEPLOY_ONLY: Failed to generate/save SPF', spfError.toString());
+      showToast('warning', 'Release saved but SPF generation failed: ' + spfError);
+    }
+
+    // Step 3: Refresh releases list (NO HTML generation for deploy-only)
+    frontendLog('INFO', 'DEPLOY_ONLY: Step 3 - Refreshing releases list');
+    releases = await invoke('get_releases');
+    renderReleases();
+    populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
+
+    // Step 4: Clear deploy screen
+    frontendLog('INFO', 'DEPLOY_ONLY: Step 4 - Clearing deploy screen');
+    clearPackages();
+    if (versionInput) versionInput.value = '';
+
+    // Reset purpose selection
+    currentDeployPurpose = null;
+    const purposeSelection = document.getElementById('deploy-purpose-selection');
+    const deployContent = document.getElementById('deploy-content');
+    if (purposeSelection) purposeSelection.style.display = 'block';
+    if (deployContent) deployContent.style.display = 'none';
+
+    // Step 5: Navigate to Releases page
+    frontendLog('INFO', 'DEPLOY_ONLY: Step 5 - Navigating to Releases page');
+    switchPage('releases');
+
+    showToast('success', `Deploy ${spfVersion} saved successfully! SPF file generated.`);
+    frontendLog('INFO', 'DEPLOY_ONLY: Finalization completed', `Version: ${spfVersion}`);
+
+  } catch (error) {
+    console.error('Failed to finalize deploy-only:', error);
+    frontendLog('ERROR', 'DEPLOY_ONLY: Failed to finalize', error.toString());
+    showToast('error', 'Failed to finalize deploy: ' + error);
+    if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.disabled = false;
   }
 }
 
@@ -1242,9 +1381,24 @@ async function handleUploadAll() {
           apiKey: settings.jfrogApiKey
         });
       } else {
-        // Regular file upload
+        // Regular file upload — check APK zip rule first
+        let uploadPath = filePath;
+        let uploadName = pkg.fileName || pkg.file_name;
+        const deployType = document.getElementById('deploy-type');
+        const currentReleaseType = deployType ? deployType.value : 'Production';
+        if (shouldZipApk(pkg, currentReleaseType) && filePath) {
+          frontendLog('INFO', 'UPLOAD: Zipping APK for STA upload', `File: ${uploadName}`);
+          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
+          if (zipResult.success) {
+            uploadPath = zipResult.zipPath;
+            uploadName = zipResult.zipFileName;
+            frontendLog('INFO', 'UPLOAD: APK zipped successfully', `ZIP: ${uploadName}`);
+          } else {
+            throw new Error(`Failed to zip APK: ${zipResult.message}`);
+          }
+        }
         result = await invoke('upload_to_jfrog', {
-          filePath: filePath,
+          filePath: uploadPath,
           jfrogPath: jfrogPath,
           apiKey: settings.jfrogApiKey
         });
@@ -1318,9 +1472,24 @@ async function retryUpload(index) {
         apiKey: settings.jfrogApiKey
       });
     } else {
-      // Regular file upload
+      // Regular file upload — check APK zip rule first
+      let uploadPath = filePath;
+      let uploadName = pkg.fileName || pkg.file_name;
+      const deployType = document.getElementById('deploy-type');
+      const currentReleaseType = deployType ? deployType.value : 'Production';
+      if (shouldZipApk(pkg, currentReleaseType) && filePath) {
+        frontendLog('INFO', 'UPLOAD: Zipping APK for STA retry upload', `File: ${uploadName}`);
+        const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
+        if (zipResult.success) {
+          uploadPath = zipResult.zipPath;
+          uploadName = zipResult.zipFileName;
+          frontendLog('INFO', 'UPLOAD: APK zipped successfully', `ZIP: ${uploadName}`);
+        } else {
+          throw new Error(`Failed to zip APK: ${zipResult.message}`);
+        }
+      }
       result = await invoke('upload_to_jfrog', {
-        filePath: filePath,
+        filePath: uploadPath,
         jfrogPath: jfrogPath,
         apiKey: settings.jfrogApiKey
       });
@@ -1403,7 +1572,7 @@ async function handleGenerateSpf() {
   const spfVersion = getFullVersionForSpf(spfPackages, version);
 
   const releaseData = {
-    id: `${version}-${Date.now()}`,
+    id: `${version}-${type.toLowerCase()}-${Date.now()}`,
     version: spfVersion,
     date,
     type: type,
@@ -1449,6 +1618,7 @@ async function handleGenerateSpf() {
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
 
     frontendLog('INFO', 'SPF: Release saved successfully', `Version: ${spfVersion}`);
     showToast('success', 'Release saved successfully');
@@ -1518,7 +1688,7 @@ async function handleFinalizeRelease() {
   const spfVersion = getFullVersionForSpf(spfPackages, version);
 
   const releaseData = {
-    id: `${version}-${Date.now()}`,
+    id: `${version}-${type.toLowerCase()}-${Date.now()}`,
     version: spfVersion,
     date,
     type: type,
@@ -1573,6 +1743,7 @@ async function handleFinalizeRelease() {
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
 
     // Step 5: Clear deploy screen
     frontendLog('INFO', 'FINALIZE: Step 5 - Clearing deploy screen');
@@ -1609,8 +1780,189 @@ async function handleFinalizeRelease() {
 }
 
 // Releases Page
+function isReleaseUnsigned(release) {
+  return (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+}
+
+function getFilteredAndSortedReleases() {
+  let result = releases.slice();
+
+  // Tab filter
+  if (currentReleaseFilter === 'deploy-only') {
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'deploy-only');
+  } else if (currentReleaseFilter === 'development') {
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'development');
+  } else if (currentReleaseFilter === 'unsigned-prod') {
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && isReleaseUnsigned(r));
+  } else if (currentReleaseFilter === 'production') {
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && !isReleaseUnsigned(r));
+  }
+
+  // Search filter
+  const q = currentReleaseSearch.toLowerCase().trim();
+  if (q) {
+    result = result.filter(r => {
+      if ((r.version || '').toLowerCase().includes(q)) return true;
+      if ((r.releaseNotes || '').toLowerCase().includes(q)) return true;
+      return (r.packages || []).some(p => {
+        const fileName = (p.url || '').split('/').pop() || '';
+        return fileName.toLowerCase().includes(q);
+      });
+    });
+  }
+
+  // Advanced filters
+  const f = currentReleaseFilters;
+  if (f.signature !== 'all') {
+    result = result.filter(r => f.signature === 'unsigned' ? isReleaseUnsigned(r) : !isReleaseUnsigned(r));
+  }
+  if (f.client !== 'all') {
+    result = result.filter(r => (r.packages || []).some(p => (p.client || '') === f.client));
+  }
+  if (f.platform !== 'all') {
+    result = result.filter(r => (r.packages || []).some(p => (p.platform || '') === f.platform));
+  }
+  if (f.device !== 'all') {
+    result = result.filter(r => (r.packages || []).some(p => (p.device || '') === f.device));
+  }
+  if (f.hasSta) {
+    result = result.filter(r => (r.packages || []).some(p => (p.platform || '') === 'STA'));
+  }
+  if (f.hasA2a) {
+    result = result.filter(r => (r.packages || []).some(p => (p.platform || '') === 'A2A' || (p.category || '') === 'A2A'));
+  }
+
+  // Sort
+  result.sort((a, b) => {
+    switch (currentReleaseSort) {
+      case 'created-desc': return (b.createdAt || '').localeCompare(a.createdAt || '');
+      case 'created-asc': return (a.createdAt || '').localeCompare(b.createdAt || '');
+      case 'version-desc': return (b.version || '').localeCompare(a.version || '', undefined, { numeric: true });
+      case 'version-asc': return (a.version || '').localeCompare(b.version || '', undefined, { numeric: true });
+      case 'date-desc': return (b.date || '').localeCompare(a.date || '');
+      case 'date-asc': return (a.date || '').localeCompare(b.date || '');
+      default: return 0;
+    }
+  });
+
+  return result;
+}
+
+function populateReleaseFilterOptions() {
+  const clients = new Set();
+  const platforms = new Set();
+  const devices = new Set();
+
+  (releases || []).forEach(r => {
+    (r.packages || []).forEach(p => {
+      if (p.client) clients.add(p.client);
+      if (p.platform) platforms.add(p.platform);
+      if (p.device) devices.add(p.device);
+    });
+  });
+
+  const populateSelect = (id, values, displayFn) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const current = el.value;
+    el.innerHTML = '<option value="all">All</option>' +
+      [...values].sort().map(v => `<option value="${v}">${displayFn ? displayFn(v) : v}</option>`).join('');
+    el.value = current && [...values].includes(current) ? current : 'all';
+  };
+
+  populateSelect('filter-client', clients);
+  populateSelect('filter-platform', platforms);
+  populateSelect('filter-device', devices, displayDeviceName);
+}
+
+function updateFilterToggleIndicator() {
+  const btn = document.getElementById('btn-toggle-filters');
+  if (!btn) return;
+  const f = currentReleaseFilters;
+  const hasActive = f.signature !== 'all' || f.client !== 'all' || f.platform !== 'all' || f.device !== 'all' || f.hasSta || f.hasA2a;
+  btn.classList.toggle('has-active-filters', hasActive);
+}
+
 function initReleasesPage() {
-  // Nothing special to initialize
+  // Tab filters
+  const tabs = document.querySelectorAll('.releases-filter-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      e.preventDefault();
+      currentReleaseFilter = tab.dataset.filter;
+      tabs.forEach(t => t.classList.toggle('active', t === tab));
+      renderReleases();
+    });
+  });
+
+  // Search
+  const searchInput = document.getElementById('releases-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(releaseSearchDebounceTimer);
+      releaseSearchDebounceTimer = setTimeout(() => {
+        currentReleaseSearch = searchInput.value;
+        renderReleases();
+      }, 300);
+    });
+  }
+
+  // Sort
+  const sortSelect = document.getElementById('releases-sort');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      currentReleaseSort = sortSelect.value;
+      renderReleases();
+    });
+  }
+
+  // Filter toggle
+  const btnToggle = document.getElementById('btn-toggle-filters');
+  const filtersPanel = document.getElementById('releases-advanced-filters');
+  if (btnToggle && filtersPanel) {
+    btnToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      filtersPanel.classList.toggle('active');
+    });
+  }
+
+  // Advanced filter dropdowns
+  const filterIds = [
+    { id: 'filter-signature', key: 'signature' },
+    { id: 'filter-client', key: 'client' },
+    { id: 'filter-platform', key: 'platform' },
+    { id: 'filter-device', key: 'device' }
+  ];
+  filterIds.forEach(({ id, key }) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        currentReleaseFilters[key] = el.value;
+        updateFilterToggleIndicator();
+        renderReleases();
+      });
+    }
+  });
+
+  // Advanced filter checkboxes
+  const cbSta = document.getElementById('filter-has-sta');
+  const cbA2a = document.getElementById('filter-has-a2a');
+  if (cbSta) {
+    cbSta.addEventListener('change', () => {
+      if (cbSta.checked && cbA2a) { cbA2a.checked = false; currentReleaseFilters.hasA2a = false; }
+      currentReleaseFilters.hasSta = cbSta.checked;
+      updateFilterToggleIndicator();
+      renderReleases();
+    });
+  }
+  if (cbA2a) {
+    cbA2a.addEventListener('change', () => {
+      if (cbA2a.checked && cbSta) { cbSta.checked = false; currentReleaseFilters.hasSta = false; }
+      currentReleaseFilters.hasA2a = cbA2a.checked;
+      updateFilterToggleIndicator();
+      renderReleases();
+    });
+  }
 }
 
 function renderReleases() {
@@ -1630,9 +1982,24 @@ function renderReleases() {
     return;
   }
 
-  container.innerHTML = releases.map(release => {
-    const releaseType = (release.releaseType || release.type || 'Unknown').toLowerCase();
-    const releaseTypeDisplay = releaseType === 'production' ? 'Production' : 'Development';
+  const filtered = getFilteredAndSortedReleases();
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <p>No releases match this filter</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(release => {
+    const releaseType = (release.releaseType || release.type || 'Unknown').toLowerCase().replace('-', '-');
+    const releaseTypeDisplay = releaseType === 'production' ? 'Production' : releaseType === 'deploy-only' ? 'Deploy Only' : 'Development';
     const pkgCount = (release.packages || []).length;
     const createdAt = release.createdAt ? new Date(release.createdAt).toLocaleString() : '';
 
@@ -1667,13 +2034,13 @@ function renderReleases() {
           </div>
         </div>
         <div class="release-card-actions">
-          <button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
+          ${releaseType !== 'deploy-only' ? `<button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Generate HTML
-          </button>
+          </button>` : ''}
           <button class="btn btn-sm btn-outline btn-export-spf" data-id="${release.id}" title="Export SPF">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -1788,7 +2155,8 @@ function renderReleaseSummary(release) {
   const copyUrlBtn = (url) => {
     if (!url) return '';
     const safeUrl = url.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-    return `<button class="btn-copy-url" title="Copy JFrog URL" onclick="copyPkgUrl(this, '${safeUrl}')">
+    const displayPath = url.replace('https://artifactory.aditum.com.br/artifactory/', '').replace(/"/g, '&quot;');
+    return `<button class="btn-copy-url" title="${displayPath}" onclick="copyPkgUrl(this, '${safeUrl}')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -1896,7 +2264,7 @@ function renderReleaseSummary(release) {
     if (platformGroups['Embedded']) {
       platformGroups['Embedded'].forEach(pkg => {
         const icon = getPlatformIcon('Embedded', pkg);
-        const name = pkg.device ? `${pkg.device} Package` : 'S920 Package';
+        const name = pkg.device ? `${displayDeviceName(pkg.device)} Package` : 'S920 Package';
         html += `
           <div class="platform-package-item">
             <img src="${icon}" alt="Embedded" class="platform-icon" onerror="this.style.display='none'" />
@@ -1950,7 +2318,7 @@ function renderReleaseSummary(release) {
             const deviceMatch = urlFileName.match(/PaymentExample-([A-Za-z0-9_]+)-/i);
             if (deviceMatch) deviceName = deviceMatch[1];
           }
-          const name = deviceName ? `PaymentExample (${deviceName})` : 'PaymentExample';
+          const name = deviceName ? `PaymentExample (${normalizeA2ADisplayName(deviceName)})` : 'PaymentExample';
           html += `
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
@@ -1968,7 +2336,7 @@ function renderReleaseSummary(release) {
           html += `
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="package-name">${deviceName}</span>
+            <span class="package-name">${normalizeA2ADisplayName(deviceName)}</span>
             ${copyUrlBtn(pkg.url)}
           </div>`;
         });
@@ -1994,8 +2362,7 @@ function renderReleaseSummary(release) {
         <div class="sta-device-group">
           <div class="sta-device-header">
             <img src="${icon}" alt="STA" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="sta-device-name">${device}</span>
-            ${copyUrlBtn(devicePkgs[0].url)}
+            <span class="sta-device-name">${displayDeviceName(device)}</span>
           </div>
           <div class="sta-device-variants">`;
 
@@ -2009,9 +2376,9 @@ function renderReleaseSummary(release) {
         html += `
             <div class="sta-variant-row">
               ${categoryTag}
-              ${devicePkgs.length > 1 ? copyUrlBtn(pkg.url) : ''}
               ${sigTag}
               ${clientTag}
+              ${copyUrlBtn(pkg.url)}
             </div>`;
       });
 
@@ -2027,7 +2394,7 @@ function renderReleaseSummary(release) {
     if (handledPlatforms.includes(platform)) continue;
     html += `<h5 class="platform-packages-title">${platform.toUpperCase()}</h5>`;
     platformPkgs.forEach(pkg => {
-      const name = `${pkg.device || ''} ${pkg.category || ''}`.trim() || platform;
+      const name = `${displayDeviceName(pkg.device || '')} ${pkg.category || ''}`.trim() || platform;
       html += `
         <div class="platform-package-item">
           <img src="assets/images/platform-pkgs.svg" alt="${platform}" class="platform-icon" onerror="this.style.display='none'" />
@@ -2160,7 +2527,7 @@ async function exportSpfForRelease(id) {
 
     // Generate filename: release_<version>-YYYY-MM-DD-<prod/dev>.spf
     const releaseType = (release.releaseType || release.type || 'development').toLowerCase();
-    const typeShort = releaseType === 'production' ? 'prod' : 'dev';
+    const typeShort = releaseType === 'production' ? 'prod' : releaseType === 'deploy-only' ? 'deploy' : 'dev';
     const spfFileName = `release_${release.version}-${release.date}-${typeShort}.spf`;
 
     if (dialogSave) {
@@ -2213,7 +2580,7 @@ async function viewRelease(id) {
   const packagesHtml = (release.packages || []).map(pkg => `
     <div class="release-package-item">
       <span class="platform">${pkg.platform}</span>
-      <span class="device">${pkg.device}</span>
+      <span class="device">${displayDeviceName(pkg.device)}</span>
       ${pkg.category ? `<span class="category">${pkg.category}</span>` : ''}
       ${pkg.url ? `<a href="${pkg.url}" target="_blank" class="url download-link">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
@@ -2257,6 +2624,7 @@ async function deleteRelease(id) {
       releases = await invoke('get_releases');
       renderReleases();
       populateHtmlReleaseSelect();
+      populateReleaseFilterOptions();
       frontendLog('INFO', 'RELEASES: Release deleted successfully', `ID: ${id}`);
       showToast('success', 'Release deleted');
     } catch (error) {
@@ -2302,7 +2670,8 @@ function populateHtmlReleaseSelect() {
   if (!selectEl) return;
 
   selectEl.innerHTML = '<option value="">-- Select a release --</option>' +
-    releases.map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
+    releases.filter(r => (r.releaseType || r.type || '').toLowerCase() !== 'deploy-only')
+      .map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
 }
 
 async function generateHtml() {
@@ -2431,6 +2800,28 @@ function initSettingsPage() {
           frontendLog('ERROR', 'SETTINGS: Failed to open folder', err.toString());
           showToast('error', `Failed to open folder: ${err}`);
         }
+      }
+    });
+  });
+
+  // Color picker sync (swatch <-> text)
+  document.querySelectorAll('.color-input').forEach(wrapper => {
+    const swatch = wrapper.querySelector('.color-swatch');
+    const colorInput = wrapper.querySelector('input[type="color"]');
+    const textInput = wrapper.querySelector('input[type="text"]');
+    if (!swatch || !colorInput || !textInput) return;
+
+    colorInput.addEventListener('input', () => {
+      const val = colorInput.value;
+      textInput.value = val;
+      swatch.style.backgroundColor = val;
+    });
+
+    textInput.addEventListener('input', () => {
+      const val = textInput.value.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+        colorInput.value = val;
+        swatch.style.backgroundColor = val;
       }
     });
   });
@@ -3165,8 +3556,6 @@ function renderImportReleasePage() {
   const rel = importReleaseState.release;
   if (!rel) return;
 
-  const isReadOnly = importReleaseState.isEditing;
-
   content.innerHTML = `
     <!-- Basic Information -->
     <div class="card">
@@ -3174,18 +3563,17 @@ function renderImportReleasePage() {
       <div class="form-grid form-grid-3">
         <div class="form-group">
           <label>Version *</label>
-          <input type="text" id="import-version" value="${rel.version || ''}" ${isReadOnly ? 'readonly class="readonly-field editable-on-confirm" data-confirm-field="version" style="cursor: pointer;"' : ''}>
+          <input type="text" id="import-version" value="${rel.version || ''}">
         </div>
         <div class="form-group">
           <label>Release Date *</label>
           <div class="date-field-wrapper">
             <input type="date" id="import-date" value="${rel.date || ''}">
-            ${importReleaseState.originalRelease ? '<p class="help-text date-edit-notice">⚠ A data original pode não ser mais válida. Atualize se necessário.</p>' : ''}
           </div>
         </div>
         <div class="form-group">
           <label>Release Type *</label>
-          <select id="import-type" ${isReadOnly ? 'disabled class="readonly-field editable-on-confirm" data-confirm-field="type" style="cursor: pointer;"' : ''}>
+          <select id="import-type">
             <option value="Production" ${rel.releaseType === 'Production' ? 'selected' : ''}>Production</option>
             <option value="Development" ${rel.releaseType === 'Development' ? 'selected' : ''}>Development</option>
           </select>
@@ -3261,25 +3649,18 @@ function renderImportReleasePage() {
 }
 
 function attachImportPageEventListeners() {
-  // Editable-on-confirm fields (version, type) - click to unlock with warning
-  document.querySelectorAll('.editable-on-confirm').forEach(field => {
-    field.addEventListener('click', async () => {
-      if (!field.readOnly && !field.disabled) return;
-      const confirmed = await showConfirmDialog(
-        'Editar campo protegido',
-        'Alterar a versão de uma release existente pode causar inconsistências. Deseja realmente prosseguir?',
-        { okLabel: 'Sim, editar', cancelLabel: 'Cancelar', kind: 'warning' }
-      );
-      if (confirmed) {
-        field.readOnly = false;
-        field.disabled = false;
-        field.classList.remove('readonly-field');
-        field.style.cursor = '';
-        field.focus();
-        frontendLog('INFO', `IMPORT: Unlocked ${field.dataset.confirmField} field for editing`);
-      }
+  // Warn when editing critical fields on an existing release
+  if (importReleaseState.isEditing) {
+    const orig = importReleaseState.originalRelease || {};
+    const fieldLabels = { 'import-version': 'version', 'import-date': 'release date', 'import-type': 'release type' };
+    ['import-version', 'import-date', 'import-type'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        showToast('warning', `You changed the ${fieldLabels[id]}. Make sure this is intentional.`);
+      });
     });
-  });
+  }
 
   // Release notes tabs
   document.querySelectorAll('.notes-tab').forEach(tab => {
@@ -3498,6 +3879,7 @@ async function handleImportAddPackages() {
     pkg.isNew = true;
     pkg.filePath = filePath;
     pkg.fileName = fileName;
+    pkg.jfrogPath = buildJfrogPath(pkg, fileName);
 
     importReleaseState.newPackages.push(pkg);
     importReleaseState.packages.push(pkg);
@@ -3506,6 +3888,33 @@ async function handleImportAddPackages() {
 
   renderImportReleasePage();
   showToast('success', `Added ${files.length} package(s)`);
+}
+
+// Device map matching Rust DEVICE_MAP (src-tauri/src/lib.rs)
+const DEVICE_MAP = {
+  'A910': { manufacturer: 'pax', path: 'a910' },
+  'S920': { manufacturer: 'pax', path: 's920' },
+  'P2': { manufacturer: 'sunmi', path: 'p2' },
+  'P2_LITE_SE': { manufacturer: 'sunmi', path: 'p2litese' },
+  'P2LITESE': { manufacturer: 'sunmi', path: 'p2litese' },
+  'P2_MINI': { manufacturer: 'sunmi', path: 'p2_mini' },
+  'L3': { manufacturer: 'positivo', path: 'l3' },
+  'L3_2024': { manufacturer: 'positivo', path: 'l3_2024' },
+  'L300': { manufacturer: 'positivo', path: 'l300' },
+  'L400': { manufacturer: 'positivo', path: 'l400' },
+  'GPOS700': { manufacturer: 'gertec', path: 'gpos700' },
+  'GPOS720': { manufacturer: 'gertec', path: 'gpos720' },
+  'GPOS760': { manufacturer: 'gertec', path: 'gpos760' },
+  'DX8000': { manufacturer: 'ingenico', path: 'dx8000' },
+  'DX4000': { manufacturer: 'ingenico', path: 'dx4000' },
+  'EX4000': { manufacturer: 'ingenico', path: 'ex4000' },
+  'X990_PRO': { manufacturer: 'verifone', path: 'x990_pro' },
+  'X990_UX': { manufacturer: 'verifone', path: 'x990_ux' },
+};
+
+// Display-only device name normalization (just replace _ with space, keep casing)
+function displayDeviceName(name) {
+  return (name || '').replace(/_/g, ' ');
 }
 
 // Normalize device names for display (used by A2A and STA packages)
@@ -3536,11 +3945,23 @@ function normalizeDeviceName(deviceRaw) {
   return deviceRaw.replace(/_/g, ' ');
 }
 
+// Normalize A2A device names for display (preserves SE suffix etc.)
+function normalizeA2ADisplayName(name) {
+  if (!name) return '';
+  const map = {
+    'P2_LITE_SE': 'P2 Lite SE', 'P2LITESE': 'P2 Lite SE',
+    'X990_PRO': 'X990 Pro', 'X990_UX': 'X990 UX',
+    'L3_2024': 'L3 2024', 'DX4000': 'DX4000', 'DX8000': 'DX8000',
+    'GPOS720': 'GPOS720', 'GPOS760': 'GPOS760',
+  };
+  return map[name.toUpperCase()] || name.replace(/_/g, ' ');
+}
+
 // Detect package info from filename (for locally added files)
 function detectPackageFromFileName(fileName, filePath) {
   const lowerName = fileName.toLowerCase();
 
-  let platform = 'Unknown', device = '', category = '', signature = '', client = '', version = '';
+  let platform = 'Unknown', device = '', category = '', signature = '', client = '', version = '', isDev = false;
 
   // Detect signature
   if (lowerName.includes('_sign.')) {
@@ -3648,7 +4069,7 @@ function detectPackageFromFileName(fileName, filePath) {
       // Extract device: PaymentExample-{Device}-P-... or PaymentExample-P-... (generic)
       const exampleMatch = fileName.match(/PaymentExample-([A-Za-z0-9_]+)-[PD]-/i);
       if (exampleMatch && exampleMatch[1].toUpperCase() !== 'P' && exampleMatch[1].toUpperCase() !== 'D') {
-        device = normalizeDeviceName(exampleMatch[1]);
+        device = exampleMatch[1];
       } else {
         device = 'Generic';
       }
@@ -3658,7 +4079,7 @@ function detectPackageFromFileName(fileName, filePath) {
       // Extract device: SmartPosTef-{Device}-P-...
       const deviceMatch = fileName.match(/SmartPosTef-([A-Za-z0-9_]+)-[PD]-/i);
       if (deviceMatch) {
-        device = normalizeDeviceName(deviceMatch[1]);
+        device = deviceMatch[1];
       } else {
         device = 'Android';
       }
@@ -3683,12 +4104,13 @@ function detectPackageFromFileName(fileName, filePath) {
   } else if (lowerName.endsWith('.apk') || lowerName.endsWith('.zip')) {
     platform = 'STA';
     const deviceMatch = fileName.match(/(?:SmartPosTef|SmartPosTEF|AditumTef|AditumTEF)-(?:AP|LP|AD|LD)-([A-Za-z0-9_]+)-/i);
-    if (deviceMatch) device = normalizeDeviceName(deviceMatch[1]);
+    if (deviceMatch) device = deviceMatch[1];
     else device = 'Unknown';
     const typeMatch = fileName.match(/(?:SmartPosTef|SmartPosTEF|AditumTef|AditumTEF)-(AP|LP|AD|LD)-/i);
     if (typeMatch) {
       const prefix = typeMatch[1].toUpperCase();
       category = (prefix === 'LP' || prefix === 'LD') ? 'Launcher' : 'App';
+      isDev = (prefix === 'LD' || prefix === 'AD');
     }
   }
 
@@ -3702,7 +4124,7 @@ function detectPackageFromFileName(fileName, filePath) {
     }
   }
 
-  return { platform, device, category, signature, client, url: '', version, filePath };
+  return { platform, device, category, signature, client, url: '', version, filePath, isDev };
 }
 
 // Handle Update/Save Release
@@ -3744,7 +4166,7 @@ async function handleUpdateRelease() {
         let uploadFileName = pkg.fileName;
 
         // STA APK→ZIP rule: For STA dev or prod-signed, APK must be zipped
-        const needsZip = shouldZipApk(pkg);
+        const needsZip = shouldZipApk(pkg, importReleaseState.release ? importReleaseState.release.releaseType : 'Production');
         if (needsZip && filePath) {
           frontendLog('INFO', 'IMPORT: Zipping APK for STA upload', `File: ${pkg.fileName}`);
           const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
@@ -3792,7 +4214,7 @@ async function handleUpdateRelease() {
 
   // Build release data
   const releaseData = {
-    id: importReleaseState.originalRelease ? importReleaseState.originalRelease.id : `${rel.version}-${Date.now()}`,
+    id: importReleaseState.originalRelease ? importReleaseState.originalRelease.id : `${rel.version}-${(rel.releaseType || 'production').toLowerCase()}-${Date.now()}`,
     version: rel.version,
     date: rel.date,
     type: rel.releaseType || 'Production',
@@ -3828,6 +4250,7 @@ async function handleUpdateRelease() {
     releases = await invoke('get_releases');
     renderReleases();
     populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
 
     hideLoadingModal();
 
@@ -3847,16 +4270,16 @@ async function handleUpdateRelease() {
 // Determine if an APK needs to be zipped before upload
 // Rule: STA dev and STA prod-signed APKs must be zipped. STA prod-unsigned APKs go as-is.
 // A2A APKs always go as-is.
-function shouldZipApk(pkg) {
-  if (!pkg.fileName) return false;
-  const lowerName = pkg.fileName.toLowerCase();
+function shouldZipApk(pkg, releaseType) {
+  const fileName = pkg.fileName || pkg.file_name || '';
+  if (!fileName) return false;
+  const lowerName = fileName.toLowerCase();
   if (!lowerName.endsWith('.apk')) return false;
   if (pkg.platform !== 'STA') return false;
 
   // Check if this is a prod-unsigned package
-  const releaseType = importReleaseState.release ? importReleaseState.release.releaseType : 'Production';
   const isSigned = pkg.signature === 'Signed' || lowerName.includes('_sign.');
-  const isProd = releaseType === 'Production';
+  const isProd = (releaseType || 'Production').toLowerCase() !== 'development';
 
   // Prod unsigned APKs go as-is
   if (isProd && !isSigned) return false;
@@ -3888,10 +4311,51 @@ function buildJfrogPath(pkg, fileName) {
   } else if (pkg.platform === 'Embedded') {
     return `${repo}/${devPrefix}pax/s920/`;
   } else if (pkg.platform === 'STA') {
+    const deviceKey = (pkg.device || '').toUpperCase();
+    const info = DEVICE_MAP[deviceKey];
+    if (info) {
+      let prefix;
+      if (isDev) {
+        prefix = 'dev/';
+      } else if (pkg.signature === 'Signed' || fileName.toLowerCase().includes('_sign.')) {
+        prefix = '';
+      } else {
+        prefix = 'unsigned/';
+      }
+      const catSegment = pkg.category === 'App' ? 'app' : 'launcher';
+      const clientFolder = pkg.client ? `${pkg.client.toLowerCase()}/` : '';
+      return `${repo}/${prefix}${info.manufacturer}/${info.path}/${catSegment}/${clientFolder}`;
+    }
     const device = (pkg.device || 'unknown').toLowerCase();
     return `${repo}/${devPrefix}android/${device}/`;
   } else if (pkg.platform === 'A2A') {
-    return `${repo}/${devPrefix}app-to-app/`;
+    const lowerFile = fileName.toLowerCase();
+    if (pkg.device === 'AAR' || lowerFile.endsWith('.aar')) {
+      return `${repo}/${devPrefix}app-to-app/sdk_integration/`;
+    } else if (pkg.device === 'Doc' || (lowerFile.startsWith('doc-') && lowerFile.endsWith('.zip'))) {
+      return `${repo}/${devPrefix}app-to-app/sdk_integration/doc/`;
+    } else if (pkg.device === 'TefSdk' || lowerFile.includes('tefsdk')) {
+      const arch = (pkg.category === 'v7a' || lowerFile.includes('v7a')) ? 'v7a' : 'v8a';
+      return `${repo}/${devPrefix}app-to-app/tef-android/${arch}/`;
+    } else if (pkg.category === 'Example' || lowerFile.includes('paymentexample')) {
+      if (pkg.device && pkg.device !== 'Generic') {
+        const deviceKey = pkg.device.toUpperCase();
+        const info = DEVICE_MAP[deviceKey];
+        if (info) {
+          const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
+          return `${repo}/${signPrefix}app-to-app/payment_example/${info.manufacturer}/${info.path}/`;
+        }
+      }
+      return `${repo}/${devPrefix}app-to-app/payment_example/`;
+    } else {
+      const deviceKey = (pkg.device || '').toUpperCase();
+      const info = DEVICE_MAP[deviceKey];
+      if (info) {
+        const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
+        return `${repo}/${signPrefix}app-to-app/apk/${info.manufacturer}/${info.path}/`;
+      }
+      return `${repo}/${devPrefix}app-to-app/`;
+    }
   } else {
     return `${repo}/${devPrefix}other/`;
   }
@@ -4289,6 +4753,36 @@ function toggleAccordion(headerEl) {
 }
 
 /**
+ * Wrap packages in client group cards. Clientless packages render directly
+ * via renderFn; packages with a client get grouped into labeled cards.
+ */
+function wrapWithClientGroups(pkgs, renderFn) {
+  if (!pkgs || pkgs.length === 0) return renderFn(pkgs);
+
+  const clientless = pkgs.filter(p => !p.client);
+  const clientMap = {};
+  pkgs.filter(p => p.client).forEach(p => {
+    if (!clientMap[p.client]) clientMap[p.client] = [];
+    clientMap[p.client].push(p);
+  });
+
+  const clients = Object.keys(clientMap);
+  if (clients.length === 0) return renderFn(pkgs);
+
+  let html = '';
+  if (clientless.length > 0) {
+    html += renderFn(clientless);
+  }
+  clients.sort().forEach(client => {
+    html += `<div class="client-group">`;
+    html += `<div class="client-group-header">${escapeHtml(client)}</div>`;
+    html += renderFn(clientMap[client]);
+    html += `</div>`;
+  });
+  return html;
+}
+
+/**
  * Route to the correct content renderer based on platform.
  */
 function renderAccordionContent(platform, pkgs) {
@@ -4296,13 +4790,13 @@ function renderAccordionContent(platform, pkgs) {
     case 'Windows':
     case 'Linux64':
     case 'Linux32':
-      return renderPlatformTabs(platform, pkgs);
+      return wrapWithClientGroups(pkgs, p => renderPlatformTabs(platform, p));
     case 'STA':
-      return renderSTADeviceList(pkgs);
+      return wrapWithClientGroups(pkgs, renderSTADeviceList);
     case 'A2A':
-      return renderA2ACards(pkgs);
+      return wrapWithClientGroups(pkgs, renderA2ACards);
     case 'Embedded':
-      return renderEmbeddedList(pkgs);
+      return wrapWithClientGroups(pkgs, renderEmbeddedList);
     case 'Custom':
       return renderCustomPlatformAccordion(pkgs);
     default:
@@ -4337,7 +4831,7 @@ function renderPlatformTabs(platform, pkgs) {
   devices.forEach((device, i) => {
     const isActive = i === 0 ? ' active' : '';
     const tabContentId = `${tabId}-${i}`;
-    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(device)} (${deviceGroups[device].length})</button>`;
+    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(displayDeviceName(device))} (${deviceGroups[device].length})</button>`;
     contentHtml += `<div class="platform-tab-content${isActive}" data-tab-index="${i}">${renderPackageTable(deviceGroups[device])}</div>`;
   });
 
@@ -4376,7 +4870,7 @@ function renderPackageTable(pkgs) {
     const fileName = pkg.url ? pkg.url.split('/').filter(s => s.length > 0).pop() : 'N/A';
     const category = pkg.category || '';
     const device = pkg.device || '';
-    const title = device || category || fileName;
+    const title = displayDeviceName(device) || category || fileName;
 
     // Build badges HTML
     let badgesHtml = '';
@@ -4393,7 +4887,7 @@ function renderPackageTable(pkgs) {
     }
 
     // Extract JFrog path from URL for tooltip
-    const jfrogPath = pkg.url ? pkg.url.replace('https://artifactory.aditum.com.br/artifactory/', '') : (pkg.filePath ? `(pending upload: ${pkg.filePath.split('/').pop()})` : 'N/A');
+    const jfrogPath = pkg.url ? pkg.url.replace('https://artifactory.aditum.com.br/artifactory/', '') : (pkg.jfrogPath || pkg.jfrog_path || (pkg.filePath ? `(pending upload: ${pkg.filePath.split('/').pop()})` : 'N/A'));
 
     html += `
       <div class="pkg-card">
@@ -4401,7 +4895,7 @@ function renderPackageTable(pkgs) {
           <span class="pkg-card-title">${escapeHtml(title)}</span>
           <div class="pkg-card-header-actions">
             <span class="btn-pkg-info" title="${escapeHtml(jfrogPath)}">
-              <span class="info-icon-letter">i</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </span>
             <button class="btn-pkg-delete" title="Delete package" onclick="handleDeleteFromJfrog(${pkg._index})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -4453,7 +4947,7 @@ function renderSTADeviceList(pkgs) {
   Object.keys(deviceGroups).sort().forEach(device => {
     const devicePkgs = deviceGroups[device];
     html += `<div class="sta-device-group">`;
-    html += `<div class="sta-device-name">${escapeHtml(device)} (${devicePkgs.length})</div>`;
+    html += `<div class="sta-device-name">${escapeHtml(displayDeviceName(device))} (${devicePkgs.length})</div>`;
     html += renderPackageTable(devicePkgs);
     html += `</div>`;
   });
@@ -4520,7 +5014,7 @@ function renderA2ACards(pkgs) {
       let exampleDevice = '';
       const exampleMatch = fileName.match(/PaymentExample-([A-Za-z0-9_]+)-[PD]-/i);
       if (exampleMatch && !['P', 'D'].includes(exampleMatch[1].toUpperCase())) {
-        exampleDevice = normalizeDeviceName(exampleMatch[1]);
+        exampleDevice = normalizeA2ADisplayName(exampleMatch[1]);
       }
       const title = exampleDevice ? `${exampleDevice} PaymentExample` : 'PaymentExample';
       html += renderA2ACardHtml(pkg, title, fileName);
@@ -4545,7 +5039,7 @@ function renderA2ACardHtml(pkg, title, fileName) {
   }
 
   // Extract JFrog path from URL for tooltip
-  const jfrogPath = pkg.url ? pkg.url.replace('https://artifactory.aditum.com.br/artifactory/', '') : (pkg.filePath ? `(pending upload: ${pkg.filePath.split('/').pop()})` : 'N/A');
+  const jfrogPath = pkg.url ? pkg.url.replace('https://artifactory.aditum.com.br/artifactory/', '') : (pkg.jfrogPath || pkg.jfrog_path || (pkg.filePath ? `(pending upload: ${pkg.filePath.split('/').pop()})` : 'N/A'));
 
   return `
       <div class="pkg-card">
@@ -4553,7 +5047,7 @@ function renderA2ACardHtml(pkg, title, fileName) {
           <span class="pkg-card-title">${escapeHtml(title)}</span>
           <div class="pkg-card-header-actions">
             <span class="btn-pkg-info" title="${escapeHtml(jfrogPath)}">
-              <span class="info-icon-letter">i</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </span>
             <button class="btn-pkg-delete" title="Delete package" onclick="handleDeleteFromJfrog(${pkg._index})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">

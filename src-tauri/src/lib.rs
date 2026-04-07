@@ -487,7 +487,7 @@ fn extract_signature(file_name: &str) -> Option<String> {
         return None;
     }
     
-    let re = Regex::new(r"\d+\.\d+\.\d+\.\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
+    let re = Regex::new(r"\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
     if let Some(caps) = re.captures(file_name) {
         if let Some(sig) = caps.get(1) {
             let potential_sig = sig.as_str().to_lowercase();
@@ -1006,8 +1006,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         return pkg;
     }
 
-    // A2A Device APK Signed: SmartPosTef-{device}-{P|D}-{version}.A2A.{hash}-release_sign.apk
-    let re = Regex::new(r"^SmartPosTef-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release_sign\.apk$").unwrap();
+    // A2A Device APK Signed: SmartPosTef-{device}-{P|D}-{version}.A2A.{hash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^SmartPosTef-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         let device_name = caps.get(1).unwrap().as_str();
         let device_key = device_name.to_uppercase();
@@ -1020,6 +1020,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1032,8 +1033,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         return pkg;
     }
 
-    // A2A Device APK Unsigned: SmartPosTef-{device}-{P|D}-{version}.A2A.{hash}-release.apk
-    let re = Regex::new(r"^SmartPosTef-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release\.apk$").unwrap();
+    // A2A Device APK Unsigned: SmartPosTef-{device}-{P|D}-{version}.A2A.{hash}[-{signature}]-release.apk
+    let re = Regex::new(r"^SmartPosTef-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         let device_name = caps.get(1).unwrap().as_str();
         let device_key = device_name.to_uppercase();
@@ -1046,6 +1047,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1072,14 +1074,14 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.jfrog_path = Some(if pkg.is_dev {
             "packages/dev/app-to-app/payment_example/".to_string()
         } else {
-            "packages/unsigned/app-to-app/payment_example/".to_string()
+            "packages/app-to-app/payment_example/".to_string()
         });
         
         return pkg;
     }
 
-    // A2A Payment Example Signed: PaymentExample-{device}-{P|D}-{version}.A2A.{hash}-release_sign.apk
-    let re = Regex::new(r"^PaymentExample-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release_sign\.apk$").unwrap();
+    // A2A Payment Example Signed: PaymentExample-{device}-{P|D}-{version}.A2A.{hash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^PaymentExample-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         let device_name = caps.get(1).unwrap().as_str();
         let device_key = device_name.to_uppercase();
@@ -1092,6 +1094,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1104,8 +1107,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         return pkg;
     }
 
-    // A2A Payment Example Unsigned: PaymentExample-{device}-{P|D}-{version}.A2A.{hash}-release.apk
-    let re = Regex::new(r"^PaymentExample-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release\.apk$").unwrap();
+    // A2A Payment Example Unsigned: PaymentExample-{device}-{P|D}-{version}.A2A.{hash}[-{signature}]-release.apk
+    let re = Regex::new(r"^PaymentExample-([A-Za-z0-9_]+)-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         let device_name = caps.get(1).unwrap().as_str();
         let device_key = device_name.to_uppercase();
@@ -1118,6 +1121,7 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1317,6 +1321,16 @@ fn denormalize_device_name(name: &str) -> String {
 // Tauri commands module
 mod commands {
     use super::*;
+
+    #[tauri::command]
+    pub fn get_app_version() -> String {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .unwrap_or_default();
+        conf.get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("0.0.0")
+            .to_string()
+    }
 
     #[tauri::command]
     pub fn get_app_paths() -> AppPaths {
@@ -2896,7 +2910,69 @@ mod commands {
         )
     }
     
+    fn normalize_device_name(name: &str) -> String {
+        name.replace("_", " ")
+    }
+
+    fn normalize_a2a_display_name(name: &str) -> String {
+        match name.to_uppercase().as_str() {
+            "P2_LITE_SE" | "P2LITESE" => "P2 Lite SE".to_string(),
+            "X990_PRO" => "X990 Pro".to_string(),
+            "X990_UX" => "X990 UX".to_string(),
+            "L3_2024" => "L3 2024".to_string(),
+            "DX4000" => "DX4000".to_string(),
+            "DX8000" => "DX8000".to_string(),
+            "GPOS720" => "GPOS720".to_string(),
+            "GPOS760" => "GPOS760".to_string(),
+            _ => name.replace("_", " ").to_string(),
+        }
+    }
+
+    /// Split packages into (clientless, client_groups) where client_groups is a BTreeMap
+    fn group_by_client<'a>(packages: &[&'a PackageData]) -> (Vec<&'a PackageData>, std::collections::BTreeMap<String, Vec<&'a PackageData>>) {
+        let mut clientless: Vec<&PackageData> = Vec::new();
+        let mut client_groups: std::collections::BTreeMap<String, Vec<&PackageData>> = std::collections::BTreeMap::new();
+        for pkg in packages {
+            if pkg.client.is_empty() {
+                clientless.push(pkg);
+            } else {
+                client_groups.entry(pkg.client.clone()).or_insert_with(Vec::new).push(pkg);
+            }
+        }
+        (clientless, client_groups)
+    }
+
+    fn client_card_open(client: &str) -> String {
+        format!(r#"
+            <div class="mt-6 p-4 border border-green-400/30 dark:border-green-500/30 rounded-lg bg-green-50/10 dark:bg-green-900/10">
+                <h4 class="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 pb-2 border-b border-green-400/30 dark:border-green-500/30">{}</h4>"#, client)
+    }
+
+    fn client_card_close() -> &'static str {
+        r#"
+            </div>"#
+    }
+
     fn generate_platform_section(title: &str, packages: &[&PackageData]) -> String {
+        let (clientless, client_groups) = group_by_client(packages);
+        let mut html = String::new();
+
+        // Render clientless packages
+        if !clientless.is_empty() {
+            html.push_str(&generate_platform_section_inner(title, &clientless));
+        }
+
+        // Render each client group
+        for (client, pkgs) in &client_groups {
+            html.push_str(&client_card_open(client));
+            html.push_str(&generate_platform_section_inner(title, pkgs));
+            html.push_str(client_card_close());
+        }
+
+        html
+    }
+
+    fn generate_platform_section_inner(title: &str, packages: &[&PackageData]) -> String {
         let mut html = format!(r#"
             
             <!-- {} Sub-section -->
@@ -2930,7 +3006,7 @@ mod commands {
             html.push_str(r#"
                 <ul class="list-none space-y-2 pl-0">"#);
             for pkg in dll_packages.iter().chain(lib_packages.iter()) {
-                let label = if pkg.device.is_empty() { "Library" } else { &pkg.device };
+                let label = if pkg.device.is_empty() { "Library".to_string() } else { normalize_device_name(&pkg.device) };
                 html.push_str(&format!(r#"
                     <li class="flex items-start">
                         <span class="font-mono text-sm text-gray-600 dark:text-gray-400 w-20 shrink-0 pt-0.5">{}:</span>
@@ -2969,7 +3045,7 @@ mod commands {
             html.push_str(r#"
                 <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
             for pkg in &other_pkgs {
-                let label = if !pkg.device.is_empty() { &pkg.device } else if !pkg.category.is_empty() { &pkg.category } else { "Package" };
+                let label = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else if !pkg.category.is_empty() { pkg.category.clone() } else { "Package".to_string() };
                 html.push_str(&format!(r#"
                     <li>
                         <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
@@ -2989,13 +3065,34 @@ mod commands {
     }
     
     fn generate_sta_section(packages: &[&PackageData]) -> String {
+        let (clientless, client_groups) = group_by_client(packages);
         let mut html = String::from(r#"
 
         <section class="mb-10">
             <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
                 Smart POS (STA - Standalone)
-            </h2>
-            
+            </h2>"#);
+
+        // Render clientless packages
+        if !clientless.is_empty() {
+            html.push_str(&generate_sta_devices(&clientless));
+        }
+
+        // Render each client group
+        for (client, pkgs) in &client_groups {
+            html.push_str(&client_card_open(client));
+            html.push_str(&generate_sta_devices(pkgs));
+            html.push_str(client_card_close());
+        }
+
+        html.push_str(r#"
+        </section>"#);
+
+        html
+    }
+
+    fn generate_sta_devices(packages: &[&PackageData]) -> String {
+        let mut html = String::from(r#"
             <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
                 <ul class="list-none space-y-4 pl-0 text-gray-700 dark:text-gray-300">"#);
         
@@ -3014,7 +3111,7 @@ mod commands {
                     <!-- {} -->
                     <li class="flex items-start flex-col{}">
                         <strong class="text-xl font-bold text-secondary dark:text-gray-100 w-full shrink-0 mb-2">{}</strong>
-                        <ul class="list-disc list-inside space-y-2 ml-4 w-full">"#, device, border_class, device));
+                        <ul class="list-disc list-inside space-y-2 ml-4 w-full">"#, device, border_class, normalize_device_name(device)));
             
             for pkg in pkgs {
                 let label_parts: Vec<String> = vec![pkg.signature.clone(), pkg.client.clone(), pkg.category.clone()]
@@ -3039,26 +3136,44 @@ mod commands {
         
         html.push_str(r#"
                 </ul>
-            </div>
-        </section>"#);
+            </div>"#);
         
         html
     }
     
     fn generate_a2a_section(packages: &[&PackageData]) -> String {
+        let (clientless, client_groups) = group_by_client(packages);
         let mut html = String::from(r#"
 
         <!-- A2A (App to App) Section -->
         <section class="mb-10">
             <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
                 App to App (A2A)
-            </h2>
-            
+            </h2>"#);
+
+        if !clientless.is_empty() {
+            html.push_str(&generate_a2a_list(&clientless));
+        }
+
+        for (client, pkgs) in &client_groups {
+            html.push_str(&client_card_open(client));
+            html.push_str(&generate_a2a_list(pkgs));
+            html.push_str(client_card_close());
+        }
+
+        html.push_str(r#"
+        </section>"#);
+
+        html
+    }
+
+    fn generate_a2a_list(packages: &[&PackageData]) -> String {
+        let mut html = String::from(r#"
             <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
                 <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
         
         for pkg in packages {
-            let label = if !pkg.device.is_empty() { &pkg.device } else if !pkg.category.is_empty() { &pkg.category } else { "Package" };
+            let label = if !pkg.device.is_empty() { normalize_a2a_display_name(&pkg.device) } else if !pkg.category.is_empty() { pkg.category.clone() } else { "Package".to_string() };
             html.push_str(&format!(r#"
                     <li>
                         <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
@@ -3070,25 +3185,43 @@ mod commands {
         
         html.push_str(r#"
                 </ul>
-            </div>
-        </section>"#);
+            </div>"#);
         
         html
     }
     
     fn generate_embedded_section(packages: &[&PackageData]) -> String {
+        let (clientless, client_groups) = group_by_client(packages);
         let mut html = String::from(r#"
 
         <section class="mb-10">
             <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
                 Embedded Linux
-            </h2>
-            
+            </h2>"#);
+
+        if !clientless.is_empty() {
+            html.push_str(&generate_embedded_list(&clientless));
+        }
+
+        for (client, pkgs) in &client_groups {
+            html.push_str(&client_card_open(client));
+            html.push_str(&generate_embedded_list(pkgs));
+            html.push_str(client_card_close());
+        }
+
+        html.push_str(r#"
+        </section>"#);
+
+        html
+    }
+
+    fn generate_embedded_list(packages: &[&PackageData]) -> String {
+        let mut html = String::from(r#"
             <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
                 <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
         
         for pkg in packages {
-            let label = if !pkg.device.is_empty() { &pkg.device } else { "Package" };
+            let label = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else { "Package".to_string() };
             html.push_str(&format!(r#"
                     <li>
                         <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
@@ -3100,25 +3233,43 @@ mod commands {
         
         html.push_str(r#"
                 </ul>
-            </div>
-        </section>"#);
+            </div>"#);
         
         html
     }
     
     fn generate_other_section(packages: &[&PackageData]) -> String {
+        let (clientless, client_groups) = group_by_client(packages);
         let mut html = String::from(r#"
 
         <section class="mb-10">
             <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
                 Other Packages
-            </h2>
-            
+            </h2>"#);
+
+        if !clientless.is_empty() {
+            html.push_str(&generate_other_list(&clientless));
+        }
+
+        for (client, pkgs) in &client_groups {
+            html.push_str(&client_card_open(client));
+            html.push_str(&generate_other_list(pkgs));
+            html.push_str(client_card_close());
+        }
+
+        html.push_str(r#"
+        </section>"#);
+
+        html
+    }
+
+    fn generate_other_list(packages: &[&PackageData]) -> String {
+        let mut html = String::from(r#"
             <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
                 <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
         
         for pkg in packages {
-            let label = if !pkg.platform.is_empty() { &pkg.platform } else if !pkg.device.is_empty() { &pkg.device } else { "Package" };
+            let label = if !pkg.platform.is_empty() { normalize_device_name(&pkg.platform) } else if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else { "Package".to_string() };
             html.push_str(&format!(r#"
                     <li>
                         <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
@@ -3130,8 +3281,7 @@ mod commands {
         
         html.push_str(r#"
                 </ul>
-            </div>
-        </section>"#);
+            </div>"#);
         
         html
     }
@@ -3867,6 +4017,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
 
         .invoke_handler(tauri::generate_handler![
+            commands::get_app_version,
             commands::get_app_paths,
             commands::get_settings,
             commands::save_settings,

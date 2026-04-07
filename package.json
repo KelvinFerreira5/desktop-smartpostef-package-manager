@@ -1,6 +1,6 @@
 {
   "name": "smartpostef-package-manager",
-  "version": "3.1.16",
+  "version": "3.1.23",
   "description": "SmartPosTEF Package Manager - Desktop application for managing and deploying packages to JFrog (Tauri Edition)",
   "author": "Aditum Pagamentos",
   "license": "MIT",
