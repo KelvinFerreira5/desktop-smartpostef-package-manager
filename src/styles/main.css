@@ -147,6 +147,24 @@ body {
   margin-bottom: 2rem;
 }
 
+.page-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-back-purpose {
+  padding: 0.25rem;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-back-purpose:hover {
+  color: var(--primary);
+  background: rgba(139, 92, 246, 0.1);
+}
+
 .page-header h2 {
   font-size: 1.75rem;
   font-weight: 700;

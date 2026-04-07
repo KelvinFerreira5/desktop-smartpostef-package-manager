@@ -101,7 +101,14 @@
       <!-- Deploy Page -->
       <div id="page-deploy" class="page active">
         <div class="page-header">
-          <h2>New Deploy</h2>
+          <div class="page-header-title-row">
+            <button id="btn-back-to-purpose" class="btn btn-sm btn-ghost btn-back-purpose" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2>New Deploy</h2>
+          </div>
           <p>Upload packages to JFrog and generate SPF files</p>
         </div>
 
@@ -210,12 +217,6 @@
           <div class="card">
             <div class="card-header">
               <h3>Packages</h3>
-              <button id="btn-change-purpose" class="btn btn-sm btn-ghost">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Change Mode
-              </button>
             </div>
 
             <!-- Deploy Mode Selection -->

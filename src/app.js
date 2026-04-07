@@ -267,6 +267,8 @@ function initDeployPage() {
 
       if (purposeSelection) purposeSelection.style.display = 'none';
       if (deployContent) deployContent.style.display = 'block';
+      const backBtn = document.getElementById('btn-back-to-purpose');
+      if (backBtn) backBtn.style.display = '';
 
       const releaseInfoCard = document.getElementById('release-info-card');
       const uploadOnlyCard = document.getElementById('upload-only-info-card');
@@ -295,18 +297,19 @@ function initDeployPage() {
     });
   });
 
-  // Change purpose button
-  const btnChangePurpose = document.getElementById('btn-change-purpose');
-  if (btnChangePurpose) {
-    btnChangePurpose.addEventListener('click', (e) => {
+  // Back to purpose button (in page header)
+  const btnBackToPurpose = document.getElementById('btn-back-to-purpose');
+  if (btnBackToPurpose) {
+    btnBackToPurpose.addEventListener('click', (e) => {
       e.preventDefault();
-      frontendLog('INFO', 'DEPLOY: Change purpose clicked');
+      frontendLog('INFO', 'DEPLOY: Back to purpose clicked');
       currentDeployPurpose = null;
       clearPackages();
       const purposeSelection = document.getElementById('deploy-purpose-selection');
       const deployContent = document.getElementById('deploy-content');
       if (purposeSelection) purposeSelection.style.display = 'block';
       if (deployContent) deployContent.style.display = 'none';
+      btnBackToPurpose.style.display = 'none';
     });
   }
 
