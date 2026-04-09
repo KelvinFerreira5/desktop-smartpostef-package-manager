@@ -5,6 +5,27 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-04-09
+
+### Added
+
+- **8-Theme System**: Four dark themes (Purple Night, Ocean Storm, Rose Gold, Emerald Shadow) and four light themes (Teal Glow Light, Lavender Breeze, Sunrise Warm, Arctic Blue) with colorful accents, gradient backgrounds, and frosted glass panels.
+- **Preferences Tab**: New Preferences tab in Settings with a visual theme grid selector showing live previews for each theme.
+- **Vertical Settings Navigation**: Settings page now uses a vertical sidebar layout with icon-labeled tabs.
+- **Colorful Accents**: Nav icons, headings, labels, badges, page descriptions, and settings tabs now follow each theme's accent palette.
+
+### Changed
+
+- **Header Logo**: Replaced static white logo with theme-aware SVG that inherits the primary accent color.
+- **Preferences Icon**: Changed Preferences tab icon from gear to sliders.
+- **Settings Location**: Moved Settings from the main navigation bar to the sidebar footer.
+
+### Removed
+
+- **HTML Generation Page**: Removed the HTML Generation page and its navigation entry.
+- **Deploy Purpose Card Wrapper**: Removed the redundant card wrapper and heading from the Deploy purpose section.
+- **Theme Toggle**: Replaced the old light/dark toggle with the new 8-theme grid in Preferences.
+
 ## [3.1.23] - 2026-04-07
 
 ### Changed

@@ -141,13 +141,13 @@ async function loadInitialData() {
 function initThemeToggle() {
   var THEMES = [
     { id: 'purple-night', name: 'Purple Night', type: 'Dark', preview: 'linear-gradient(135deg, #180e38, #a064ff, #e040a0)' },
-    { id: 'ocean-storm', name: 'Ocean Storm', type: 'Dark', preview: 'linear-gradient(135deg, #0c1a30, #38bdf8, #818cf8)' },
-    { id: 'rose-gold', name: 'Rose Gold', type: 'Dark', preview: 'linear-gradient(135deg, #30181f, #f47a8a, #e6968c)' },
+    { id: 'ocean-storm', name: 'Ocean Storm', type: 'Dark', preview: 'linear-gradient(135deg, #0c1a30, #38bdf8, #2dd4bf)' },
+    { id: 'rose-gold', name: 'Rose Gold', type: 'Dark', preview: 'linear-gradient(135deg, #30181f, #f47a8a, #f5c542)' },
     { id: 'emerald-shadow', name: 'Emerald Shadow', type: 'Dark', preview: 'linear-gradient(135deg, #0c1f14, #34d399, #a3e635)' },
     { id: 'teal-glow-light', name: 'Teal Glow', type: 'Light', preview: 'linear-gradient(135deg, #b8dde8, #00a896, #00695c)' },
     { id: 'lavender-breeze', name: 'Lavender Breeze', type: 'Light', preview: 'linear-gradient(135deg, #d8cef0, #7c3aed, #c026d3)' },
     { id: 'sunrise-warm', name: 'Sunrise Warm', type: 'Light', preview: 'linear-gradient(135deg, #f8d8c0, #ea580c, #dc2626)' },
-    { id: 'arctic-blue', name: 'Arctic Blue', type: 'Light', preview: 'linear-gradient(135deg, #c0dce8, #0284c7, #06b6d4)' }
+    { id: 'arctic-blue', name: 'Arctic Blue', type: 'Light', preview: 'linear-gradient(135deg, #c0dce8, #0284c7, #7c3aed)' }
   ];
 
   function setTheme(id) {
@@ -162,15 +162,15 @@ function initThemeToggle() {
     var grid = document.getElementById('themeGrid');
     if (!grid) return;
     var current = document.body.getAttribute('data-theme') || 'purple-night';
-    grid.innerHTML = THEMES.map(function(t) {
+    grid.innerHTML = THEMES.map(function (t) {
       return '<div class="theme-card' + (t.id === current ? ' active' : '') + '" data-theme-id="' + t.id + '">'
         + '<div class="theme-preview" style="background: ' + t.preview + ';"></div>'
         + '<div class="theme-name">' + t.name + '</div>'
         + '<div class="theme-type">' + t.type + '</div>'
         + '</div>';
     }).join('');
-    grid.querySelectorAll('.theme-card').forEach(function(card) {
-      card.addEventListener('click', function() {
+    grid.querySelectorAll('.theme-card').forEach(function (card) {
+      card.addEventListener('click', function () {
         setTheme(this.getAttribute('data-theme-id'));
       });
     });
