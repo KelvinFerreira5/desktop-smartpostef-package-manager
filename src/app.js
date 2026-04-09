@@ -40,7 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initDeployPage();
   initReleasesPage();
-  initHtmlGenPage();
   initSettingsPage();
   initThemeToggle();
 
@@ -138,27 +137,51 @@ async function loadInitialData() {
   }
 }
 
-// Theme Toggle
+// Theme System
 function initThemeToggle() {
-  const themeBtn = document.getElementById('btn-toggle-theme');
-  if (!themeBtn) return;
+  var THEMES = [
+    { id: 'purple-night', name: 'Purple Night', type: 'Dark', preview: 'linear-gradient(135deg, #180e38, #a064ff, #e040a0)' },
+    { id: 'ocean-storm', name: 'Ocean Storm', type: 'Dark', preview: 'linear-gradient(135deg, #0c1a30, #38bdf8, #818cf8)' },
+    { id: 'rose-gold', name: 'Rose Gold', type: 'Dark', preview: 'linear-gradient(135deg, #30181f, #f47a8a, #e6968c)' },
+    { id: 'emerald-shadow', name: 'Emerald Shadow', type: 'Dark', preview: 'linear-gradient(135deg, #0c1f14, #34d399, #a3e635)' },
+    { id: 'teal-glow-light', name: 'Teal Glow', type: 'Light', preview: 'linear-gradient(135deg, #b8dde8, #00a896, #00695c)' },
+    { id: 'lavender-breeze', name: 'Lavender Breeze', type: 'Light', preview: 'linear-gradient(135deg, #d8cef0, #7c3aed, #c026d3)' },
+    { id: 'sunrise-warm', name: 'Sunrise Warm', type: 'Light', preview: 'linear-gradient(135deg, #f8d8c0, #ea580c, #dc2626)' },
+    { id: 'arctic-blue', name: 'Arctic Blue', type: 'Light', preview: 'linear-gradient(135deg, #c0dce8, #0284c7, #06b6d4)' }
+  ];
 
-  const themeLabel = themeBtn.querySelector('.theme-label');
-
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  if (savedTheme === 'light') {
-    document.body.classList.add('light-mode');
-    if (themeLabel) themeLabel.textContent = 'Dark Mode';
+  function setTheme(id) {
+    document.body.setAttribute('data-theme', id);
+    document.documentElement.setAttribute('data-theme', id);
+    localStorage.setItem('spm-theme', id);
+    renderThemeGrid();
+    frontendLog('INFO', 'UI: Theme changed', 'Theme: ' + id);
   }
 
-  themeBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    if (themeLabel) themeLabel.textContent = isLight ? 'Dark Mode' : 'Light Mode';
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    frontendLog('INFO', 'UI: Theme toggled', `Theme: ${isLight ? 'light' : 'dark'}`);
-  });
+  function renderThemeGrid() {
+    var grid = document.getElementById('themeGrid');
+    if (!grid) return;
+    var current = document.body.getAttribute('data-theme') || 'purple-night';
+    grid.innerHTML = THEMES.map(function(t) {
+      return '<div class="theme-card' + (t.id === current ? ' active' : '') + '" data-theme-id="' + t.id + '">'
+        + '<div class="theme-preview" style="background: ' + t.preview + ';"></div>'
+        + '<div class="theme-name">' + t.name + '</div>'
+        + '<div class="theme-type">' + t.type + '</div>'
+        + '</div>';
+    }).join('');
+    grid.querySelectorAll('.theme-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        setTheme(this.getAttribute('data-theme-id'));
+      });
+    });
+  }
+
+  // Apply saved theme
+  var savedTheme = localStorage.getItem('spm-theme') || 'purple-night';
+  setTheme(savedTheme);
+
+  // Expose renderThemeGrid for when settings page opens
+  window._renderThemeGrid = renderThemeGrid;
 }
 
 // Format helpers
@@ -249,6 +272,7 @@ function switchPage(pageName) {
   // Initialize page-specific logic
   if (pageName === 'tools') initToolsPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
+  if (pageName === 'settings' && window._renderThemeGrid) window._renderThemeGrid();
 }
 
 // Deploy Page
