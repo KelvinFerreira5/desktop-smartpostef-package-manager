@@ -5,6 +5,38 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-04-09
+
+### Added
+
+- **Purge Button**: New "Purge" button on release cards that deletes all packages from JFrog one-by-one, then removes the release locally. Uses a flame icon and amber warning color to distinguish from the local-only Delete button.
+- **Release Description Field**: New optional text field for release descriptions (subtitle), available in the deploy form, import/edit form, and persisted in SPF files as `description=` in the `<release_info>` section. Displayed as a subtitle on release cards and included in search.
+
+### Fixed
+
+- **Search Icon Hidden**: Fixed the search icon in the Releases toolbar not being visible due to the input background painting over the absolutely-positioned SVG. Added `z-index: 1` to the icon.
+- **A2A Client Extraction Bug**: Fixed "Multiple different versions detected" error when scanning A2A folders. A2A device patterns now call `extract_client_from_version()` to strip embedded client codes from the version string.
+
+### Changed
+
+- **Delete Button Tooltip**: Updated the Delete button tooltip from "Delete" to "Delete release from local storage only" for clarity alongside the new Purge button.
+
+## [3.2.1] - 2026-04-09
+
+### Added
+
+- **v2 Package Naming Support**: Full support for the new v2 filename convention using `+hexhash` separator (e.g., `2.5.4+0d05ce0`) across all package types (Windows, Linux 32/64, Embedded S920, STA LP/AP/LD/AD, A2A).
+- **A2A v2 Naming**: Support for restructured A2A filenames where `A2A` appears after the package name (e.g., `AditumSdkIntegration-A2A-D-2.4.4+8e450cfb1-release.aar`).
+- **Linux Library `.tar` Extension**: v2 Linux library packages now support `.tar` in addition to `.zip`.
+- **23 New Regex Patterns**: Added v2 patterns for all platforms in the Rust backend, placed before legacy patterns for priority matching.
+
+### Changed
+
+- **Version Parsing**: `extract_base_version()` (Rust + JS) now handles `+` separator as first-priority split.
+- **Signature Extraction**: `extract_signature()` now recognizes v2 signed filenames with hex hashes.
+- **SPF Version Format**: `getFullVersionForSpf()` detects hex hashes and uses `ver+hash` format for v2 packages.
+- **Frontend Version Detection**: `detectPackageFromFileName()` and SPF import now use cascading regex (v2 → A2A v1 → STA v1).
+
 ## [3.2.0] - 2026-04-09
 
 ### Added

@@ -208,6 +208,13 @@ function getFullVersionForSpf(pkgs, fallbackVersion) {
     const ver = pkg.version;
     const hash = pkg.hash;
     if (ver && hash) {
+      // Check if this is a v2 hex hash (contains a-f characters)
+      const isHexHash = /[a-fA-F]/.test(hash);
+      if (isHexHash) {
+        // v2 format for both A2A and STA/TEF: X.X.X+HEXHASH
+        return `${ver}+${hash}`;
+      }
+
       // Check if this is an A2A package
       const platform = pkg.platform || '';
       const category = pkg.category || '';
@@ -664,6 +671,11 @@ async function handleAddManual() {
 // Extract base version from full version string
 function extractBaseVersion(version) {
   if (!version) return null;
+
+  // Handle v2 versions with hex hash: X.X.X+HEXHASH -> X.X.X
+  if (version.includes('+')) {
+    return version.split('+')[0];
+  }
 
   // Handle A2A versions: X.X.X.A2A.HASH -> X.X.X
   if (version.includes('.A2A.')) {
@@ -1258,6 +1270,7 @@ async function handleFinalizeDeployOnly() {
     date,
     type: 'deploy-only',
     releaseType: 'deploy-only',
+    description: '',
     releaseNotes: '',
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1548,11 +1561,13 @@ async function handleGenerateSpf() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
+  const descInput = document.getElementById('deploy-description');
 
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
+  const description = descInput ? descInput.value.trim() : '';
 
   if (!version || !date) {
     frontendLog('WARNING', 'SPF: Missing version or date');
@@ -1603,6 +1618,7 @@ async function handleGenerateSpf() {
     version: spfVersion,
     date,
     type: type,
+    description,
     releaseNotes,
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1663,11 +1679,13 @@ async function handleFinalizeRelease() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
+  const descInput = document.getElementById('deploy-description');
 
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
+  const description = descInput ? descInput.value.trim() : '';
 
   if (!version || !date) {
     frontendLog('WARNING', 'FINALIZE: Missing version or date');
@@ -1720,6 +1738,7 @@ async function handleFinalizeRelease() {
     date,
     type: type,
     releaseType: type,
+    description,
     releaseNotes,
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1831,6 +1850,7 @@ function getFilteredAndSortedReleases() {
     result = result.filter(r => {
       if ((r.version || '').toLowerCase().includes(q)) return true;
       if ((r.releaseNotes || '').toLowerCase().includes(q)) return true;
+      if ((r.description || '').toLowerCase().includes(q)) return true;
       return (r.packages || []).some(p => {
         const fileName = (p.url || '').split('/').pop() || '';
         return fileName.toLowerCase().includes(q);
@@ -2046,6 +2066,7 @@ function renderReleases() {
             <span class="release-type-badge ${releaseType}">${releaseTypeDisplay}</span>
             ${hasUnsigned ? '<span class="release-type-badge unsigned">Não assinados</span>' : ''}
           </div>
+          ${release.description ? `<div class="release-card-description">${release.description}</div>` : ''}
           <div class="release-card-meta">
             <span class="meta-item">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -2089,7 +2110,14 @@ function renderReleases() {
             </svg>
             Expand
           </button>
-          <button class="btn btn-sm btn-outline btn-delete-release" data-id="${release.id}" title="Delete">
+          <button class="btn btn-sm btn-outline btn-purge-release" data-id="${release.id}" title="Delete all packages from JFrog and remove release">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/>
+              <path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/>
+            </svg>
+            Purge
+          </button>
+          <button class="btn btn-sm btn-outline btn-delete-release" data-id="${release.id}" title="Delete release from local storage only">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -2503,6 +2531,16 @@ function attachReleaseEventListeners(container) {
     });
   });
 
+  // Purge release (delete packages from JFrog, then delete release)
+  container.querySelectorAll('.btn-purge-release').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const id = btn.dataset.id;
+      frontendLog('INFO', 'RELEASES: Purge release button clicked', `Release ID: ${id}`);
+      await purgeRelease(id);
+    });
+  });
+
   // Delete release
   container.querySelectorAll('.btn-delete-release').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2660,6 +2698,91 @@ async function deleteRelease(id) {
     }
   } else {
     frontendLog('INFO', 'RELEASES: Delete cancelled by user', `Release ID: ${id}`);
+  }
+}
+
+async function purgeRelease(id) {
+  if (!invoke) return;
+  const release = releases.find(r => r.id === id);
+  if (!release) return;
+
+  frontendLog('INFO', 'RELEASES: Purge release requested', `Release ID: ${id}, Version: ${release.version}`);
+
+  const pkgCount = (release.packages || []).filter(p => p.url).length;
+  const confirmed = await showConfirmDialog(
+    'Confirm Purge',
+    `Are you sure you want to PURGE this release?\n\nThis will delete ${pkgCount} package(s) from JFrog and remove the release.\n\nVersion: ${release.version}\n\nThis action cannot be undone.`,
+    { okLabel: 'Purge All', kind: 'error' }
+  );
+
+  if (!confirmed) {
+    frontendLog('INFO', 'RELEASES: Purge cancelled by user', `Release ID: ${id}`);
+    return;
+  }
+
+  if (!settings.jfrogApiKey) {
+    showToast('error', 'JFrog API key not configured. Go to Settings.');
+    return;
+  }
+
+  const packagesWithUrl = (release.packages || []).filter(p => p.url);
+  let successCount = 0;
+  let failCount = 0;
+  let notFoundCount = 0;
+
+  showLoadingModal(`Purging release ${release.version}... (0/${packagesWithUrl.length})`);
+
+  for (let i = 0; i < packagesWithUrl.length; i++) {
+    const pkg = packagesWithUrl[i];
+    const fileName = pkg.url.split('/').filter(s => s.length > 0).pop() || 'Unknown';
+
+    const loadingMsg = document.getElementById('loading-modal-message');
+    if (loadingMsg) loadingMsg.textContent = `Deleting from JFrog... (${i + 1}/${packagesWithUrl.length})\n${fileName}`;
+
+    try {
+      const result = await invoke('delete_from_jfrog', {
+        url: pkg.url,
+        apiKey: settings.jfrogApiKey
+      });
+
+      if (result.success) {
+        successCount++;
+        frontendLog('INFO', 'RELEASES: Purge - package deleted', `URL: ${pkg.url}`);
+      } else if (result.not_found) {
+        notFoundCount++;
+        frontendLog('WARNING', 'RELEASES: Purge - package not found', `URL: ${pkg.url}`);
+      } else {
+        failCount++;
+        frontendLog('ERROR', 'RELEASES: Purge - delete failed', `URL: ${pkg.url}, Error: ${result.message}`);
+      }
+    } catch (err) {
+      failCount++;
+      frontendLog('ERROR', 'RELEASES: Purge - delete error', `URL: ${pkg.url}, Error: ${err}`);
+    }
+  }
+
+  try {
+    const loadingMsg = document.getElementById('loading-modal-message');
+    if (loadingMsg) loadingMsg.textContent = 'Removing release...';
+
+    await invoke('delete_release', { id });
+    releases = await invoke('get_releases');
+    renderReleases();
+    populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
+
+    hideLoadingModal();
+
+    let summary = `Purge complete: ${successCount} deleted`;
+    if (notFoundCount > 0) summary += `, ${notFoundCount} not found`;
+    if (failCount > 0) summary += `, ${failCount} failed`;
+
+    showToast(failCount > 0 ? 'warning' : 'success', summary);
+    frontendLog('INFO', 'RELEASES: Purge complete', summary);
+  } catch (error) {
+    hideLoadingModal();
+    frontendLog('ERROR', 'RELEASES: Purge - failed to delete release', error.toString());
+    showToast('error', 'Failed to delete release after purging packages: ' + error);
   }
 }
 
@@ -3425,7 +3548,7 @@ function parseSpfContent(content) {
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return null;
 
-    let release = { version: '', date: '', releaseType: 'Production', releaseNotes: '' };
+    let release = { version: '', date: '', releaseType: 'Production', description: '', releaseNotes: '' };
     let packages = [];
 
     // Check for sectioned format
@@ -3455,6 +3578,7 @@ function parseSpfContent(content) {
           if (key.trim() === 'version') release.version = value;
           else if (key.trim() === 'date') release.date = value;
           else if (key.trim() === 'type') release.releaseType = value.toLowerCase() === 'development' ? 'Development' : 'Production';
+          else if (key.trim() === 'description') release.description = value;
         } else if (currentSection === 'release_notes') {
           releaseNotesLines.push(line);
         } else if (currentSection === 'release_pkgs') {
@@ -3484,9 +3608,11 @@ function parseSpfContent(content) {
           packages.push(pkg);
         }
       }
-      // Try to extract version from first package URL
+      // Try to extract version from first package URL (v2 hex hash, A2A v1, STA v1)
       if (packages.length > 0) {
-        const versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.\d+)/);
+        let versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\+[0-9a-fA-F]+)/);
+        if (!versionMatch) versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.A2A\.\d+)/);
+        if (!versionMatch) versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.\d+)/);
         if (versionMatch) release.version = versionMatch[1];
       }
       release.date = new Date().toLocaleDateString('en-CA');
@@ -3605,6 +3731,10 @@ function renderImportReleasePage() {
             <option value="Development" ${rel.releaseType === 'Development' ? 'selected' : ''}>Development</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" style="margin-top: 12px;">
+        <label>Description</label>
+        <input type="text" id="import-description" value="${rel.description || ''}" placeholder="Brief description of this release...">
       </div>
     </div>
     
@@ -3995,8 +4125,10 @@ function detectPackageFromFileName(fileName, filePath) {
     signature = 'Signed';
   }
 
-  // Extract version from filename
-  const versionMatch = fileName.match(/(\d+\.\d+\.\d+\.\d+)/);
+  // Extract version from filename (try v2 hex hash first, then A2A v1, then STA v1)
+  let versionMatch = fileName.match(/(\d+\.\d+\.\d+\+[0-9a-fA-F]+)/);
+  if (!versionMatch) versionMatch = fileName.match(/(\d+\.\d+\.\d+\.A2A\.\d+)/);
+  if (!versionMatch) versionMatch = fileName.match(/(\d+\.\d+\.\d+\.\d+)/);
   if (versionMatch) version = versionMatch[1];
 
   // Platform detection
@@ -4172,6 +4304,8 @@ async function handleUpdateRelease() {
   if (dateInput) rel.date = dateInput.value;
   if (typeInput) rel.releaseType = typeInput.value;
   if (notesInput) rel.releaseNotes = notesInput.value;
+  const descInput = document.getElementById('import-description');
+  if (descInput) rel.description = descInput.value.trim();
 
   // Check if there are new packages to upload
   const newPkgs = importReleaseState.newPackages.filter(p => !p.uploaded);
@@ -4245,6 +4379,7 @@ async function handleUpdateRelease() {
     version: rel.version,
     date: rel.date,
     type: rel.releaseType || 'Production',
+    description: rel.description || '',
     releaseNotes: rel.releaseNotes || '',
     packages: importReleaseState.packages.map(p => ({
       platform: p.platform || 'Unknown',

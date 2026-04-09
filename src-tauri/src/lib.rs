@@ -56,6 +56,8 @@ pub struct Release {
     pub date: String,
     #[serde(rename = "type")]
     pub release_type: String,
+    #[serde(default)]
+    pub description: String,
     #[serde(rename = "releaseNotes")]
     pub release_notes: String,
     pub packages: Vec<PackageData>,
@@ -487,6 +489,19 @@ fn extract_signature(file_name: &str) -> Option<String> {
         return None;
     }
     
+    // Try v2 format first: version+hexhash-SIGNATURE-release_sign.ext
+    let re_v2 = Regex::new(r"\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
+    if let Some(caps) = re_v2.captures(file_name) {
+        if let Some(sig) = caps.get(1) {
+            let potential_sig = sig.as_str().to_lowercase();
+            let excluded = ["release", "debug", "sign", "signed", "unsigned", "offline", "online"];
+            if !excluded.contains(&potential_sig.as_str()) {
+                return Some(sig.as_str().to_string());
+            }
+        }
+    }
+
+    // v1 format: version.hash-SIGNATURE-release_sign.ext or version.A2A.hash-SIGNATURE-release_sign.ext
     let re = Regex::new(r"\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
     if let Some(caps) = re.captures(file_name) {
         if let Some(sig) = caps.get(1) {
@@ -503,8 +518,17 @@ fn extract_signature(file_name: &str) -> Option<String> {
 // Extract base version (Major.Minor.Patch) from full version string
 // "2.5.1.183749" -> "2.5.1"
 // "2.4.1.A2A.96873" -> "2.4.1"
+// "2.5.4+0d05ce0" -> "2.5.4"
 // "0.16.1" -> "0.16.1"
 fn extract_base_version(version: &str) -> Option<String> {
+    // Handle v2 versions with hex hash: X.X.X+HEXHASH -> X.X.X
+    if version.contains('+') {
+        let parts: Vec<&str> = version.split('+').collect();
+        if !parts.is_empty() {
+            return Some(parts[0].to_string());
+        }
+    }
+
     // Handle A2A versions: X.X.X.A2A.HASH -> X.X.X
     if version.contains(".A2A.") {
         let parts: Vec<&str> = version.split(".A2A.").collect();
@@ -556,6 +580,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== WINDOWS PACKAGES ====================
     
+    // Windows DLL v2: AditumTefLibrary-{P|D}-{version}+{hexhash}.zip
+    let re = Regex::new(r"^AditumTefLibrary-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("DLL".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/dll/" } else { "packages/windows/dll/" }.to_string());
+        return pkg;
+    }
+
+    // Windows Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86-online.exe
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86-online\.exe$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/" } else { "packages/windows/" }.to_string());
+        return pkg;
+    }
+
+    // Windows Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86-offline.exe
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86-offline\.exe$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/" } else { "packages/windows/" }.to_string());
+        return pkg;
+    }
+
     // Windows DLL: AditumTefLibrary-{P|D}-{version}-{hash}.zip
     let re = Regex::new(r"^AditumTefLibrary-([PD])-(\d+\.\d+\.\d+)-(\d+)\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -609,6 +672,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== LINUX 64 PACKAGES ====================
     
+    // Linux 64 Library v2: AditumTEFLib-{P|D}-amd64-{version}+{hexhash}(-{rev})?.(zip|tar)
+    let re = Regex::new(r"^AditumTEFLib-([PD])-amd64-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-(\d+))?\.(zip|tar)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("Library".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/library/" } else { "packages/linux/64/library/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 64 Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86_64-online
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86_64-online$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/" } else { "packages/linux/64/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 64 Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86_64-offline
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86_64-offline$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/" } else { "packages/linux/64/" }.to_string());
+        return pkg;
+    }
+
     // Linux 64 Library: AditumTEFLib-{P|D}-amd64-{version}.{hash}(-{rev})?.zip
     let re = Regex::new(r"^AditumTEFLib-([PD])-amd64-(\d+\.\d+\.\d+)\.(\d+)(?:-(\d+))?\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -662,6 +764,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== LINUX 32 PACKAGES ====================
     
+    // Linux 32 Library v2: AditumTEFLib-{P|D}-i386-{version}+{hexhash}(-{rev})?.(zip|tar)
+    let re = Regex::new(r"^AditumTEFLib-([PD])-i386-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-(\d+))?\.(zip|tar)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("Library".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/library/" } else { "packages/linux/32/library/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 32 Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-i386-online
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-i386-online$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/" } else { "packages/linux/32/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 32 Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-i386-offline
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-i386-offline$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/" } else { "packages/linux/32/" }.to_string());
+        return pkg;
+    }
+
     // Linux 32 Library: AditumTEFLib-{P|D}-i386-{version}.{hash}(-{rev})?.zip
     let re = Regex::new(r"^AditumTEFLib-([PD])-i386-(\d+\.\d+\.\d+)\.(\d+)(?:-(\d+))?\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -715,6 +856,37 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== EMBEDDED S920 PACKAGES ====================
     
+    // Embedded S920 Signed v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}_sign.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)_sign\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Embedded".to_string());
+        pkg.device = Some("S920".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/pax/s920/" }.to_string());
+        return pkg;
+    }
+
+    // Embedded S920 Unsigned v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Embedded".to_string());
+        pkg.device = Some("S920".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/unsigned/pax/s920/" }.to_string());
+        if !pkg.is_dev {
+            let folder_name = file_name.trim_end_matches(".zip").to_string();
+            pkg.special_handling = Some("extract-s920-root".to_string());
+            pkg.extract_folder = Some(folder_name);
+        }
+        return pkg;
+    }
+
     // Embedded S920 Signed (new format): SmartPosTef-{P|D}-S920-{version}.{hash}_sign.zip
     let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\.(\d+)_sign\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -783,6 +955,52 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== STA LAUNCHER PACKAGES (LP) ====================
     
+    // STA Launcher Production v2: SmartPosTef-LP-{device}-{version}+{hexhash}(-{signature})?-release(_sign)?.(zip|apk)
+    let re = Regex::new(r"^SmartPosTef-LP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        let has_signed = caps.get(5).is_some();
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Launcher".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_signed = has_signed;
+        pkg.is_dev = false;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = if has_signed {
+                format!("packages/{}/{}/launcher/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/{}/{}/launcher/", info.manufacturer, info.path)
+            };
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // STA Launcher Production: SmartPosTef-LP-{device}-{version}.{hash}(-{signature})?-release(_sign)?.(zip|apk)
     let re = Regex::new(r"^SmartPosTef-LP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -831,6 +1049,52 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== STA APP PACKAGES (AP) ====================
     
+    // STA App Production v2: SmartPosTef-AP-{device}-{version}+{hexhash}(-{signature})?-release(_sign)?.(zip|apk)
+    let re = Regex::new(r"^SmartPosTef-AP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        let has_signed = caps.get(5).is_some();
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("App".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_signed = has_signed;
+        pkg.is_dev = false;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = if has_signed {
+                format!("packages/{}/{}/app/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/{}/{}/app/", info.manufacturer, info.path)
+            };
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // STA App Production: SmartPosTef-AP-{device}-{version}.{hash}(-{signature})?-release(_sign)?.(zip|apk)
     let re = Regex::new(r"^SmartPosTef-AP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -879,6 +1143,46 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== DEVELOPMENT STA PACKAGES (LD/AD) ====================
     
+    // Dev Launcher v2 (LD): SmartPosTef-LD-{device}-{version}+{hexhash}...
+    let re = Regex::new(r"^SmartPosTef-LD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Launcher".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = true;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = format!("packages/dev/{}/{}/launcher/", info.manufacturer, info.path);
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // Dev Launcher (LD): SmartPosTef-LD-{device}-{version}.{hash}...
     let re = Regex::new(r"^SmartPosTef-LD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -909,6 +1213,46 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         
         if let Some(info) = device_info {
             let base_path = format!("packages/dev/{}/{}/launcher/", info.manufacturer, info.path);
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
+    // Dev App v2 (AD): SmartPosTef-AD-{device}-{version}+{hexhash}...
+    let re = Regex::new(r"^SmartPosTef-AD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("App".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = true;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = format!("packages/dev/{}/{}/app/", info.manufacturer, info.path);
             pkg.jfrog_path = Some(if let Some(ref c) = client {
                 format!("{}{}/", base_path, c.to_lowercase())
             } else {
@@ -961,6 +1305,199 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== A2A PACKAGES ====================
     
+    // A2A AAR v2: AditumSdkIntegration-A2A-{P|D}-{version}+{hexhash}-release.aar
+    let re = Regex::new(r"^AditumSdkIntegration-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.aar$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("SDK Integration".to_string());
+        pkg.category = Some("AAR".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/app-to-app/sdk_integration/" } else { "packages/app-to-app/sdk_integration/" }.to_string());
+        return pkg;
+    }
+
+    // A2A Doc v2: Doc-AditumSdkIntegration-A2A-{P|D}-{version}+{hexhash}.zip
+    let re = Regex::new(r"^Doc-AditumSdkIntegration-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("SDK Integration".to_string());
+        pkg.category = Some("Documentation".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/app-to-app/sdk_integration/doc/" } else { "packages/app-to-app/sdk_integration/doc/" }.to_string());
+        return pkg;
+    }
+
+    // A2A TefSdk v2: AditumSdkService-A2A-{P|D}-TefSdk-{arch}-{version}+{hexhash}-release.apk
+    let re = Regex::new(r"^AditumSdkService-A2A-([PD])-TefSdk-(arm64-v8a|armeabi-v7a)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let arch = caps.get(2).unwrap().as_str();
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("TefSdk".to_string());
+        pkg.category = Some(if arch == "armeabi-v7a" { "v7a" } else { "v8a" }.to_string());
+        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        let arch_path = if arch == "armeabi-v7a" { "v7a" } else { "v8a" };
+        pkg.jfrog_path = Some(if pkg.is_dev { 
+            format!("packages/dev/app-to-app/tef-android/{}/", arch_path) 
+        } else { 
+            format!("packages/app-to-app/tef-android/{}/", arch_path) 
+        });
+        return pkg;
+    }
+
+    // A2A Device APK Signed v2: SmartPosTef-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^SmartPosTef-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Device APK".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Device APK Unsigned v2: SmartPosTef-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release.apk
+    let re = Regex::new(r"^SmartPosTef-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Device APK".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Generic v2: PaymentExample-A2A-{P|D}-{version}+{hexhash}-release.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("Generic".to_string());
+        pkg.category = Some("Payment Example".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        
+        pkg.jfrog_path = Some(if pkg.is_dev {
+            "packages/dev/app-to-app/payment_example/".to_string()
+        } else {
+            "packages/app-to-app/payment_example/".to_string()
+        });
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Signed v2: PaymentExample-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Payment Example".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Unsigned v2: PaymentExample-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Payment Example".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
     // A2A AAR: AditumSdkIntegration-{P|D}-{version}.A2A.{hash}-release.aar
     let re = Regex::new(r"^AditumSdkIntegration-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release\.aar$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -1016,11 +1553,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Device APK".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1043,11 +1585,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Device APK".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1090,11 +1637,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Payment Example".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1117,11 +1669,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Payment Example".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -2588,6 +3145,9 @@ mod commands {
         // type should be lowercase: "production" or "development"
         let release_type_lower = release.release_type.to_lowercase();
         content.push_str(&format!("type={}\n", release_type_lower));
+        if !release.description.is_empty() {
+            content.push_str(&format!("description={}\n", release.description));
+        }
         content.push_str("</release_info>\n\n");
         
         // Section 2: <release_notes>
@@ -3764,6 +4324,8 @@ mod commands {
         pub date: String,
         #[serde(rename = "releaseType")]
         pub release_type: String,
+        #[serde(default)]
+        pub description: String,
         #[serde(rename = "releaseNotes")]
         pub release_notes: String,
         pub packages: Vec<PackageData>,
@@ -3782,6 +4344,7 @@ mod commands {
         let mut version = String::new();
         let mut date = String::new();
         let mut release_type = String::from("Production");
+        let mut description = String::new();
 
         for line in info_content.lines() {
             let line = line.trim();
@@ -3792,6 +4355,8 @@ mod commands {
             } else if let Some(val) = line.strip_prefix("type=") {
                 let t = val.trim().to_lowercase();
                 release_type = if t == "development" { "Development".to_string() } else { "Production".to_string() };
+            } else if let Some(val) = line.strip_prefix("description=") {
+                description = val.trim().to_string();
             }
         }
 
@@ -3854,6 +4419,7 @@ mod commands {
             version,
             date,
             release_type,
+            description,
             release_notes,
             packages,
         })

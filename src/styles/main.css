@@ -1157,6 +1157,7 @@ textarea {
 .releases-search-wrapper svg {
   position: absolute;
   left: 0.75rem;
+  z-index: 1;
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -4422,3 +4423,19 @@ select::-webkit-scrollbar-thumb {
 /* Light mode: Client Group Cards */
 
 /* Light mode: Unified Package Card Grid */
+/* Release card description */
+.release-card-description {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+/* Purge button styling */
+.btn-purge-release {
+  color: var(--warning-color, #f59e0b) !important;
+  border-color: var(--warning-color, #f59e0b) !important;
+}
+
+.btn-purge-release:hover {
+  background: rgba(245, 158, 11, 0.15) !important;
+}
