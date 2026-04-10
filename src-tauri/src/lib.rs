@@ -50,6 +50,41 @@ pub struct CustomDevice {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExportOptions {
+    pub releases: bool,
+    #[serde(rename = "defaultTheme")]
+    pub default_theme: bool,
+    #[serde(rename = "jfrogSettings")]
+    pub jfrog_settings: bool,
+    #[serde(rename = "clientMappings")]
+    pub client_mappings: bool,
+    #[serde(rename = "htmlSettings")]
+    pub html_settings: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportOptions {
+    pub releases: bool,
+    #[serde(rename = "defaultTheme")]
+    pub default_theme: bool,
+    #[serde(rename = "jfrogSettings")]
+    pub jfrog_settings: bool,
+    #[serde(rename = "clientMappings")]
+    pub client_mappings: bool,
+    #[serde(rename = "htmlSettings")]
+    pub html_settings: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportSummary {
+    pub imported: Vec<String>,
+    pub skipped: Vec<String>,
+    #[serde(rename = "releaseCount")]
+    pub release_count: usize,
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Release {
     pub id: String,
     pub version: String,
@@ -188,6 +223,18 @@ impl Default for Settings {
 fn get_app_data_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
     base.join("smartpostef-package-manager")
+}
+
+fn get_type_short(release: &Release) -> &'static str {
+    let rtype = release.release_type.to_lowercase();
+    if rtype == "production" {
+        let is_unsigned = release.packages.iter().any(|p| p.url.contains("/unsigned/"));
+        if is_unsigned { "unsigned" } else { "prod" }
+    } else if rtype == "deploy-only" {
+        "deploy"
+    } else {
+        "dev"
+    }
 }
 
 fn ensure_directories() {
@@ -3206,8 +3253,7 @@ mod commands {
         let html_dir = get_app_data_dir().join("html");
         fs::create_dir_all(&html_dir).map_err(|e| e.to_string())?;
         
-        let release_type = &release.release_type;
-        let type_short = if release_type.to_lowercase() == "production" { "prod" } else { "dev" };
+        let type_short = get_type_short(&release);
         let filename = format!("release_{}-{}-{}.html", release.version, release.date, type_short);
         let html_path = html_dir.join(&filename);
         
@@ -3867,119 +3913,252 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn export_data() -> Result<String, String> {
-        log_to_file("INFO", "EXPORT: Exporting application data (v2 with SPF)", None);
+    pub fn export_data(options: ExportOptions, theme: String) -> Result<String, String> {
+        log_to_file("INFO", "EXPORT: Exporting application data (v3 selective)", None);
         
-        let mut settings = get_settings();
-        
-        // Encrypt the API key before exporting
-        if !settings.jfrog_api_key.is_empty() {
-            settings.jfrog_api_key = encrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
+        let settings = get_settings();
+        let mut export_obj = serde_json::Map::new();
+
+        export_obj.insert("version".to_string(), serde_json::json!(3));
+        export_obj.insert("exportedAt".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+        export_obj.insert("included".to_string(), serde_json::json!({
+            "releases": options.releases,
+            "defaultTheme": options.default_theme,
+            "jfrogSettings": options.jfrog_settings,
+            "clientMappings": options.client_mappings,
+            "htmlSettings": options.html_settings,
+        }));
+
+        // Theme
+        if options.default_theme && !theme.is_empty() {
+            export_obj.insert("theme".to_string(), serde_json::json!(theme));
+        }
+
+        // Settings (selective)
+        let mut settings_obj = serde_json::Map::new();
+        if options.jfrog_settings && !settings.jfrog_api_key.is_empty() {
+            let encrypted_key = encrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
                 log_to_file("ERROR", "EXPORT: Failed to encrypt API key", Some(&e));
                 e
             })?;
+            settings_obj.insert("jfrogApiKey".to_string(), serde_json::json!(encrypted_key));
             log_to_file("INFO", "EXPORT: API key encrypted for export", None);
         }
+        if options.client_mappings {
+            settings_obj.insert("clientMappings".to_string(), serde_json::to_value(&settings.client_mappings).unwrap_or_default());
+        }
+        if options.html_settings {
+            settings_obj.insert("portalSettings".to_string(), serde_json::to_value(&settings.portal_settings).unwrap_or_default());
+        }
+        if options.releases {
+            // customPlatforms are contextual to releases
+            settings_obj.insert("customPlatforms".to_string(), serde_json::to_value(&settings.custom_platforms).unwrap_or_default());
+        }
+        if !settings_obj.is_empty() {
+            export_obj.insert("settings".to_string(), serde_json::Value::Object(settings_obj));
+        }
 
-        let releases = load_releases();
-
-        // Collect SPF file contents for each release that has one
-        let spf_dir = get_app_data_dir().join("spf");
-        let mut spf_files: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-        for rel in &releases {
-            if let Some(ref spf_name) = rel.spf_file_name {
-                let spf_path = spf_dir.join(spf_name);
-                if spf_path.exists() {
-                    if let Ok(spf_content) = fs::read_to_string(&spf_path) {
-                        spf_files.insert(spf_name.clone(), serde_json::Value::String(spf_content));
+        // Releases + SPF files
+        if options.releases {
+            let releases = load_releases();
+            let spf_dir = get_app_data_dir().join("spf");
+            let mut spf_files: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+            for rel in &releases {
+                if let Some(ref spf_name) = rel.spf_file_name {
+                    let spf_path = spf_dir.join(spf_name);
+                    if spf_path.exists() {
+                        if let Ok(spf_content) = fs::read_to_string(&spf_path) {
+                            spf_files.insert(spf_name.clone(), serde_json::Value::String(spf_content));
+                        }
                     }
                 }
             }
+            export_obj.insert("releases".to_string(), serde_json::to_value(&releases).unwrap_or_default());
+            export_obj.insert("spfFiles".to_string(), serde_json::Value::Object(spf_files.clone()));
+
+            let result = serde_json::to_string_pretty(&serde_json::Value::Object(export_obj)).map_err(|e| {
+                log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
+                e.to_string()
+            })?;
+            log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
+                "Size: {} bytes, Releases: {}, SPF files: {}",
+                result.len(), releases.len(), spf_files.len()
+            )));
+            Ok(result)
+        } else {
+            let result = serde_json::to_string_pretty(&serde_json::Value::Object(export_obj)).map_err(|e| {
+                log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
+                e.to_string()
+            })?;
+            log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
+                "Size: {} bytes (no releases)", result.len()
+            )));
+            Ok(result)
         }
-        
-        let export_data = serde_json::json!({
-            "version": 2,
-            "settings": settings,
-            "releases": releases,
-            "spfFiles": spf_files,
-            "exportedAt": chrono::Utc::now().to_rfc3339()
-        });
-        let result = serde_json::to_string_pretty(&export_data).map_err(|e| {
-            log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
-            e.to_string()
-        })?;
-        log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
-            "Size: {} bytes, Releases: {}, SPF files: {}",
-            result.len(), releases.len(), spf_files.len()
-        )));
-        Ok(result)
     }
 
     #[tauri::command]
-    pub fn import_data(data: String) -> Result<(), String> {
-        log_to_file("INFO", "IMPORT: Importing application data", Some(&format!("Data size: {} bytes", data.len())));
+    pub fn import_data(data: String, options: ImportOptions) -> Result<ImportSummary, String> {
+        log_to_file("INFO", "IMPORT: Importing application data (selective)", Some(&format!("Data size: {} bytes", data.len())));
         let parsed: serde_json::Value = serde_json::from_str(&data).map_err(|e| {
             log_to_file("ERROR", "IMPORT: Failed to parse import data", Some(&e.to_string()));
             e.to_string()
         })?;
-        
-        // Import settings
-        if let Some(settings_val) = parsed.get("settings") {
-            log_to_file("INFO", "IMPORT: Importing settings", None);
-            let mut settings: Settings = serde_json::from_value(settings_val.clone()).map_err(|e| e.to_string())?;
-            
-            // Decrypt the API key if it was encrypted
-            if !settings.jfrog_api_key.is_empty() {
-                settings.jfrog_api_key = decrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
-                    log_to_file("ERROR", "IMPORT: Failed to decrypt API key", Some(&e));
-                    e
-                })?;
-                log_to_file("INFO", "IMPORT: API key decrypted successfully", None);
+
+        let mut imported: Vec<String> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        let mut release_count: usize = 0;
+        let mut theme_result: Option<String> = None;
+
+        // Import theme
+        if options.default_theme {
+            if let Some(theme_val) = parsed.get("theme").and_then(|v| v.as_str()) {
+                theme_result = Some(theme_val.to_string());
+                imported.push("defaultTheme".to_string());
+                log_to_file("INFO", "IMPORT: Theme imported", Some(theme_val));
+            } else {
+                skipped.push("defaultTheme".to_string());
             }
-            
-            save_settings(settings)?;
+        } else {
+            skipped.push("defaultTheme".to_string());
         }
         
-        // Import releases
-        if let Some(releases) = parsed.get("releases") {
-            let releases: Vec<Release> = serde_json::from_value(releases.clone()).map_err(|e| e.to_string())?;
-            log_to_file("INFO", "IMPORT: Importing releases", Some(&format!("Count: {}", releases.len())));
-            let releases_path = get_app_data_dir().join("releases.json");
-            let content = serde_json::to_string_pretty(&releases).map_err(|e| e.to_string())?;
-            fs::write(&releases_path, content).map_err(|e| e.to_string())?;
+        // Import settings (partial merge)
+        let mut current_settings = get_settings();
 
-            // Regenerate SPF files for releases that have spfFileName but no local SPF
-            let spf_dir = get_app_data_dir().join("spf");
-            let _ = fs::create_dir_all(&spf_dir);
-            for rel in &releases {
-                if let Some(ref spf_name) = rel.spf_file_name {
-                    let spf_path = spf_dir.join(spf_name);
-                    if !spf_path.exists() {
-                        // Try to get from exported spfFiles first
-                        let mut restored = false;
-                        if let Some(spf_files) = parsed.get("spfFiles") {
-                            if let Some(spf_content) = spf_files.get(spf_name) {
-                                if let Some(content_str) = spf_content.as_str() {
-                                    let _ = fs::write(&spf_path, content_str);
-                                    restored = true;
-                                    log_to_file("INFO", "IMPORT: Restored SPF from export", Some(&format!("File: {}", spf_name)));
-                                }
-                            }
-                        }
-                        // If not in export, regenerate from release data
-                        if !restored {
-                            if let Ok(spf_content) = generate_spf_content(rel.clone()) {
-                                let _ = fs::write(&spf_path, &spf_content);
-                                log_to_file("INFO", "IMPORT: Regenerated SPF from release data", Some(&format!("File: {}", spf_name)));
-                            }
-                        }
+        if options.jfrog_settings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(api_key) = settings_val.get("jfrogApiKey").and_then(|v| v.as_str()) {
+                    if !api_key.is_empty() {
+                        let decrypted = decrypt_api_key(api_key).map_err(|e| {
+                            log_to_file("ERROR", "IMPORT: Failed to decrypt API key", Some(&e));
+                            e
+                        })?;
+                        current_settings.jfrog_api_key = decrypted;
+                        imported.push("jfrogSettings".to_string());
+                        log_to_file("INFO", "IMPORT: JFrog API key imported and decrypted", None);
+                    } else {
+                        skipped.push("jfrogSettings".to_string());
+                    }
+                } else {
+                    skipped.push("jfrogSettings".to_string());
+                }
+            } else {
+                skipped.push("jfrogSettings".to_string());
+            }
+        } else {
+            skipped.push("jfrogSettings".to_string());
+        }
+
+        if options.client_mappings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(mappings) = settings_val.get("clientMappings") {
+                    if let Ok(m) = serde_json::from_value::<Vec<ClientMapping>>(mappings.clone()) {
+                        current_settings.client_mappings = m;
+                        imported.push("clientMappings".to_string());
+                        log_to_file("INFO", "IMPORT: Client mappings imported", None);
+                    } else {
+                        skipped.push("clientMappings".to_string());
+                    }
+                } else {
+                    skipped.push("clientMappings".to_string());
+                }
+            } else {
+                skipped.push("clientMappings".to_string());
+            }
+        } else {
+            skipped.push("clientMappings".to_string());
+        }
+
+        if options.html_settings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(portal) = settings_val.get("portalSettings") {
+                    if let Ok(p) = serde_json::from_value::<PortalSettings>(portal.clone()) {
+                        current_settings.portal_settings = p;
+                        imported.push("htmlSettings".to_string());
+                        log_to_file("INFO", "IMPORT: HTML/Portal settings imported", None);
+                    } else {
+                        skipped.push("htmlSettings".to_string());
+                    }
+                } else {
+                    skipped.push("htmlSettings".to_string());
+                }
+            } else {
+                skipped.push("htmlSettings".to_string());
+            }
+        } else {
+            skipped.push("htmlSettings".to_string());
+        }
+
+        // Import customPlatforms alongside releases
+        if options.releases {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(platforms) = settings_val.get("customPlatforms") {
+                    if let Ok(p) = serde_json::from_value::<Vec<CustomDevice>>(platforms.clone()) {
+                        current_settings.custom_platforms = p;
                     }
                 }
             }
         }
+
+        save_settings(current_settings)?;
         
-        log_to_file("INFO", "IMPORT: Data imported successfully", None);
-        Ok(())
+        // Import releases
+        if options.releases {
+            if let Some(releases_val) = parsed.get("releases") {
+                let releases: Vec<Release> = serde_json::from_value(releases_val.clone()).map_err(|e| e.to_string())?;
+                release_count = releases.len();
+                log_to_file("INFO", "IMPORT: Importing releases", Some(&format!("Count: {}", releases.len())));
+                let releases_path = get_app_data_dir().join("releases.json");
+                let content = serde_json::to_string_pretty(&releases).map_err(|e| e.to_string())?;
+                fs::write(&releases_path, content).map_err(|e| e.to_string())?;
+
+                // Regenerate SPF files for releases that have spfFileName but no local SPF
+                let spf_dir = get_app_data_dir().join("spf");
+                let _ = fs::create_dir_all(&spf_dir);
+                for rel in &releases {
+                    if let Some(ref spf_name) = rel.spf_file_name {
+                        let spf_path = spf_dir.join(spf_name);
+                        if !spf_path.exists() {
+                            // Try to get from exported spfFiles first
+                            let mut restored = false;
+                            if let Some(spf_files) = parsed.get("spfFiles") {
+                                if let Some(spf_content) = spf_files.get(spf_name) {
+                                    if let Some(content_str) = spf_content.as_str() {
+                                        let _ = fs::write(&spf_path, content_str);
+                                        restored = true;
+                                        log_to_file("INFO", "IMPORT: Restored SPF from export", Some(&format!("File: {}", spf_name)));
+                                    }
+                                }
+                            }
+                            // If not in export, regenerate from release data
+                            if !restored {
+                                if let Ok(spf_content) = generate_spf_content(rel.clone()) {
+                                    let _ = fs::write(&spf_path, &spf_content);
+                                    log_to_file("INFO", "IMPORT: Regenerated SPF from release data", Some(&format!("File: {}", spf_name)));
+                                }
+                            }
+                        }
+                    }
+                }
+                imported.push("releases".to_string());
+            } else {
+                skipped.push("releases".to_string());
+            }
+        } else {
+            skipped.push("releases".to_string());
+        }
+        
+        log_to_file("INFO", "IMPORT: Data imported successfully", Some(&format!(
+            "Imported: {:?}, Skipped: {:?}, Releases: {}", imported, skipped, release_count
+        )));
+
+        Ok(ImportSummary {
+            imported,
+            skipped,
+            release_count,
+            theme: theme_result,
+        })
     }
 
     #[tauri::command]
@@ -4436,7 +4615,7 @@ mod commands {
         let spf_content = generate_spf_content(release.clone())?;
 
         // 2. Determine SPF file name
-        let type_short = if release.release_type.to_lowercase() == "production" { "prod" } else { "dev" };
+        let type_short = get_type_short(&release);
         let spf_file_name = format!("release_{}-{}-{}.spf", release.version, release.date, type_short);
 
         // 3. Save SPF to spf directory

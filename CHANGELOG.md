@@ -5,6 +5,22 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.5] - 2026-04-10
+
+### Fixed
+
+- **Unsigned Production File Naming**: SPF and HTML filenames for unsigned production releases now use `-unsigned` prefix instead of `-prod`. The `-prod` prefix is reserved for signed production releases only. Added `getTypeShort()` (JS) and `get_type_short()` (Rust) helpers that check package URLs for `/unsigned/` path to determine the correct prefix.
+
+## [3.2.4] - 2026-04-10
+
+### Added
+
+- **Segregated Export/Import**: Export and import are now selective — a modal with toggle switches lets users choose which data categories to include: Releases (+ SPF files), Default Theme, JFrog Settings (encrypted API key), Client Mappings, and HTML Settings. Export format bumped to v3 with an `"included"` map; v2 backups remain importable. On import, unavailable categories are shown as disabled. Settings use a partial-merge strategy so unselected fields are preserved.
+
+### Fixed
+
+- **Export/Import Modal Scroll**: Fixed the category selector modal cutting off footer buttons on smaller screens by adding scrollable body with `max-height: 90vh`.
+
 ## [3.2.2] - 2026-04-09
 
 ### Added

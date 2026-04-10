@@ -1635,8 +1635,8 @@ async function handleGenerateSpf() {
     // Generate SPF content
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
 
-    // Generate filename: release_<fullversion>-YYYY-MM-DD-<prod/dev>.spf
-    const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
+    // Generate filename: release_<fullversion>-YYYY-MM-DD-<type>.spf
+    const typeShort = getTypeShort(releaseData);
     const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
 
     // Ask user where to save
@@ -1761,7 +1761,7 @@ async function handleFinalizeRelease() {
     frontendLog('INFO', 'FINALIZE: Step 2 - Generating SPF file');
     try {
       const spfContent = await invoke('generate_spf_content', { release: releaseData });
-      const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
+      const typeShort = getTypeShort(releaseData);
       const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
 
       // Auto-save to app's data folder
@@ -1828,6 +1828,13 @@ async function handleFinalizeRelease() {
 // Releases Page
 function isReleaseUnsigned(release) {
   return (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+}
+
+function getTypeShort(release) {
+  const type = (release.releaseType || release.type || 'development').toLowerCase();
+  if (type === 'production') return isReleaseUnsigned(release) ? 'unsigned' : 'prod';
+  if (type === 'deploy-only') return 'deploy';
+  return 'dev';
 }
 
 function getFilteredAndSortedReleases() {
@@ -2590,9 +2597,8 @@ async function exportSpfForRelease(id) {
 
     const spfContent = await invoke('generate_spf_content', { release: spfRelease });
 
-    // Generate filename: release_<version>-YYYY-MM-DD-<prod/dev>.spf
-    const releaseType = (release.releaseType || release.type || 'development').toLowerCase();
-    const typeShort = releaseType === 'production' ? 'prod' : releaseType === 'deploy-only' ? 'deploy' : 'dev';
+    // Generate filename: release_<version>-YYYY-MM-DD-<type>.spf
+    const typeShort = getTypeShort(release);
     const spfFileName = `release_${release.version}-${release.date}-${typeShort}.spf`;
 
     if (dialogSave) {
@@ -3169,12 +3175,124 @@ async function viewLogs() {
   }
 }
 
+function showExportImportDialog(mode, availableCategories = null) {
+  const isExport = mode === 'export';
+  const title = isExport ? 'Export Data' : 'Import Data';
+  const subtitle = isExport
+    ? 'Select which data categories to include in the export file.'
+    : 'Select which data categories to restore from the backup file.';
+  const confirmLabel = isExport ? 'Export' : 'Import';
+
+  const categories = [
+    { key: 'releases', label: 'Releases', desc: 'All releases and their SPF files', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
+    { key: 'defaultTheme', label: 'Default Theme', desc: 'Your selected color theme', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' },
+    { key: 'jfrogSettings', label: 'JFrog Settings', desc: 'Encrypted API key', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
+    { key: 'clientMappings', label: 'Client Mappings', desc: 'Client number-to-name mappings', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
+    { key: 'htmlSettings', label: 'HTML Settings', desc: 'Portal title and company name', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' },
+  ];
+
+  frontendLog('INFO', `UI: ${title} dialog shown`);
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal active';
+    overlay.style.zIndex = '2000';
+
+    const categoryRows = categories.map(cat => {
+      const available = !availableCategories || availableCategories[cat.key];
+      const disabledClass = available ? '' : ' category-item-disabled';
+      const disabledAttr = available ? '' : ' disabled';
+      const checked = available ? ' checked' : '';
+      return `
+        <label class="category-item${disabledClass}">
+          <div class="category-item-info">
+            <span class="category-item-icon">${cat.icon}</span>
+            <div>
+              <span class="category-item-label">${cat.label}</span>
+              <span class="category-item-desc">${cat.desc}${!available ? ' (not in file)' : ''}</span>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" data-category="${cat.key}"${checked}${disabledAttr}>
+            <span class="toggle-slider"></span>
+          </label>
+        </label>`;
+    }).join('');
+
+    overlay.innerHTML = `
+      <div class="modal-content confirm-dialog export-import-dialog" style="max-width: 480px; padding: 0;">
+        <div class="confirm-header confirm-header-info">
+          <div class="confirm-icon">
+            ${isExport
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+      }
+          </div>
+          <h3 class="confirm-title">${title}</h3>
+        </div>
+        <div class="export-import-dialog-body">
+          <p class="export-import-dialog-subtitle">${subtitle}</p>
+          <div class="export-import-select-all">
+            <button class="btn btn-sm btn-outline" id="eid-toggle-all">Select All</button>
+          </div>
+          <div class="category-checkbox-list">
+            ${categoryRows}
+          </div>
+        </div>
+        <div class="confirm-footer">
+          <button class="btn btn-secondary" id="eid-cancel">Cancel</button>
+          <button class="btn btn-primary" id="eid-confirm">${confirmLabel}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const toggleAllBtn = overlay.querySelector('#eid-toggle-all');
+    const checkboxes = overlay.querySelectorAll('.category-checkbox-list input[type="checkbox"]:not(:disabled)');
+
+    const updateToggleAllLabel = () => {
+      const allChecked = [...checkboxes].every(cb => cb.checked);
+      toggleAllBtn.textContent = allChecked ? 'Deselect All' : 'Select All';
+    };
+
+    toggleAllBtn.addEventListener('click', () => {
+      const allChecked = [...checkboxes].every(cb => cb.checked);
+      checkboxes.forEach(cb => { cb.checked = !allChecked; });
+      updateToggleAllLabel();
+    });
+
+    checkboxes.forEach(cb => cb.addEventListener('change', updateToggleAllLabel));
+
+    const cleanup = (result) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    overlay.querySelector('#eid-cancel').addEventListener('click', () => cleanup(null));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+    overlay.querySelector('#eid-confirm').addEventListener('click', () => {
+      const opts = {};
+      categories.forEach(cat => {
+        const cb = overlay.querySelector(`input[data-category="${cat.key}"]`);
+        opts[cat.key] = cb ? cb.checked : false;
+      });
+      frontendLog('INFO', `UI: ${title} dialog confirmed`, JSON.stringify(opts));
+      cleanup(opts);
+    });
+  });
+}
+
 async function exportData() {
   if (!invoke) return;
   frontendLog('INFO', 'SETTINGS: Starting data export');
 
   try {
-    const data = await invoke('export_data');
+    const options = await showExportImportDialog('export');
+    if (!options) return; // cancelled
+
+    const theme = localStorage.getItem('spm-theme') || 'purple-night';
+    const data = await invoke('export_data', { options, theme });
 
     if (dialogSave) {
       const savePath = await dialogSave({
@@ -3205,21 +3323,54 @@ async function importData() {
       title: 'Select Backup File'
     });
 
-    if (selected) {
-      const content = await invoke('read_file_content', { filePath: selected });
-      await invoke('import_data', { data: content });
+    if (!selected) return;
 
-      // Reload data
+    const content = await invoke('read_file_content', { filePath: selected });
+
+    // Detect available categories in the file
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { showToast('error', 'Invalid JSON file'); return; }
+
+    const isV3 = parsed.version === 3;
+    const settingsObj = parsed.settings || {};
+    const availableCategories = {
+      releases: !!parsed.releases,
+      defaultTheme: isV3 ? !!parsed.theme : false,
+      jfrogSettings: !!settingsObj.jfrogApiKey,
+      clientMappings: !!settingsObj.clientMappings,
+      htmlSettings: !!settingsObj.portalSettings,
+    };
+
+    const options = await showExportImportDialog('import', availableCategories);
+    if (!options) return; // cancelled
+
+    const summary = await invoke('import_data', { data: content, options });
+
+    // Apply theme if imported
+    if (summary.theme) {
+      document.body.setAttribute('data-theme', summary.theme);
+      document.documentElement.setAttribute('data-theme', summary.theme);
+      localStorage.setItem('spm-theme', summary.theme);
+      if (window._renderThemeGrid) window._renderThemeGrid();
+    }
+
+    // Selectively reload affected data
+    if (options.jfrogSettings || options.clientMappings || options.htmlSettings) {
       settings = await invoke('get_settings');
-      releases = await invoke('get_releases');
-
       populateSettings();
+    }
+    if (options.releases) {
+      releases = await invoke('get_releases');
       renderReleases();
       populateHtmlReleaseSelect();
-
-      frontendLog('INFO', 'SETTINGS: Data imported successfully');
-      showToast('success', 'Data imported successfully');
     }
+
+    const importedList = summary.imported.join(', ') || 'none';
+    const msg = summary.releaseCount > 0
+      ? `Imported: ${importedList} (${summary.releaseCount} releases)`
+      : `Imported: ${importedList}`;
+    frontendLog('INFO', 'SETTINGS: Data imported successfully', msg);
+    showToast('success', msg);
   } catch (error) {
     frontendLog('ERROR', 'SETTINGS: Failed to import data', error.toString());
     showToast('error', 'Failed to import data: ' + error);
@@ -4400,7 +4551,7 @@ async function handleUpdateRelease() {
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
 
     // Save SPF to internal releases folder
-    const typeShort = (rel.releaseType || 'Production').toLowerCase() === 'production' ? 'prod' : 'dev';
+    const typeShort = getTypeShort(rel);
     const spfFileName = `release_${rel.version}-${rel.date}-${typeShort}.spf`;
     await invoke('save_internal_spf', { content: spfContent, fileName: spfFileName });
 
