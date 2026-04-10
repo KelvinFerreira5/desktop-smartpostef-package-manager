@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v2.0.39 (Tauri Edition)
+# SmartPosTEF Package Manager v3.2.2 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -46,7 +46,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 |---------|-------------|
 | **Custom Devices** | Create, view, and delete custom device platforms for use in releases |
 
-**Additional Features** include releases management (view, manage, delete saved releases), HTML generation for landing pages, comprehensive settings management, data export/import (v2 with SPF portability) for backup and migration, and dark/light mode toggle.
+**Additional Features** include releases management (view, manage, search, purge, and delete saved releases), release descriptions (optional subtitle for each release), HTML generation for landing pages, comprehensive settings management, data export/import (v2 with SPF portability) for backup and migration, and an 8-theme system (4 dark + 4 light themes with glassmorphism UI).
 
 ### Package Detection
 
@@ -61,7 +61,12 @@ The application automatically detects and categorizes packages based on file nam
 | Linux 32-bit | i386 | AditumTEF-installer-P-2.5.1.289844-i386-offline |
 | S920 Embedded (new format) | P-S920, D-S920 | SmartPosTef-P-S920-2.5.1.138693.zip |
 | S920 Embedded (legacy) | P, D | SmartPosTef-P-2.5.1.138693.zip |
+| A2A SDK Integration | A2A | AditumSdkIntegration-A2A-D-2.4.4+8e450cfb1-release.aar |
+| A2A Device APK | A2A | SmartPosTef-A2A-D-L3-2.4.4+8e450cfb1-release_sign.apk |
+| A2A Payment Example | A2A | PaymentExample-A2A-P-2.4.4+8e450cfb1-release.apk |
 
+> **v2 naming convention**: Packages using the newer `+hexhash` format (e.g., `2.5.4+0d05ce0`) are fully supported alongside the legacy `.numericHash` format.
+>
 ### Special Upload Handling
 
 Some packages require extraction before upload rather than direct file upload:
@@ -84,7 +89,8 @@ These companion files are automatically excluded from SPF export since they are 
 | Dev unsigned | `SmartPosTef-D-S920-2.5.1.138693.zip` | `packages/dev/pax/s920/SmartPosTef-D-S920-2.5.1.138693.zip` (direct upload) |
 | Production signed | `SmartPosTef-P-S920-2.5.1.138693_sign.zip` | `packages/pax/s920/SmartPosTef-P-S920-2.5.1.138693_sign.zip` (direct upload) |
 
-For unsigne productions S920 packages, the extraction logic handles both cases:
+For unsigned production S920 packages, the extraction logic handles both cases:
+
 - ZIP with subfolder (e.g., `PAX_S920/AditumApps.aup`) → extracts `AditumApps.aup` to folder root
 - ZIP with files at root (e.g., `AditumApps.aup`) → extracts `AditumApps.aup` to folder root
 
@@ -284,6 +290,7 @@ smartpostef-package-manager-tauri/
 ├── package.json                # Node.js dependencies
 ├── CHANGELOG.md                # Version history
 ├── README.md                   # This file
+├── DESIGN-SYSTEM.md            # UI design system reference
 └── DOCUMENTATION.md            # Comprehensive documentation
 ```
 
@@ -306,18 +313,13 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| 2.0.41 | 2026-02-09 | Per-execution rotative logging, "Não assinados" badge on unsigned releases, fixed S920 folder links in HTML |
-| 2.0.40 | 2026-02-09 | Restored markdown rendering in release notes, improved modal contrast, fixed HTML favicon |
-| 2.0.39 | 2026-02-09 | Fixed toast cascade z-index/opacity, Online=green/Offline=yellow tags, widened modals to 80% |
-| 2.0.38 | 2026-02-09 | S920 unsigned flat extraction (strips PAX_S920 subfolder), styled STA device tags, Open/Find on Data Export toast |
-| 2.0.37 | 2026-02-09 | S920 unsigned extract-and-upload workflow, SPF filter fixes for S920 packages |
-| 2.0.36 | 2026-02-09 | S920 new filename format detection (SmartPosTef-{P|D}-S920-{version}) |
-| 2.0.35 | 2026-02-09 | Toast Open/Find buttons, API key AES-256-GCM encryption on export, Release Summary redesign, eye toggle fix |
-| 2.0.34 | 2026-02-06 | NSIS installer icon and version fix, version synchronization across all config files |
-| 2.0.33 | 2026-02-06 | Fixed Windows taskbar icon resolution, fixed Windows dropdown select styling |
-| 2.0.32 | 2026-02-06 | HTML release notes now render Markdown properly, complete build guide in README |
-| 2.0.31 | 2026-02-06 | Cascade toast notifications, fixed SPF save path, open folder buttons in Settings |
-| 2.0.30 | 2026-02-06 | Markdown rendering in release notes modal, Finalize Release workflow replacing Generate SPF |
+| 3.2.2 | 2026-04-09 | Purge button (delete all packages from JFrog), release description field, search icon fix, A2A client extraction bugfix |
+| 3.2.1 | 2026-04-09 | v2 package naming support (`+hexhash`), 23 new regex patterns, Linux `.tar` support |
+| 3.2.0 | 2026-04-09 | 8-theme system (4 dark + 4 light), glassmorphism UI, vertical settings navigation, colorful accents |
+| 3.1.23 | 2026-04-07 | STA/A2A toggles always visible in toolbar |
+| 3.1.22 | 2026-04-07 | A2A upload path fix, dev release saved as production fix, editable fields in edit mode |
+| 3.1.21 | 2026-04-02 | Link icon on package cards, JFrog path tooltip for new packages |
+| 3.1.20 | 2026-04-02 | STA upload path structure rewrite, client folder support |
 | 2.0.29 | 2026-02-06 | Fixed delete button, comprehensive logging for all frontend/backend actions |
 | 2.0.28 | 2026-02-06 | Delete confirmation dialog now uses in-app modal instead of native OS dialog |
 | 2.0.27 | 2026-02-06 | Fixed release summary A2A display names and icons, fixed online installer companion warnings |
