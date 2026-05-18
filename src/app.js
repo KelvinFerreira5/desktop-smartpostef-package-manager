@@ -85,6 +85,47 @@ async function initTauriApis() {
     console.log('Tauri APIs initialized');
     frontendLog('INFO', 'APPLICATION: Tauri APIs initialized successfully');
 
+    // Tauri native drag & drop for SPF import
+    if (window.__TAURI__.event) {
+      const listen = window.__TAURI__.event.listen;
+
+      listen('tauri://drag-enter', () => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.add('drag-over');
+      });
+
+      listen('tauri://drag-leave', () => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.remove('drag-over');
+      });
+
+      listen('tauri://drag-drop', async (event) => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.remove('drag-over');
+
+        const paths = event.payload?.paths;
+        if (!paths || paths.length === 0 || !dropZone) return;
+
+        const spfPath = paths.find(p => p.endsWith('.spf'));
+        if (!spfPath) {
+          showToast('error', 'Please drop a valid .spf file');
+          return;
+        }
+
+        const fileName = spfPath.split(/[\/\\]/).pop();
+        frontendLog('INFO', 'IMPORT: SPF file dropped via Tauri drag-drop', `File: ${fileName}`);
+        try {
+          const content = await invoke('read_file_content', { filePath: spfPath });
+          handleSpfImport(content, fileName);
+        } catch (err) {
+          frontendLog('ERROR', 'IMPORT: Failed to read dropped SPF file', err.toString());
+          showToast('error', 'Failed to read file: ' + err);
+        }
+      });
+
+      frontendLog('INFO', 'APPLICATION: Tauri drag-drop listeners registered');
+    }
+
     // Set footer version from backend
     try {
       const version = await invoke('get_app_version');
@@ -419,6 +460,16 @@ function initDeployPage() {
     });
   }
 
+  // Retry all failed button
+  const btnRetryAll = document.getElementById('btn-retry-all');
+  if (btnRetryAll) {
+    btnRetryAll.addEventListener('click', async (e) => {
+      e.preventDefault();
+      frontendLog('INFO', 'DEPLOY: Retry all failed button clicked');
+      await handleRetryAll();
+    });
+  }
+
   // Generate SPF button (kept for backward compatibility, but hidden in new flow)
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   if (btnGenerateSpf) {
@@ -556,6 +607,15 @@ async function scanSelectedFolder() {
 
     // Set packages from scan result
     packages = scanResult.packages || [];
+
+    // Restore upload state from previous uploads
+    for (const pkg of packages) {
+      const fileName = pkg.fileName || pkg.file_name;
+      if (fileName && uploadedUrls[fileName]) {
+        pkg.uploaded = true;
+        pkg.url = uploadedUrls[fileName];
+      }
+    }
 
     // Show companion file warnings
     if (scanResult.companionWarnings && scanResult.companionWarnings.length > 0) {
@@ -1200,6 +1260,7 @@ function updateActionButtons() {
   const allUploaded = hasPackages && packages.every(p => p.uploaded);
 
   const btnUploadAll = document.getElementById('btn-upload-all');
+  const btnRetryAll = document.getElementById('btn-retry-all');
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
   const btnFinalizeDeployOnly = document.getElementById('btn-finalize-deploy-only');
@@ -1207,6 +1268,10 @@ function updateActionButtons() {
 
   if (btnUploadAll) btnUploadAll.disabled = !hasPackages || allUploaded;
   if (btnClearAll) btnClearAll.style.display = hasPackages ? 'inline-flex' : 'none';
+
+  // Show "Retry All Failed" when there are failed packages
+  const hasFailed = hasPackages && packages.some(p => p.error);
+  if (btnRetryAll) btnRetryAll.style.display = hasFailed ? 'inline-flex' : 'none';
 
   // In "New Release" mode: Generate SPF is always hidden; show "Finalize Release" after all uploads
   if (currentDeployPurpose === 'release') {
@@ -1410,7 +1475,8 @@ async function handleUploadAll() {
           zipPath: filePath,
           folderName: extractFolder,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       } else if (specialHandling && extractFolder) {
         // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
@@ -1418,7 +1484,8 @@ async function handleUploadAll() {
           zipPath: filePath,
           extractFolder: extractFolder,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       } else {
         // Regular file upload — check APK zip rule first
@@ -1440,7 +1507,8 @@ async function handleUploadAll() {
         result = await invoke('upload_to_jfrog', {
           filePath: uploadPath,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       }
 
@@ -1476,6 +1544,113 @@ async function handleUploadAll() {
   }
 }
 
+// Retry all failed uploads sequentially
+async function handleRetryAll() {
+  const failedIndexes = packages.reduce((acc, pkg, i) => {
+    if (pkg.error) acc.push(i);
+    return acc;
+  }, []);
+
+  if (failedIndexes.length === 0) {
+    showToast('info', 'No failed packages to retry');
+    return;
+  }
+
+  frontendLog('INFO', 'UPLOAD: Retrying all failed uploads', `Count: ${failedIndexes.length}`);
+
+  const btnRetryAll = document.getElementById('btn-retry-all');
+  if (btnRetryAll) btnRetryAll.disabled = true;
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const index of failedIndexes) {
+    const pkg = packages[index];
+    if (!pkg || !invoke) continue;
+
+    pkg.uploading = true;
+    pkg.error = null;
+    renderPackages();
+
+    try {
+      const filePath = pkg.filePath || pkg.file_path;
+      const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
+      const specialHandling = pkg.specialHandling || pkg.special_handling;
+      const extractFolder = pkg.extractFolder || pkg.extract_folder;
+
+      let result;
+
+      if (specialHandling === 'extract-s920-root' && extractFolder) {
+        result = await invoke('extract_root_and_upload_to_jfrog', {
+          zipPath: filePath,
+          folderName: extractFolder,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      } else if (specialHandling && extractFolder) {
+        result = await invoke('extract_and_upload_to_jfrog', {
+          zipPath: filePath,
+          extractFolder: extractFolder,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      } else {
+        let uploadPath = filePath;
+        let uploadName = pkg.fileName || pkg.file_name;
+        const deployType = document.getElementById('deploy-type');
+        const currentReleaseType = deployType ? deployType.value : 'Production';
+        if (shouldZipApk(pkg, currentReleaseType) && filePath) {
+          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
+          if (zipResult.success) {
+            uploadPath = zipResult.zipPath;
+            uploadName = zipResult.zipFileName;
+          } else {
+            throw new Error(`Failed to zip APK: ${zipResult.message}`);
+          }
+        }
+        result = await invoke('upload_to_jfrog', {
+          filePath: uploadPath,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      }
+
+      if (result.success) {
+        pkg.uploaded = true;
+        pkg.url = result.url;
+        uploadedUrls[pkg.fileName || pkg.file_name] = result.url;
+        successCount++;
+        showToast('success', `Uploaded: ${pkg.fileName || pkg.file_name}`);
+      } else {
+        pkg.error = result.message;
+        failCount++;
+        showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${result.message}`);
+      }
+    } catch (error) {
+      pkg.error = error.toString();
+      failCount++;
+      showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${error}`);
+    }
+
+    pkg.uploading = false;
+    renderPackages();
+  }
+
+  if (btnRetryAll) btnRetryAll.disabled = false;
+  updateActionButtons();
+
+  if (failCount === 0) {
+    frontendLog('INFO', 'UPLOAD: All retries succeeded', `Count: ${successCount}`);
+    showToast('success', `All ${successCount} failed packages uploaded successfully!`);
+  } else {
+    frontendLog('WARNING', 'UPLOAD: Retry completed with failures', `Success: ${successCount}, Failed: ${failCount}`);
+    showToast('warning', `Retried: ${successCount} succeeded, ${failCount} still failed`);
+  }
+}
+
 // Retry upload for a single package
 async function retryUpload(index) {
   const pkg = packages[index];
@@ -1501,7 +1676,8 @@ async function retryUpload(index) {
         zipPath: filePath,
         folderName: extractFolder,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     } else if (specialHandling && extractFolder) {
       // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
@@ -1509,7 +1685,8 @@ async function retryUpload(index) {
         zipPath: filePath,
         extractFolder: extractFolder,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     } else {
       // Regular file upload — check APK zip rule first
@@ -1531,7 +1708,8 @@ async function retryUpload(index) {
       result = await invoke('upload_to_jfrog', {
         filePath: uploadPath,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     }
 
@@ -3036,6 +3214,29 @@ function populateSettings() {
   renderClientMappings();
 }
 
+// Generate a deterministic 3-digit decimal code from a client name using DJB2 hash.
+// The name is uppercased before hashing to ensure case-insensitivity.
+// If the result collides with an existing mapping (excluding the one at excludeIndex),
+// it increments until a free slot is found.
+function generateClientNumber(name, excludeIndex) {
+  const upper = name.toUpperCase();
+  let hash = 5381;
+  for (let i = 0; i < upper.length; i++) {
+    hash = (Math.imul(hash, 33) + upper.charCodeAt(i)) >>> 0;
+  }
+  const base = hash % 1000;
+  const usedNumbers = (settings.clientMappings || [])
+    .filter((_, i) => i !== excludeIndex)
+    .map(m => m.number);
+  let candidate = base;
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const padded = String((base + attempt) % 1000).padStart(3, '0');
+    if (!usedNumbers.includes(padded)) return padded;
+    candidate = (base + attempt + 1) % 1000;
+  }
+  return String(candidate).padStart(3, '0');
+}
+
 function renderClientMappings() {
   const container = document.getElementById('client-mappings-list');
   if (!container) return;
@@ -3049,8 +3250,14 @@ function renderClientMappings() {
 
   container.innerHTML = mappings.map((mapping, index) => `
     <div class="mapping-item">
-      <input type="text" class="mapping-number" value="${mapping.number}" placeholder="Number" data-index="${index}" data-field="number">
       <input type="text" class="mapping-name" value="${mapping.name}" placeholder="Client Name" data-index="${index}" data-field="name">
+      <button class="btn-generate-mapping" data-index="${index}" title="Generate code from name">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <line x1="5" y1="12" x2="19" y2="12"/>
+          <polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
+      <input type="text" class="mapping-number" value="${mapping.number}" placeholder="000" data-index="${index}" data-field="number">
       <button class="btn-remove-mapping" data-index="${index}" title="Remove mapping">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
           <line x1="18" y1="6" x2="6" y2="18"/>
@@ -3060,7 +3267,7 @@ function renderClientMappings() {
     </div>
   `).join('');
 
-  // Attach event listeners
+  // Attach change listeners
   container.querySelectorAll('.mapping-number, .mapping-name').forEach(input => {
     input.addEventListener('change', (e) => {
       const index = parseInt(e.target.dataset.index);
@@ -3068,6 +3275,26 @@ function renderClientMappings() {
       if (settings.clientMappings[index]) {
         settings.clientMappings[index][field] = e.target.value;
       }
+    });
+  });
+
+  // Generate button
+  container.querySelectorAll('.btn-generate-mapping').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const index = parseInt(btn.dataset.index);
+      const nameInput = container.querySelector(`.mapping-name[data-index="${index}"]`);
+      const numberInput = container.querySelector(`.mapping-number[data-index="${index}"]`);
+      if (!nameInput || !nameInput.value.trim()) {
+        showToast('warning', 'Enter a client name first');
+        return;
+      }
+      const generated = generateClientNumber(nameInput.value.trim(), index);
+      numberInput.value = generated;
+      if (settings.clientMappings[index]) {
+        settings.clientMappings[index].number = generated;
+      }
+      frontendLog('INFO', 'SETTINGS: Client number generated', `Name: ${nameInput.value.trim()}, Code: ${generated}`);
     });
   });
 
@@ -3615,32 +3842,6 @@ function renderSpfDropZone(container) {
     </div>
   `;
 
-  // Drag & drop handlers
-  const dropZone = document.getElementById('spf-drop-zone');
-  if (dropZone) {
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        const file = files[0];
-        if (file.name.endsWith('.spf')) {
-          const text = await file.text();
-          handleSpfImport(text, file.name);
-        } else {
-          showToast('error', 'Please drop a valid .spf file');
-        }
-      }
-    });
-  }
-
   // Browse button
   const btnBrowse = document.getElementById('btn-browse-spf');
   if (btnBrowse) {
@@ -3682,11 +3883,19 @@ function handleSpfImport(spfContent, fileName) {
   importReleaseState.packages = parsed.packages;
   importReleaseState.isEditing = true;
 
-  // Check if this release already exists locally
-  const existingRelease = releases.find(r => r.version === parsed.release.version);
+  // Check if this release already exists locally (match version + type + signed/unsigned)
+  const parsedType = (parsed.release.releaseType || parsed.release.type || '').toLowerCase();
+  const parsedUnsigned = isReleaseUnsigned({ packages: parsed.packages });
+  const existingRelease = releases.find(r => {
+    if (r.version !== parsed.release.version) return false;
+    const rType = (r.releaseType || r.type || '').toLowerCase();
+    if (rType !== parsedType) return false;
+    if (rType === 'production') return isReleaseUnsigned(r) === parsedUnsigned;
+    return true;
+  });
   if (existingRelease) {
     importReleaseState.originalRelease = existingRelease;
-    frontendLog('INFO', 'IMPORT: Found existing local release', `Version: ${existingRelease.version}`);
+    frontendLog('INFO', 'IMPORT: Found existing local release', `Version: ${existingRelease.version}, Type: ${existingRelease.releaseType || existingRelease.type}, Unsigned: ${isReleaseUnsigned(existingRelease)}`);
   }
 
   renderImportReleasePage();
@@ -3875,13 +4084,13 @@ function renderImportReleasePage() {
             <input type="date" id="import-date" value="${rel.date || ''}">
           </div>
         </div>
-        <div class="form-group">
+        ${rel.releaseType === 'deploy-only' ? '' : `<div class="form-group">
           <label>Release Type *</label>
           <select id="import-type">
             <option value="Production" ${rel.releaseType === 'Production' ? 'selected' : ''}>Production</option>
             <option value="Development" ${rel.releaseType === 'Development' ? 'selected' : ''}>Development</option>
           </select>
-        </div>
+        </div>`}
       </div>
       <div class="form-group" style="margin-top: 12px;">
         <label>Description</label>

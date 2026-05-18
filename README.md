@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.2.2 (Tauri Edition)
+# SmartPosTEF Package Manager v3.3.0 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -98,7 +98,31 @@ Signed S920 packages (`_sign.zip`) or development are uploaded directly without 
 
 ### Client Mapping
 
-The application extracts client map numbers from version strings to generate correct JFrog paths. For example, in the version string `2.5.1.788.502702`, the number `788` is the client map number. If configured with mapping `788 → Lyra`, the JFrog path becomes `packages/sunmi/p2/launcher/lyra`.
+The application extracts client map numbers from version strings to generate correct JFrog paths. For example, in version `2.5.5788` (where `788` is appended to the patch segment), the number `788` is the client map number. If configured with mapping `788 → Lyra`, the JFrog path becomes `packages/sunmi/p2/launcher/lyra`.
+
+#### Auto-Generate Client Number
+
+Each mapping row has a **Generate (→) button** that deterministically derives a 3-digit decimal code from the client name using the **DJB2 hash algorithm**:
+
+```
+hash = 5381
+for each character in UPPERCASE(name):
+    hash = (hash × 33 + ASCII(character)) unsigned 32-bit
+code = hash % 1000   →  zero-padded to 3 digits
+```
+
+| Client Name | Uppercased | Generated Code |
+|-------------|------------|----------------|
+| Lyra | LYRA | deterministic 3-digit value |
+| Unica | UNICA | deterministic 3-digit value |
+
+**Properties:**
+- **Deterministic** — same name always produces the same code
+- **Case-insensitive** — `lyra`, `Lyra`, `LYRA` all yield the same result
+- **Collision-safe** — if the generated code is already used by another mapping, the algorithm increments by 1 (mod 1000) until a free slot is found
+- **Overridable** — the number field remains editable; the generated value is just a suggestion
+
+The layout of each mapping row is: **[Client Name] [→] [Client Number] [✕]**
 
 ## Prerequisites
 

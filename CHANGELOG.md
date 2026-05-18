@@ -5,6 +5,42 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-05-18
+
+### Added
+
+- **Retry All Failed Button**: New "Retry All Failed" button (amber, shown when any package has a failed upload) retries all failed packages in sequence using the same upload logic as Upload All. Shows a summary toast on completion. The button is hidden when there are no failures and automatically re-evaluates after each retry.
+
+- **Configurable JFrog Base URL**: The JFrog Base URL configured in Settings is now actually used by the Rust upload backend. Previously the backend hardcoded `https://artifactory.aditum.com.br/artifactory` in all three upload commands (`upload_to_jfrog`, `extract_and_upload_to_jfrog`, `extract_root_and_upload_to_jfrog`). Now each command accepts an optional `base_url` parameter passed from the frontend; falls back to the original default when not set.
+
+- **Client Mapping Auto-Generate Number**: Each client mapping row now has a **Generate (→) button** that deterministically derives a 3-digit decimal code from the client name using the DJB2 hash algorithm (uppercase input, `hash = hash × 33 + charCode`, mod 1000, zero-padded). The result is collision-safe — if the generated code already exists in another mapping it increments by 1 (mod 1000) until a free slot is found. The number field remains manually editable.
+
+### Fixed
+
+- **Finalize Release Button Disabled After Re-Scan**: After uploading packages where some failed, fixing filenames, and re-scanning the folder, the Finalize Release button would remain disabled even after successfully re-uploading all packages. Root cause: `scanSelectedFolder()` replaced the `packages` array with fresh objects from the scan result, losing all `uploaded`/`url` state. Fixed by restoring upload state from the persistent `uploadedUrls` map immediately after the new array is assigned.
+
+### Changed
+
+- **Client Mapping Row Layout**: Reordered the mapping row from `[Number][Name][✕]` to `[Name][→][Number][✕]` to match the natural data-entry flow (type the name, generate the code, optionally edit it).
+
+## [3.2.8] - 2026-04-10
+
+### Fixed
+
+- **SPF Drag & Drop on Import Page**: Fixed drag-and-drop of `.spf` files not working on Linux. HTML5 `e.dataTransfer.files` is always empty on WebKitGTK (Tauri's Linux webview) for OS file drops. Replaced HTML5 drag-drop handlers with Tauri v2's native drag-drop event API (`tauri://drag-enter`, `tauri://drag-drop`, `tauri://drag-leave`), which provides file paths directly. The dropped file is read via the existing `read_file_content` Rust command. Also removed the full-screen global drop overlay in favor of the import-page card drop zone.
+
+## [3.2.7] - 2026-04-10
+
+### Fixed
+
+- **SPF Drag & Drop on Import Page** (incomplete): Initial attempt using `dragDropEnabled: false` — only works on Windows, not Linux.
+
+## [3.2.6] - 2026-04-10
+
+### Added
+
+- **Global SPF Drag & Drop**: Drop an `.spf` file anywhere in the app to import a release. A full-screen overlay with glassmorphism backdrop appears when dragging a file over the window, guiding the user to drop. Automatically navigates to the import page and triggers the existing SPF import pipeline.
+
 ## [3.2.5] - 2026-04-10
 
 ### Fixed

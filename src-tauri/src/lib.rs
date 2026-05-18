@@ -2451,7 +2451,9 @@ mod commands {
         file_path: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let upload_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -2485,8 +2487,8 @@ mod commands {
         let file_size = fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
         
         let url = format!(
-            "https://artifactory.aditum.com.br/artifactory/{}{}",
-            jfrog_path, file_name
+            "{}/{}{}",
+            base_url, jfrog_path, file_name
         );
         
         log_to_file("DEBUG", "UPLOAD: Preparing upload request", Some(&format!(
@@ -2600,7 +2602,9 @@ mod commands {
         extract_folder: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let operation_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -2771,8 +2775,8 @@ mod commands {
             // Build the JFrog URL: jfrog_path + extract_folder + relative_path
             let relative_str = relative_path.to_string_lossy().replace("\\", "/");
             let url = format!(
-                "https://artifactory.aditum.com.br/artifactory/{}{}/{}",
-                jfrog_path, extract_folder, relative_str
+                "{}/{}{}/{}",
+                base_url, jfrog_path, extract_folder, relative_str
             );
             
             log_to_file("DEBUG", &format!("EXTRACT_UPLOAD: Uploading file - {}", file_name), Some(&format!(
@@ -2842,7 +2846,7 @@ mod commands {
             
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, extract_folder),
+                url: format!("{}/{}{}/", base_url, jfrog_path, extract_folder),
                 message: format!("Uploaded {} files from folder {}", uploaded_files.len(), extract_folder),
             })
         } else if uploaded_files.is_empty() && !failed_files.is_empty() {
@@ -2878,7 +2882,7 @@ mod commands {
             // Include the list of failed files in the message for user information
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, extract_folder),
+                url: format!("{}/{}{}/", base_url, jfrog_path, extract_folder),
                 message: format!("Uploaded {} files. Failed: {}", uploaded_files.len(), failed_file_names.join(", ")),
             })
         }
@@ -2892,7 +2896,9 @@ mod commands {
         folder_name: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let operation_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -3032,8 +3038,8 @@ mod commands {
             // Build the JFrog URL: jfrog_path + folder_name + / + relative_path
             let relative_str = relative_path.to_string_lossy().replace("\\", "/");
             let url = format!(
-                "https://artifactory.aditum.com.br/artifactory/{}{}/{}",
-                jfrog_path, folder_name, relative_str
+                "{}/{}{}/{}",
+                base_url, jfrog_path, folder_name, relative_str
             );
             
             log_to_file("DEBUG", &format!("EXTRACT_ROOT_UPLOAD: Uploading file - {}", file_name), Some(&format!(
@@ -3103,7 +3109,7 @@ mod commands {
             
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, folder_name),
+                url: format!("{}/{}{}/", base_url, jfrog_path, folder_name),
                 message: format!("Extracted and uploaded {} files to {}{}/", uploaded_files.len(), jfrog_path, folder_name),
             })
         } else if uploaded_files.is_empty() && !failed_files.is_empty() {
@@ -3126,7 +3132,7 @@ mod commands {
             )));
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, folder_name),
+                url: format!("{}/{}{}/", base_url, jfrog_path, folder_name),
                 message: format!("Uploaded {} files. Failed: {}", uploaded_files.len(), failed_file_names.join(", ")),
             })
         }
