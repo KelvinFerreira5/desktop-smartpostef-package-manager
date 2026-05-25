@@ -3133,7 +3133,6 @@ select::-webkit-scrollbar-thumb {
   border: none;
   border-radius: var(--radius-lg);
   margin-bottom: 1rem;
-  overflow: hidden;
   transition: all 0.2s ease;
 }
 
@@ -3280,6 +3279,97 @@ select::-webkit-scrollbar-thumb {
   border-top: 1px solid var(--border-color);
   padding: 1.25rem 1.5rem;
   background: rgba(0, 0, 0, 0.15);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+}
+
+/* Status icons (environment type + signature) */
+.release-status-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.release-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: opacity 0.15s ease;
+  cursor: default;
+}
+
+.release-type-icon:hover {
+  opacity: 0.75;
+}
+
+/* Metadata row bullet separator */
+.meta-sep {
+  color: var(--text-muted);
+  opacity: 0.4;
+  user-select: none;
+  font-size: 0.7rem;
+}
+
+/* Kebab overflow menu */
+.release-kebab-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-kebab {
+  padding: 0.5rem 0.65rem !important;
+}
+
+.release-kebab-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  min-width: 148px;
+  z-index: 200;
+  overflow: hidden;
+}
+
+.release-kebab-menu.open {
+  display: block;
+}
+
+.kebab-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.kebab-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-overflow-purge,
+.btn-overflow-purge:hover {
+  color: #f59e0b !important;
+}
+
+.btn-overflow-delete,
+.btn-overflow-delete:hover {
+  color: #ef4444 !important;
 }
 
 .release-summary-section {

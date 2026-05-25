@@ -5,6 +5,25 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.8] - 2026-05-25
+
+### Fixed
+
+- **Release card — meta date/time icons**: Replaced 📅 and 🕒 emoji with proper Material 3 SVG icons (`calendar_today` and `schedule`), rendered inline at 14×14 with `fill="currentColor"` for consistent theming.
+- **Release card — kebab button centering**: The three-dot (`⋮`) icon was rendered off-center due to dots positioned at `cx="2"` in a 24×24 viewBox at `width="4"`. Fixed to use `cx="12"` (centered) with `width="16" height="16"`.
+- **Release card — kebab menu clipping**: The `overflow: hidden` on `.release-card-expandable` clipped the absolutely-positioned dropdown, hiding the Delete item when the list extended below the card boundary. Removed `overflow: hidden` from the card container and added `border-bottom-left-radius` / `border-bottom-right-radius` to `.release-card-body` so expanded body content still clips to the card's rounded corners.
+
+## [3.3.7] - 2026-05-25
+
+### Changed
+
+- **Release Card Redesign (UI Spec v4)**: Overhauled the release list card layout following the Version Card UI Component Design Specifications v4:
+  - **Status icons**: Text badges ("Deploy Only", "Development", "Não assinados") replaced with two inline SVG icons per card — an environment icon (upload arrow / package box / code brackets) and a signature icon (closed lock / open lock). Each icon has a `title` tooltip and uses the existing semantic colors.
+  - **Overflow menu**: Export SPF, Purge, and Delete moved out of top-level buttons into a `⋮` kebab dropdown (`release-kebab-menu`). Purge is amber, Delete is red. Clicking outside the menu closes it via a single document-level listener.
+  - **Expand button**: Now icon-only (chevron SVG, no text label). Chevron rotates 180° on expand via CSS `rotated` class toggle.
+  - **Metadata row**: Added `•` bullet separators and `📅` / `🕒` emoji prefixes for Release date and Created time.
+  - **Primary actions**: Only "Generate HTML" and "Edit" remain as always-visible top-level buttons.
+
 ## [3.3.6] - 2026-05-25
 
 ### Added

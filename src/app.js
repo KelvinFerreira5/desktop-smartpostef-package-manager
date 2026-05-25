@@ -21,6 +21,7 @@ let currentDeployMode = 'folder';
 let currentDeployPurpose = null;
 let currentReleaseFilter = 'all';
 let currentReleaseSort = 'created-desc';
+let kebabCloseListenerAdded = false;
 let currentReleaseSearch = '';
 let currentReleaseFilters = { signature: 'all', client: 'all', platform: 'all', device: 'all', hasSta: false, hasA2a: false };
 let releaseSearchDebounceTimer = null;
@@ -2266,27 +2267,37 @@ function renderReleases() {
     const platforms = new Set((release.packages || []).map(p => p.platform));
     const platformCount = platforms.size;
 
+    // Status icons — environment type
+    const typeColor = releaseType === 'deploy-only' ? '#3b82f6' : releaseType === 'production' ? '#22c55e' : '#f59e0b';
+    const typeTooltip = releaseType === 'deploy-only' ? 'Deploy Only' : releaseType === 'production' ? 'Production' : 'Development';
+    const typeIconPath = releaseType === 'deploy-only'
+      ? '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
+      : releaseType === 'production'
+        ? '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'
+        : '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>';
+    // Status icons — signature
+    const sigColor = hasUnsigned ? '#ef4444' : '#22c55e';
+    const sigTooltip = hasUnsigned ? 'Unsigned' : 'Signed';
+    const sigIconPath = hasUnsigned
+      ? '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>'
+      : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+
     return `
     <div class="release-card-expandable" data-id="${release.id}">
       <div class="release-card-header">
         <div class="release-card-info">
           <div class="release-card-title">
             <span class="release-version-text">Version ${release.version}</span>
-            <span class="release-type-badge ${releaseType}">${releaseTypeDisplay}</span>
-            ${hasUnsigned ? '<span class="release-type-badge unsigned">Não assinados</span>' : ''}
+            <span class="release-status-icons">
+              <span class="release-type-icon" style="color:${typeColor}" title="${typeTooltip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">${typeIconPath}</svg></span>
+              <span class="release-type-icon" style="color:${sigColor}" title="${sigTooltip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">${sigIconPath}</svg></span>
+            </span>
           </div>
           ${release.description ? `<div class="release-card-description">${release.description}</div>` : ''}
           <div class="release-card-meta">
-            <span class="meta-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              Release: ${release.date}
-            </span>
-            ${createdAt ? `<span class="meta-item">Created: ${createdAt}</span>` : ''}
+            <span class="meta-item"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="14" height="14"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/></svg> Release: ${release.date}</span>
+            ${createdAt ? `<span class="meta-sep">•</span><span class="meta-item"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="16" height="16"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> Created: ${createdAt}</span>` : ''}
+            <span class="meta-sep">•</span>
             <span class="meta-item platforms-badge">${platformCount} platform${platformCount !== 1 ? 's' : ''}</span>
           </div>
         </div>
@@ -2298,14 +2309,6 @@ function renderReleases() {
             </svg>
             Generate HTML
           </button>
-          <button class="btn btn-sm btn-outline btn-export-spf" data-id="${release.id}" title="Export SPF">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Export SPF
-          </button>
           <button class="btn btn-sm btn-outline btn-edit-release" data-id="${release.id}" title="Edit Release">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -2313,25 +2316,29 @@ function renderReleases() {
             </svg>
             Edit
           </button>
+          <div class="release-kebab-wrapper">
+            <button class="btn btn-sm btn-outline btn-kebab" data-id="${release.id}" title="More actions">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+            </button>
+            <div class="release-kebab-menu">
+              <button class="kebab-item btn-overflow-spf" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export SPF
+              </button>
+              <button class="kebab-item btn-overflow-purge" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/><path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/></svg>
+                Purge
+              </button>
+              <button class="kebab-item btn-overflow-delete" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>
           <button class="btn btn-sm btn-outline btn-toggle-expand" data-id="${release.id}" title="Expand/Collapse">
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
-            Expand
-          </button>
-          <button class="btn btn-sm btn-outline btn-purge-release" data-id="${release.id}" title="Delete all packages from JFrog and remove release">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/>
-              <path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/>
-            </svg>
-            Purge
-          </button>
-          <button class="btn btn-sm btn-outline btn-delete-release" data-id="${release.id}" title="Delete release from local storage only">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-            Delete
           </button>
         </div>
       </div>
@@ -2672,27 +2679,40 @@ function renderReleaseSummary(release) {
 }
 
 function attachReleaseEventListeners(container) {
-  // Toggle expand/collapse
+  // Global document listener to close open kebab menus (added once per session)
+  if (!kebabCloseListenerAdded) {
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.release-kebab-wrapper')) {
+        document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      }
+    });
+    kebabCloseListenerAdded = true;
+  }
+
+  // Toggle expand/collapse (chevron-only button)
   container.querySelectorAll('.btn-toggle-expand').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const card = btn.closest('.release-card-expandable');
       const body = card.querySelector('.release-card-body');
       const isExpanded = body.style.display !== 'none';
-
       body.style.display = isExpanded ? 'none' : 'block';
+      const chevron = btn.querySelector('.chevron-icon');
+      if (chevron) chevron.classList.toggle('rotated', !isExpanded);
       frontendLog('INFO', 'RELEASES: Release card toggled', `ID: ${btn.dataset.id}, Action: ${isExpanded ? 'collapsed' : 'expanded'}`);
-      btn.innerHTML = isExpanded ? `
-        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        Expand
-      ` : `
-        <svg class="chevron-icon rotated" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        Collapse
-      `;
+    });
+  });
+
+  // Kebab menu toggle
+  container.querySelectorAll('.btn-kebab').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = btn.closest('.release-kebab-wrapper');
+      const menu = wrapper.querySelector('.release-kebab-menu');
+      const isOpen = menu.classList.contains('open');
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      if (!isOpen) menu.classList.add('open');
     });
   });
 
@@ -2706,12 +2726,13 @@ function attachReleaseEventListeners(container) {
     });
   });
 
-  // Export SPF
-  container.querySelectorAll('.btn-export-spf').forEach(btn => {
+  // Export SPF (overflow menu)
+  container.querySelectorAll('.btn-overflow-spf').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.dataset.id;
-      frontendLog('INFO', 'RELEASES: Export SPF button clicked', `Release ID: ${id}`);
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Export SPF clicked', `Release ID: ${id}`);
       await exportSpfForRelease(id);
     });
   });
@@ -2740,22 +2761,24 @@ function attachReleaseEventListeners(container) {
     });
   });
 
-  // Purge release (delete packages from JFrog, then delete release)
-  container.querySelectorAll('.btn-purge-release').forEach(btn => {
+  // Purge release (overflow menu)
+  container.querySelectorAll('.btn-overflow-purge').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.dataset.id;
-      frontendLog('INFO', 'RELEASES: Purge release button clicked', `Release ID: ${id}`);
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Purge release clicked', `Release ID: ${id}`);
       await purgeRelease(id);
     });
   });
 
-  // Delete release
-  container.querySelectorAll('.btn-delete-release').forEach(btn => {
+  // Delete release (overflow menu)
+  container.querySelectorAll('.btn-overflow-delete').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.dataset.id;
-      frontendLog('INFO', 'RELEASES: Delete release button clicked', `Release ID: ${id}`);
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Delete release clicked', `Release ID: ${id}`);
       await deleteRelease(id);
     });
   });
