@@ -117,6 +117,7 @@ code = hash % 1000   →  zero-padded to 3 digits
 | Unica | UNICA | deterministic 3-digit value |
 
 **Properties:**
+
 - **Deterministic** — same name always produces the same code
 - **Case-insensitive** — `lyra`, `Lyra`, `LYRA` all yield the same result
 - **Collision-safe** — if the generated code is already used by another mapping, the algorithm increments by 1 (mod 1000) until a free slot is found

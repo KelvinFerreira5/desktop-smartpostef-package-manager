@@ -5,6 +5,42 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.6] - 2026-05-25
+
+### Added
+
+- **Description in Generated HTML**: The release description is now rendered in the exported HTML page, displayed as an italic line below the release date in the version header. Hidden entirely when the description is empty.
+
+## [3.3.5] - 2026-05-25
+
+### Added
+
+- **HTML Generation for Deploy-Only Releases**: Deploy-only releases can now have HTML generated. Removed the `releaseType !== 'deploy-only'` guard on the "Generate HTML" button in the releases list, and removed the deploy-only exclusion filter from the Tools → Generate HTML dropdown. The generated HTML displays the type label as "Deploy Only" (previously the raw value `"deploy-only"` would have been shown).
+
+## [3.3.4] - 2026-05-25
+
+### Added
+
+- **Description Field for Deploy-Only Creation**: The "Upload Information" card in the New Deploy → Deploy Only flow now includes a Description field (`#upload-description`). The value is saved to `releaseData.description` and cleared when the deploy screen resets after finalization.
+
+## [3.3.3] - 2026-05-18
+
+### Added
+
+- **Built-in Locked Client Mappings**: Six client mappings (Lyra:788, Unica:877, B1:6649, Valori:867, Bin:677, Basa:668) are now hardcoded into the app and always present from installation. They are injected at startup via `ensureBuiltinMappings()`, which removes any stale stored copies by name and prepends fresh built-in objects so the Rust backend always reads them from the settings file. In the Settings UI, built-in rows are rendered as read-only (disabled inputs, lock icon, no generate/remove buttons). On save, any custom mapping whose name duplicates a built-in is automatically removed with a warning toast.
+
+## [3.3.2] - 2026-05-18
+
+### Fixed
+
+- **Deploy-only SPF Import Type Detection**: Importing a `.spf` file with `type=deploy-only` in `<release_info>` was incorrectly mapped to `'Production'` because the parser only had a two-way check (`development` vs. else). Added an explicit `deploy-only` branch so the type is preserved correctly. As a result, the Import page now hides the Release Notes card and shows the "Save Deploy" button (instead of "Save Release") when importing a deploy-only SPF.
+
+## [3.3.1] - 2026-05-18
+
+### Fixed
+
+- **Deploy-only Edit Flow**: Editing a deploy-only release from the Releases list now hides the Release Notes card (irrelevant for deploy-only) and shows "Update Deploy" / "Save Deploy" instead of "Update Release" / "Save Release". The save logic already preserved the `deploy-only` type correctly and was not changed.
+
 ## [3.3.0] - 2026-05-18
 
 ### Added

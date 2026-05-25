@@ -2834,6 +2834,28 @@ select::-webkit-scrollbar-thumb {
   flex-shrink: 0;
 }
 
+/* Built-in (locked) mapping rows */
+.mapping-item--builtin {
+  opacity: 0.75;
+}
+
+.mapping-item--builtin input {
+  cursor: not-allowed;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.mapping-lock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--text-muted, var(--text-secondary));
+  opacity: 0.5;
+}
+
 /* Additional package tag styles */
 .package-tag.unsigned {
   background: rgba(239, 68, 68, 0.25);

@@ -3274,7 +3274,13 @@ mod commands {
     }
 
     fn generate_html_content(release: &Release) -> String {
-        let release_type = &release.release_type;
+        let release_type_raw = release.release_type.to_lowercase();
+        let release_type = if release_type_raw == "deploy-only" {
+            "Deploy Only".to_string()
+        } else {
+            release.release_type.clone()
+        };
+        let release_type = &release_type;
         let packages = &release.packages;
         let release_notes = &release.release_notes;
         
@@ -3350,6 +3356,13 @@ mod commands {
             sections_html.push_str(&generate_other_section(&other_packages));
         }
         
+        // Description line (shown only when non-empty)
+        let description_html = if !release.description.is_empty() {
+            format!(r#"<p class="text-sm text-gray-600 dark:text-gray-300 mt-2 italic">{}</p>"#, release.description)
+        } else {
+            String::new()
+        };
+
         // Release notes section
         let release_notes_html = if !release_notes.is_empty() {
             // Escape backticks and backslashes for safe embedding in JS template literal
@@ -3466,6 +3479,7 @@ mod commands {
             <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 Release Date: {date}
             </p>
+            {description}
         </div>
 {notes}
 {sections}
@@ -3517,6 +3531,7 @@ mod commands {
             version = release.version,
             release_type = release_type,
             date = release.date,
+            description = description_html,
             sections = sections_html,
             notes = release_notes_html
         )

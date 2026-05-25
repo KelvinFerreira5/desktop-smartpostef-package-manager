@@ -1,6 +1,17 @@
 // SmartPosTEF Package Manager - Tauri Edition v2.0.6
 // Comprehensive package detection and Electron-style UI
 
+// SmartPosTEF Package Manager v3.3.4
+// Built-in client mappings — always present, always locked, cannot be edited or removed
+const BUILTIN_CLIENT_MAPPINGS = [
+  { number: '788', name: 'Lyra', builtin: true },
+  { number: '877', name: 'Unica', builtin: true },
+  { number: '6649', name: 'B1', builtin: true },
+  { number: '867', name: 'Valori', builtin: true },
+  { number: '677', name: 'Bin', builtin: true },
+  { number: '668', name: 'Basa', builtin: true },
+];
+
 // State
 let packages = [];
 let releases = [];
@@ -144,11 +155,22 @@ async function initTauriApis() {
   }
 }
 
+// Ensure built-in mappings are always present and authoritative at the top of the list
+function ensureBuiltinMappings() {
+  if (!settings.clientMappings) settings.clientMappings = [];
+  // Remove any stale built-in copies (matched by name, case-insensitive) stored from previous runs
+  const builtinNames = BUILTIN_CLIENT_MAPPINGS.map(m => m.name.toLowerCase());
+  settings.clientMappings = settings.clientMappings.filter(m => !builtinNames.includes((m.name || '').toLowerCase()));
+  // Prepend fresh built-in objects
+  settings.clientMappings.unshift(...BUILTIN_CLIENT_MAPPINGS.map(m => ({ ...m })));
+}
+
 // Load initial data from backend
 async function loadInitialData() {
   try {
     frontendLog('INFO', 'APPLICATION: Loading initial data');
     settings = await invoke('get_settings');
+    ensureBuiltinMappings();
     frontendLog('INFO', 'APPLICATION: Settings loaded', `API key: ${settings.jfrogApiKey ? 'configured' : 'not set'}, Mappings: ${(settings.clientMappings || []).length}`);
     populateSettings();
 
@@ -1298,6 +1320,7 @@ function updateActionButtons() {
 async function handleFinalizeDeployOnly() {
   frontendLog('INFO', 'DEPLOY_ONLY: Starting deploy-only finalization');
   const versionInput = document.getElementById('upload-version');
+  const descriptionInput = document.getElementById('upload-description');
   const version = versionInput ? versionInput.value.trim() : '';
 
   if (!version) {
@@ -1335,7 +1358,7 @@ async function handleFinalizeDeployOnly() {
     date,
     type: 'deploy-only',
     releaseType: 'deploy-only',
-    description: '',
+    description: descriptionInput ? descriptionInput.value.trim() : '',
     releaseNotes: '',
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1379,6 +1402,7 @@ async function handleFinalizeDeployOnly() {
     frontendLog('INFO', 'DEPLOY_ONLY: Step 4 - Clearing deploy screen');
     clearPackages();
     if (versionInput) versionInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
 
     // Reset purpose selection
     currentDeployPurpose = null;
@@ -2267,13 +2291,13 @@ function renderReleases() {
           </div>
         </div>
         <div class="release-card-actions">
-          ${releaseType !== 'deploy-only' ? `<button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
+          <button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Generate HTML
-          </button>` : ''}
+          </button>
           <button class="btn btn-sm btn-outline btn-export-spf" data-id="${release.id}" title="Export SPF">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -3004,8 +3028,7 @@ function populateHtmlReleaseSelect() {
   if (!selectEl) return;
 
   selectEl.innerHTML = '<option value="">-- Select a release --</option>' +
-    releases.filter(r => (r.releaseType || r.type || '').toLowerCase() !== 'deploy-only')
-      .map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
+    releases.map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
 }
 
 async function generateHtml() {
@@ -3248,7 +3271,22 @@ function renderClientMappings() {
     return;
   }
 
-  container.innerHTML = mappings.map((mapping, index) => `
+  container.innerHTML = mappings.map((mapping, index) => {
+    if (mapping.builtin) {
+      return `
+        <div class="mapping-item mapping-item--builtin">
+          <input type="text" class="mapping-name" value="${mapping.name}" disabled>
+          <span class="mapping-lock-icon" title="Built-in mapping — cannot be changed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <input type="text" class="mapping-number" value="${mapping.number}" disabled>
+        </div>
+      `;
+    }
+    return `
     <div class="mapping-item">
       <input type="text" class="mapping-name" value="${mapping.name}" placeholder="Client Name" data-index="${index}" data-field="name">
       <button class="btn-generate-mapping" data-index="${index}" title="Generate code from name">
@@ -3265,7 +3303,8 @@ function renderClientMappings() {
         </svg>
       </button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // Attach change listeners
   container.querySelectorAll('.mapping-number, .mapping-name').forEach(input => {
@@ -3344,6 +3383,19 @@ async function saveSettings() {
 
   // Filter out empty mappings
   settings.clientMappings = (settings.clientMappings || []).filter(m => m.number && m.name);
+
+  // Remove any custom mappings whose name duplicates a built-in (case-insensitive)
+  const builtinNames = BUILTIN_CLIENT_MAPPINGS.map(m => m.name.toLowerCase());
+  const dupNames = settings.clientMappings
+    .filter(m => !m.builtin && builtinNames.includes((m.name || '').toLowerCase()))
+    .map(m => m.name);
+  if (dupNames.length > 0) {
+    settings.clientMappings = settings.clientMappings.filter(m => m.builtin || !builtinNames.includes((m.name || '').toLowerCase()));
+    showToast('warning', `Duplicate built-in mapping(s) removed: ${dupNames.join(', ')}`);
+  }
+
+  // Re-inject built-ins so Rust backend always sees them in the saved file
+  ensureBuiltinMappings();
 
   try {
     await invoke('save_settings', { settings });
@@ -3937,7 +3989,10 @@ function parseSpfContent(content) {
           const value = valueParts.join('=').trim();
           if (key.trim() === 'version') release.version = value;
           else if (key.trim() === 'date') release.date = value;
-          else if (key.trim() === 'type') release.releaseType = value.toLowerCase() === 'development' ? 'Development' : 'Production';
+          else if (key.trim() === 'type') {
+            const t = value.toLowerCase();
+            release.releaseType = t === 'deploy-only' ? 'deploy-only' : t === 'development' ? 'Development' : 'Production';
+          }
           else if (key.trim() === 'description') release.description = value;
         } else if (currentSection === 'release_notes') {
           releaseNotesLines.push(line);
@@ -4098,7 +4153,8 @@ function renderImportReleasePage() {
       </div>
     </div>
     
-    <!-- Release Notes -->
+    <!-- Release Notes (hidden for deploy-only) -->
+    ${rel.releaseType === 'deploy-only' ? '' : `
     <div class="card">
       <h3>Release Notes</h3>
       <div class="release-notes-tabs">
@@ -4114,6 +4170,7 @@ function renderImportReleasePage() {
         </div>
       </div>
     </div>
+    `}
     
     <!-- Release Summary -->
     <div class="card">
@@ -4153,7 +4210,9 @@ function renderImportReleasePage() {
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        ${importReleaseState.originalRelease ? 'Update Release' : 'Save Release'}
+        ${rel.releaseType === 'deploy-only'
+      ? (importReleaseState.originalRelease ? 'Update Deploy' : 'Save Deploy')
+      : (importReleaseState.originalRelease ? 'Update Release' : 'Save Release')}
       </button>
     </div>
   `;
