@@ -5,6 +5,51 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.12] - 2026-05-26
+
+### Fixed
+
+- **Generate icon — box replaced with shuffle**: The Generate button in Client Mappings (Settings) and its corresponding help modal entry were using a 3D box/cube SVG that rendered as an unrecognizable square at small sizes. Replaced with the Feather shuffle (crossed arrows) icon, which clearly conveys "auto-generate/mix" and renders well at 14–16px.
+
+## [3.3.11] - 2026-05-25
+
+### Fixed
+
+- **Help content — Settings fully documented**: Expanded the Settings help from 3 incomplete sections to 8 comprehensive sections covering all 6 sidebar tabs:
+  - **Preferences**: Theme grid with 8 themes (4 dark + 4 light), instant apply, localStorage persistence
+  - **JFrog**: API Key (encrypted, eye toggle), Base URL, Default Repository
+  - **Client Mappings**: Built-in locked rows, custom rows, Add Mapping, Generate code (DJB2), delete
+  - **HTML Generation Settings**: Page Title, Subtitle, Primary/Secondary Color pickers with hex sync
+  - **Data Export/Import**: Export/Import buttons, 5 selectable categories, JSON format
+  - **Paths & Logs**: 4 directory paths with Open Folder buttons, View Logs modal
+  - **Save Settings**: Explains the action bar save button vs auto-saving operations
+
+- **Help content — emojis replaced with SVG icons**: All emoji characters (🟢, 🔴, ⏳, 🔒, 🎲) replaced with inline Feather-style SVG icons using semantic colors (`#22c55e`, `#ef4444`, `#f59e0b`) or `currentColor` for theme compatibility.
+
+## [3.3.10] - 2026-05-25
+
+### Fixed
+
+- **Help modal theme compatibility**: Ensured the contextual help modal renders correctly across all 8 themes (4 dark + 4 light):
+  - Replaced hardcoded purple hover glow on the `?` button with `var(--accent-glow)` so it matches each theme’s primary color
+  - Added `background: var(--bg-secondary)` to section body for clear contrast against the `--bg-tertiary` summary header
+  - Added `border-bottom` on open section summaries to visually separate header from content on light themes
+  - Added themed styling for inline `<code>` elements (`var(--bg-tertiary)` bg + `var(--primary)` color)
+  - Changed table row borders from `--border-color` to `--border-light` for subtler separation
+
+## [3.3.9] - 2026-05-25
+
+### Added
+
+- **Contextual Help Button**: Added a persistent `?` floating button (bottom-right corner) that opens a modal with rich, context-sensitive help for the current screen. Each page/sub-state has dedicated help content covering:
+  - **Purpose** — what the screen is for
+  - **Workflow** — numbered step-by-step flow
+  - **Icons & Indicators** — table explaining every icon and color meaning
+  - **Actions** — what each button/area does when clicked
+  - Covers all screens: Deploy (purpose selection, release form, upload-only form), Releases (card icons, kebab menu, expand), Settings (JFrog, client mappings, themes), Tools, Advanced, and Import/Edit Release
+  - Help content adapts to Deploy page sub-states (purpose selection vs release form vs upload-only)
+  - Sections are collapsible via `<details>` elements for easy scanning
+
 ## [3.3.8] - 2026-05-25
 
 ### Fixed

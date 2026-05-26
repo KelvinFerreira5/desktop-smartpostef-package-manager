@@ -22,6 +22,276 @@ let currentDeployPurpose = null;
 let currentReleaseFilter = 'all';
 let currentReleaseSort = 'created-desc';
 let kebabCloseListenerAdded = false;
+
+// Contextual Help Content — keyed by page/sub-state
+const HELP_CONTENT = {
+  'deploy-purpose': {
+    title: 'New Deploy — Choose Your Flow',
+    sections: [
+      { heading: 'Purpose', body: 'This is the starting screen for all deployment operations. Choose how you want to proceed based on your goal.' },
+      {
+        heading: 'Options', body: `
+        <table class="help-table">
+          <tr><td><strong>Release from Scratch</strong></td><td>Upload packages to JFrog and create a full release with version, date, release notes, and an SPF manifest file.</td></tr>
+          <tr><td><strong>Upload Only</strong></td><td>Just upload packages to JFrog without creating a formal release. Useful for quick deploys or hotfixes.</td></tr>
+          <tr><td><strong>Import Release</strong></td><td>Import an existing <code>.spf</code> file to edit, manage, or update a previously created release.</td></tr>
+        </table>
+      ` },
+      { heading: 'Workflow', body: '<ol><li>Click one of the three option cards</li><li>You\'ll be taken to the corresponding form</li><li>Use the ← back arrow (top-left) to return here</li></ol>' },
+    ]
+  },
+  'deploy-release': {
+    title: 'New Deploy — Release from Scratch',
+    sections: [
+      { heading: 'Purpose', body: 'Create a full release: define version info, upload packages, write release notes, and generate an SPF manifest.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>Fill in <strong>Main Version</strong> (e.g., 2.5.1) and <strong>Release Date</strong></li>
+          <li>Select <strong>Type</strong> (Production or Development)</li>
+          <li>Add packages via <strong>Drag & Drop</strong> or <strong>Select Folder</strong></li>
+          <li>Packages are auto-detected with platform, device, and signature</li>
+          <li>Write optional <strong>Release Notes</strong> (Markdown supported)</li>
+          <li>Click <strong>Generate SPF</strong> to finalize and save the release</li>
+        </ol>
+      ` },
+      {
+        heading: 'Icons & Indicators', body: `
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Green checkmark</td><td>Package uploaded successfully</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Red X</td><td>Upload failed</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Spinner</td><td>Upload in progress</td></tr>
+          <tr><td><strong>Platform badges</strong></td><td>Windows, Linux, Embedded, STA, A2A — auto-detected from filename/URL</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Select Folder</strong></td><td>Pick a folder; all supported files inside are added as packages</td></tr>
+          <tr><td><strong>Upload All</strong></td><td>Starts uploading all pending packages to JFrog</td></tr>
+          <tr><td><strong>Retry All</strong></td><td>Re-attempts all failed uploads</td></tr>
+          <tr><td><strong>Generate SPF</strong></td><td>Creates the release, saves it locally, and generates the SPF file</td></tr>
+          <tr><td><strong>← Back</strong></td><td>Return to purpose selection (packages are preserved)</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'deploy-upload': {
+    title: 'New Deploy — Upload Only (Deploy Only)',
+    sections: [
+      { heading: 'Purpose', body: 'Upload packages directly to JFrog without creating a formal release. The result is a lightweight "deploy-only" record.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>Enter a <strong>Version</strong> identifier</li>
+          <li>Optionally add a <strong>Description</strong></li>
+          <li>Add packages via Drag & Drop or Select Folder</li>
+          <li>Upload packages to JFrog</li>
+          <li>Click <strong>Save Deploy</strong> to finalize</li>
+        </ol>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Upload All</strong></td><td>Upload all pending packages</td></tr>
+          <tr><td><strong>Save Deploy</strong></td><td>Saves the deploy-only record locally</td></tr>
+          <tr><td><strong>← Back</strong></td><td>Return to purpose selection</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'releases': {
+    title: 'Releases — Manage Your Releases',
+    sections: [
+      { heading: 'Purpose', body: 'View, search, filter, and manage all saved releases (both full releases and deploy-only records).' },
+      {
+        heading: 'Icons & Indicators', body: `
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Blue upload arrow</td><td>Deploy Only — upload-only release</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="16" height="16"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Green package</td><td>Production release</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="16" height="16"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Amber code brackets</td><td>Development release</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Green lock</td><td>All packages are signed</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Red open lock</td><td>Contains unsigned packages</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/></svg> Calendar</td><td>Release date</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> Clock</td><td>Creation timestamp</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Card Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Generate HTML</strong></td><td>Export a formatted HTML report of the release</td></tr>
+          <tr><td><strong>Edit</strong></td><td>Open the release in the import/edit form to modify it</td></tr>
+          <tr><td><strong>⋮ (More)</strong></td><td>Opens overflow menu with: Export SPF, Purge, Delete</td></tr>
+          <tr><td><strong>▾ Chevron</strong></td><td>Expand/collapse the release summary with package details</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Overflow Menu', body: `
+        <table class="help-table">
+          <tr><td><strong>Export SPF</strong></td><td>Save the release as an <code>.spf</code> file for sharing</td></tr>
+          <tr><td><strong>Purge</strong> (amber)</td><td>Delete packages from JFrog, then delete the release locally</td></tr>
+          <tr><td><strong>Delete</strong> (red)</td><td>Delete the release locally only (packages remain on JFrog)</td></tr>
+        </table>
+      ` },
+      { heading: 'Search & Filters', body: 'Use the search bar to filter by version. Use filter dropdowns to narrow by signature status, client, platform, device, or STA/A2A presence.' },
+    ]
+  },
+  'settings': {
+    title: 'Settings — Application Configuration',
+    sections: [
+      { heading: 'Purpose', body: 'Configure all application preferences. Use the <strong>sidebar tabs</strong> on the left to switch between sections: Preferences, JFrog, Client Mappings, HTML Settings, Data Export/Import, and Paths & Logs.' },
+      {
+        heading: 'Preferences (Theme)', body: `
+        <p>Choose a visual theme for the application. 8 themes are available (4 dark, 4 light). Click any theme card to apply it instantly.</p>
+        <table class="help-table">
+          <tr><td><strong>Dark themes</strong></td><td>Purple Night, Ocean Storm, Rose Gold, Emerald Shadow</td></tr>
+          <tr><td><strong>Light themes</strong></td><td>Teal Glow, Lavender Breeze, Sunrise Warm, Arctic Blue</td></tr>
+        </table>
+        <p>The selected theme is saved to localStorage and persists across sessions.</p>
+      ` },
+      {
+        heading: 'JFrog Configuration', body: `
+        <table class="help-table">
+          <tr><td><strong>API Key</strong></td><td>Authentication key for JFrog API access. Stored encrypted locally (AES-256-GCM). Use the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> eye button to toggle visibility.</td></tr>
+          <tr><td><strong>Base URL</strong></td><td>The base URL of your JFrog Artifactory instance (e.g., <code>https://artifactory.example.com/artifactory</code>)</td></tr>
+          <tr><td><strong>Default Repository</strong></td><td>The default repository path used when building upload destinations</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Client Mappings', body: `
+        <p>Map client names to numeric codes used in version strings and SPF file paths.</p>
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <strong>Locked rows</strong></td><td>Built-in mappings (Lyra, Unica, B1, Valori, Bin, Basa) — cannot be edited or removed</td></tr>
+          <tr><td><strong>Custom rows</strong></td><td>Your own mappings — editable and removable via the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> delete button</td></tr>
+          <tr><td><strong>+ Add Mapping</strong></td><td>Add a new custom client name → code mapping</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> <strong>Generate</strong></td><td>Auto-generate a unique 3-digit code from the client name using DJB2 hash</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'HTML Generation Settings', body: `
+        <p>Customize the appearance of generated HTML release reports.</p>
+        <table class="help-table">
+          <tr><td><strong>Page Title</strong></td><td>Title displayed at the top of the generated HTML page</td></tr>
+          <tr><td><strong>Subtitle</strong></td><td>Secondary text below the title (e.g., company name)</td></tr>
+          <tr><td><strong>Primary Color</strong></td><td>Main accent color for headers and links. Use the color picker or type a hex value.</td></tr>
+          <tr><td><strong>Secondary Color</strong></td><td>Secondary accent color for gradients and highlights. Use the color picker or type a hex value.</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Data Export / Import', body: `
+        <p>Backup or restore your application data selectively by category.</p>
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <strong>Export</strong></td><td>Choose which categories to save to a JSON file</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <strong>Import</strong></td><td>Restore data from a backup file; only selected categories are overwritten</td></tr>
+        </table>
+        <p><strong>Available categories:</strong> Releases, Theme, JFrog Settings (API key encrypted), Client Mappings, HTML Settings.</p>
+      ` },
+      {
+        heading: 'Paths & Logs', body: `
+        <p>View and open the application\'s data directories, and inspect runtime logs.</p>
+        <table class="help-table">
+          <tr><td><strong>User Data</strong></td><td>Root directory for all app settings and data files</td></tr>
+          <tr><td><strong>Releases</strong></td><td>Where release JSON records are stored</td></tr>
+          <tr><td><strong>HTML Output</strong></td><td>Where generated HTML reports are saved</td></tr>
+          <tr><td><strong>Logs</strong></td><td>Application log files location</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <strong>Open</strong></td><td>Opens the directory in your system file manager</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> <strong>View Logs</strong></td><td>Opens a modal with recent application log entries</td></tr>
+        </table>
+      ` },
+      { heading: 'Save Settings', body: 'Click the <strong>Save Settings</strong> button in the action bar at the bottom to persist all changes across all tabs (JFrog, Client Mappings, HTML Settings). Theme and Data operations save immediately without this button.' },
+    ]
+  },
+  'tools': {
+    title: 'Tools — Utilities',
+    sections: [
+      { heading: 'Purpose', body: 'Access utility tools for day-to-day operations.' },
+      {
+        heading: 'Daily Password Generator', body: `
+        <p>Generates a time-based daily password using the v3.1 algorithm (hash-based mixing).</p>
+        <table class="help-table">
+          <tr><td><strong>Date selector</strong></td><td>Pick any date to generate its corresponding password</td></tr>
+          <tr><td><strong>Copy button</strong></td><td>Copy the generated password to clipboard</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'advanced': {
+    title: 'Advanced Options — Custom Devices & Platforms',
+    sections: [
+      { heading: 'Purpose', body: 'Define custom device models and platform configurations that extend the built-in detection rules.' },
+      {
+        heading: 'Custom Devices', body: `
+        <table class="help-table">
+          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name and detection pattern</td></tr>
+          <tr><td><strong>Edit</strong></td><td>Modify an existing custom device</td></tr>
+          <tr><td><strong>Delete</strong></td><td>Remove a custom device</td></tr>
+        </table>
+        <p>Custom devices are used during package filename detection to identify hardware targets.</p>
+      ` },
+    ]
+  },
+  'import-release': {
+    title: 'Import / Edit Release',
+    sections: [
+      { heading: 'Purpose', body: 'Import an SPF file to view, edit, or update an existing release. Also used when clicking "Edit" on a release card.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>The release data is loaded (from file or existing record)</li>
+          <li>Review and modify version, date, type, packages, and release notes</li>
+          <li>Add or remove packages as needed</li>
+          <li>Click <strong>Update Release</strong> (or <strong>Save Deploy</strong> for deploy-only) to save changes</li>
+        </ol>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Update/Save Release</strong></td><td>Save all modifications to the release</td></tr>
+          <tr><td><strong>Upload All</strong></td><td>Upload new packages that haven\'t been deployed yet</td></tr>
+          <tr><td><strong>Release Notes</strong></td><td>Edit Markdown release notes (hidden for deploy-only releases)</td></tr>
+        </table>
+      ` },
+    ]
+  },
+};
+
+// Show contextual help for the current screen
+function showHelp() {
+  const activePage = document.querySelector('.page.active');
+  if (!activePage) return;
+  const pageId = activePage.id.replace('page-', '');
+  let helpKey = pageId;
+
+  // Deploy page sub-state detection
+  if (pageId === 'deploy') {
+    const purposeSelection = document.getElementById('deploy-purpose-selection');
+    const uploadOnlyCard = document.getElementById('upload-only-info-card');
+    if (purposeSelection && purposeSelection.style.display !== 'none') {
+      helpKey = 'deploy-purpose';
+    } else if (uploadOnlyCard && uploadOnlyCard.style.display !== 'none') {
+      helpKey = 'deploy-upload';
+    } else {
+      helpKey = 'deploy-release';
+    }
+  }
+
+  const content = HELP_CONTENT[helpKey];
+  if (!content) {
+    showModal('Help', '<p>No help content available for this screen.</p>');
+    return;
+  }
+
+  const sectionsHtml = content.sections.map(s => `
+    <details class="help-section" open>
+      <summary>${s.heading}</summary>
+      <div class="help-section-body">${s.body}</div>
+    </details>
+  `).join('');
+
+  showModal(content.title, `<div class="help-content-wrapper">${sectionsHtml}</div>`);
+  frontendLog('INFO', 'HELP: Contextual help shown', `Key: ${helpKey}`);
+}
+
 let currentReleaseSearch = '';
 let currentReleaseFilters = { signature: 'all', client: 'all', platform: 'all', device: 'all', hasSta: false, hasA2a: false };
 let releaseSearchDebounceTimer = null;
@@ -54,6 +324,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initReleasesPage();
   initSettingsPage();
   initThemeToggle();
+
+  // Contextual help button
+  const helpBtn = document.getElementById('btn-help');
+  if (helpBtn) helpBtn.addEventListener('click', showHelp);
 
   console.log('Event handlers set up, waiting for Tauri...');
 
@@ -3314,8 +3588,7 @@ function renderClientMappings() {
       <input type="text" class="mapping-name" value="${mapping.name}" placeholder="Client Name" data-index="${index}" data-field="name">
       <button class="btn-generate-mapping" data-index="${index}" title="Generate code from name">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-          <line x1="5" y1="12" x2="19" y2="12"/>
-          <polyline points="12 5 19 12 12 19"/>
+          <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>
         </svg>
       </button>
       <input type="text" class="mapping-number" value="${mapping.number}" placeholder="000" data-index="${index}" data-field="number">
