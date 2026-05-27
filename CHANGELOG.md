@@ -5,6 +5,18 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.15] - 2026-05-27
+
+### Fixed
+
+- **HTML device-card separators — explicit divider element**: Replaced unreliable CSS border-based separators (`border-top`, `border-bottom`, `+` sibling selector) with an explicit `<div class="device-divider">` HTML element emitted after every device-card. This fixes inconsistent separator rendering caused by CSS specificity conflicts, flexbox `gap` interactions, and `:last-child`/`:first-child` edge cases in Tauri's WebKitGTK. Dividers now appear reliably in all sections (TEF, Smart POS, A2A, Embedded) including single-device manufacturers.
+
+- **HTML packages-col CSS cleanup**: Removed complex border override chain (`.device-stack{gap:0}`, `.device-card+.device-card{border-top}`, `.device-card:last-child{border-bottom:none}`, `.device-card-head{border-bottom}`) and replaced with a single `.packages-col .device-divider{height:1px;background:var(--border);margin:.4rem 0}` rule.
+
+- **HTML variant-row/pkg-row borders removed inside packages-col**: Stripped `border-bottom` from `.variant-row` and `.pkg-row` elements inside the packages column to prevent lines between individual packages within a device-card.
+
+- **HTML device-card hover refinement**: Made hover background more subtle (`rgba(160,100,255,0.06)` instead of `var(--primary-dim)`) and added `border-radius:6px` to the card for smooth highlight clipping.
+
 ## [3.3.12] - 2026-05-26
 
 ### Fixed
