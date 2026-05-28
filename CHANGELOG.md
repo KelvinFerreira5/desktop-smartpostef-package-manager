@@ -5,6 +5,18 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.16] - 2026-05-28
+
+### Changed
+
+- **Release list icons — Material Icons**: Replaced custom SVG path icons with Google Material Symbols (`publish` for deploy-only, `storefront` for production, `science` for development, `encrypted`/`encrypted_off` for signed/unsigned).
+
+- **Unsigned detection — Android filename check**: `isReleaseUnsigned()` now checks all STA and A2A package filenames for the `_sign` suffix, regardless of file extension (`.apk`, `.zip`, or none). If any Android package in a release lacks `_sign` in its filename, the release is marked as unsigned.
+
+- **A2A release summary — client signing badges**: Device APK packages in A2A release summary now display signature (blue) and client (green) badges, matching the existing STA badge behavior.
+
+- **Release tabs — simplified**: Removed the "Unsigned Prod" tab. Tabs are now: All, Deploys, Development, Production. The Production tab shows all production releases; signed/unsigned status is communicated via the lock icon on each card.
+
 ## [3.3.15] - 2026-05-27
 
 ### Fixed

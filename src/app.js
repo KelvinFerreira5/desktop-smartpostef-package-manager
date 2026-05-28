@@ -2304,7 +2304,28 @@ async function handleFinalizeRelease() {
 
 // Releases Page
 function isReleaseUnsigned(release) {
-  return (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+  const pkgs = release.packages || [];
+
+  // Legacy check: any package URL contains /unsigned/
+  if (pkgs.some(p => (p.url || '').includes('/unsigned/'))) {
+    return true;
+  }
+
+  // Android check: for STA/A2A packages, check if ANY lacks _sign in filename
+  // (applies to .apk, .zip, or extensionless files)
+  const androidPkgs = pkgs.filter(p => {
+    const platform = (p.platform || '').toUpperCase();
+    return platform === 'STA' || platform === 'A2A';
+  });
+
+  if (androidPkgs.length > 0) {
+    return androidPkgs.some(p => {
+      const fileName = (p.url || '').split('/').filter(s => s.length > 0).pop() || '';
+      return !fileName.toLowerCase().includes('_sign');
+    });
+  }
+
+  return false;
 }
 
 function getTypeShort(release) {
@@ -2322,10 +2343,8 @@ function getFilteredAndSortedReleases() {
     result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'deploy-only');
   } else if (currentReleaseFilter === 'development') {
     result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'development');
-  } else if (currentReleaseFilter === 'unsigned-prod') {
-    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && isReleaseUnsigned(r));
   } else if (currentReleaseFilter === 'production') {
-    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && !isReleaseUnsigned(r));
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production');
   }
 
   // Search filter
@@ -2534,27 +2553,21 @@ function renderReleases() {
     const pkgCount = (release.packages || []).length;
     const createdAt = release.createdAt ? new Date(release.createdAt).toLocaleString() : '';
 
-    // Check if release contains unsigned packages (URL contains /unsigned/)
-    const hasUnsigned = (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+    // Check if release contains unsigned packages
+    const hasUnsigned = isReleaseUnsigned(release);
 
     // Count unique platforms
     const platforms = new Set((release.packages || []).map(p => p.platform));
     const platformCount = platforms.size;
 
-    // Status icons — environment type
-    const typeColor = releaseType === 'deploy-only' ? '#3b82f6' : releaseType === 'production' ? '#22c55e' : '#f59e0b';
+    // Status icons — environment type (Material Icons)
+    const typeIcon = releaseType === 'deploy-only' ? 'publish' : releaseType === 'production' ? 'storefront' : 'science';
+    const typeColor = releaseType === 'deploy-only' ? '#3b82f6' : releaseType === 'production' ? '#06b6d4' : '#f59e0b';
     const typeTooltip = releaseType === 'deploy-only' ? 'Deploy Only' : releaseType === 'production' ? 'Production' : 'Development';
-    const typeIconPath = releaseType === 'deploy-only'
-      ? '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
-      : releaseType === 'production'
-        ? '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>'
-        : '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>';
-    // Status icons — signature
+    // Status icons — signature (Material Icons)
+    const sigIcon = hasUnsigned ? 'encrypted_off' : 'encrypted';
     const sigColor = hasUnsigned ? '#ef4444' : '#22c55e';
     const sigTooltip = hasUnsigned ? 'Unsigned' : 'Signed';
-    const sigIconPath = hasUnsigned
-      ? '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>'
-      : '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
 
     return `
     <div class="release-card-expandable" data-id="${release.id}">
@@ -2563,8 +2576,8 @@ function renderReleases() {
           <div class="release-card-title">
             <span class="release-version-text">Version ${release.version}</span>
             <span class="release-status-icons">
-              <span class="release-type-icon" style="color:${typeColor}" title="${typeTooltip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">${typeIconPath}</svg></span>
-              <span class="release-type-icon" style="color:${sigColor}" title="${sigTooltip}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">${sigIconPath}</svg></span>
+              <span class="material-symbols-outlined release-category-icon" style="color:${typeColor}" title="${typeTooltip}">${typeIcon}</span>
+              <span class="material-symbols-outlined release-category-icon" style="color:${sigColor}" title="${sigTooltip}">${sigIcon}</span>
             </span>
           </div>
           ${release.description ? `<div class="release-card-description">${release.description}</div>` : ''}
@@ -2878,10 +2891,14 @@ function renderReleaseSummary(release) {
         deviceApks.forEach(pkg => {
           const icon = getPlatformIcon('A2A', pkg);
           const deviceName = pkg.device || 'Device';
+          const sigTag = pkg.signature ? makeTag(pkg.signature, 'blue') : '';
+          const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
           html += `
           <div class="platform-package-item">
             <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${normalizeA2ADisplayName(deviceName)}</span>
+            ${sigTag}
+            ${clientTag}
             ${copyUrlBtn(pkg.url)}
           </div>`;
         });

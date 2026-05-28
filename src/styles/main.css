@@ -3436,6 +3436,17 @@ select::-webkit-scrollbar-thumb {
   opacity: 0.75;
 }
 
+.release-category-icon {
+  font-size: 1.25rem;
+  vertical-align: middle;
+  transition: opacity 0.15s ease;
+  cursor: default;
+}
+
+.release-category-icon:hover {
+  opacity: 0.75;
+}
+
 /* Metadata row bullet separator */
 .meta-sep {
   color: var(--text-muted);
