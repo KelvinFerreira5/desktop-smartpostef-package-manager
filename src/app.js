@@ -1635,7 +1635,7 @@ async function handleFinalizeDeployOnly() {
 
   const releaseData = {
     id: `${version}-deploy-only-${Date.now()}`,
-    version: spfVersion,
+    version: version,
     date,
     type: 'deploy-only',
     releaseType: 'deploy-only',
@@ -1661,7 +1661,8 @@ async function handleFinalizeDeployOnly() {
     // Step 2: Generate and auto-save SPF file
     frontendLog('INFO', 'DEPLOY_ONLY: Step 2 - Generating SPF file');
     try {
-      const spfContent = await invoke('generate_spf_content', { release: releaseData });
+      const spfReleaseData = { ...releaseData, version: spfVersion };
+      const spfContent = await invoke('generate_spf_content', { release: spfReleaseData });
       const spfFileName = `release_${spfVersion}-${date}-deploy.spf`;
       const paths = await invoke('get_app_paths');
       const spfSavePath = `${paths.userData}/${spfFileName}`;
@@ -1815,6 +1816,10 @@ async function handleUploadAll() {
           apiKey: settings.jfrogApiKey,
           baseUrl: settings.jfrogBaseUrl || null
         });
+        // Clean up temporary zip file after upload attempt
+        if (uploadPath !== filePath) {
+          try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
+        }
       }
 
       if (result.success) {
@@ -1921,6 +1926,10 @@ async function handleRetryAll() {
           apiKey: settings.jfrogApiKey,
           baseUrl: settings.jfrogBaseUrl || null
         });
+        // Clean up temporary zip file after upload attempt
+        if (uploadPath !== filePath) {
+          try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
+        }
       }
 
       if (result.success) {
@@ -2016,6 +2025,10 @@ async function retryUpload(index) {
         apiKey: settings.jfrogApiKey,
         baseUrl: settings.jfrogBaseUrl || null
       });
+      // Clean up temporary zip file after upload attempt
+      if (uploadPath !== filePath) {
+        try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
+      }
     }
 
     if (result.success) {
@@ -2098,7 +2111,7 @@ async function handleGenerateSpf() {
 
   const releaseData = {
     id: `${version}-${type.toLowerCase()}-${Date.now()}`,
-    version: spfVersion,
+    version: version,
     date,
     type: type,
     description,
@@ -2115,8 +2128,9 @@ async function handleGenerateSpf() {
   };
 
   try {
-    // Generate SPF content
-    const spfContent = await invoke('generate_spf_content', { release: releaseData });
+    // Generate SPF content using the full version with hash for the SPF file
+    const spfReleaseData = { ...releaseData, version: spfVersion };
+    const spfContent = await invoke('generate_spf_content', { release: spfReleaseData });
 
     // Generate filename: release_<fullversion>-YYYY-MM-DD-<type>.spf
     const typeShort = getTypeShort(releaseData);
@@ -2217,7 +2231,7 @@ async function handleFinalizeRelease() {
 
   const releaseData = {
     id: `${version}-${type.toLowerCase()}-${Date.now()}`,
-    version: spfVersion,
+    version: version,
     date,
     type: type,
     releaseType: type,
@@ -2243,7 +2257,8 @@ async function handleFinalizeRelease() {
     // Step 2: Generate and auto-save SPF file
     frontendLog('INFO', 'FINALIZE: Step 2 - Generating SPF file');
     try {
-      const spfContent = await invoke('generate_spf_content', { release: releaseData });
+      const spfReleaseData = { ...releaseData, version: spfVersion };
+      const spfContent = await invoke('generate_spf_content', { release: spfReleaseData });
       const typeShort = getTypeShort(releaseData);
       const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
 

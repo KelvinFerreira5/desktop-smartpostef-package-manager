@@ -5,6 +5,24 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.19] - 2026-06-01
+
+### Fixed
+
+- **ZIP cleanup after APK upload**: Temporary `.zip` files generated when zipping APKs for STA upload are now automatically deleted after the upload attempt (success or failure), preventing leftover files in the source directory.
+
+- **Release version now saves user-typed value**: The version displayed in the releases list now reflects exactly what the user typed in the version input, instead of being overridden by the auto-detected version with hash. The full version with hash is still used for SPF file content and filename generation.
+
+- **Help modal icon vertical alignment**: Material Symbols icons in the "Icons & Indicators" help table are now vertically centered with their adjacent text labels.
+
+- **Generated HTML packages-col height increased**: The packages column `max-height` in generated HTML output increased by 35% (from `calc(100vh - 6rem)` to `calc(100vh - 3.9rem)`), providing more visible content area.
+
+- **Generated HTML light mode packages-col background**: The packages column background in light mode is now lighter and more discreet (`rgba(245,242,255,0.45)` instead of `rgba(240,235,255,0.65)`).
+
+### Added
+
+- **`delete_file` Rust command**: New backend command to delete a file at a given path, used for temporary zip cleanup.
+
 ## [3.3.18] - 2026-06-01
 
 ### Added

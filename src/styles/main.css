@@ -644,7 +644,7 @@ body {
 
 .help-table td {
   padding: 0.5rem 0.625rem;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .help-table td:first-child {
@@ -659,6 +659,11 @@ body {
 }
 
 .help-table svg {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.help-table .material-symbols-outlined {
   vertical-align: middle;
   margin-right: 4px;
 }
