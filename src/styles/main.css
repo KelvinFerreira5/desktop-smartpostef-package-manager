@@ -823,6 +823,63 @@ textarea {
   height: 20px;
 }
 
+/* Clear button for inputs */
+.input-clearable {
+  position: relative;
+}
+
+.input-clearable input,
+.input-clearable textarea {
+  padding-right: 2.5rem;
+}
+
+.input-clearable.input-with-toggle input {
+  padding-right: 5.5rem;
+}
+
+.btn-clear-input {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, color 0.2s, background 0.2s;
+}
+
+.input-clearable.has-value .btn-clear-input {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-clear-input:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.btn-clear-input svg {
+  width: 16px;
+  height: 16px;
+}
+
+.input-clearable.input-with-toggle .btn-clear-input {
+  right: 3rem;
+}
+
+.input-clearable textarea~.btn-clear-input {
+  top: 0.75rem;
+  transform: none;
+}
+
 .color-input {
   display: flex;
   align-items: center;
@@ -1291,7 +1348,7 @@ textarea {
   align-items: center;
 }
 
-.releases-search-wrapper svg {
+.releases-search-wrapper>svg {
   position: absolute;
   left: 0.75rem;
   z-index: 1;
@@ -1301,6 +1358,7 @@ textarea {
 
 .releases-search-wrapper input {
   padding-left: 2.25rem;
+  padding-right: 2.5rem;
   width: 100%;
 }
 

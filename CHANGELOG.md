@@ -5,6 +5,18 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.20] - 2026-06-01
+
+### Added
+
+- **Undo/Redo keyboard shortcuts**: Ctrl+Z (undo) and Ctrl+Y (redo) now work in all text inputs, password fields, and textareas across the app.
+
+- **Clear button on input fields**: All text inputs, password fields, and textareas now have an "X" clear button that appears when the field has content. Clicking it clears the value and re-triggers any dependent logic (e.g., search filtering).
+
+### Fixed
+
+- **Search clear button icon alignment**: Fixed `.releases-search-wrapper svg` selector applying position styles to the clear button SVG by scoping it to direct child only (`> svg`).
+
 ## [3.3.19] - 2026-06-01
 
 ### Fixed

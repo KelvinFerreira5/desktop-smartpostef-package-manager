@@ -324,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initReleasesPage();
   initSettingsPage();
   initThemeToggle();
+  initClearButtons();
 
   // Contextual help button
   const helpBtn = document.getElementById('btn-help');
@@ -333,6 +334,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Wait for Tauri to be available, then load data
   waitForTauri();
+});
+
+// Clear button initialization for all .input-clearable containers
+function initClearButtons() {
+  // Set initial has-value state for inputs that already have content
+  document.querySelectorAll('.input-clearable').forEach(wrapper => {
+    const input = wrapper.querySelector('input, textarea');
+    if (input && input.value) {
+      wrapper.classList.add('has-value');
+    }
+  });
+
+  // Toggle has-value class on input events (event delegation)
+  document.addEventListener('input', (e) => {
+    const wrapper = e.target.closest('.input-clearable');
+    if (wrapper) {
+      wrapper.classList.toggle('has-value', e.target.value.length > 0);
+    }
+  });
+
+  // Handle clear button clicks (event delegation)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-clear-input');
+    if (!btn) return;
+    const wrapper = btn.closest('.input-clearable');
+    if (!wrapper) return;
+    const input = wrapper.querySelector('input, textarea');
+    if (!input) return;
+    input.value = '';
+    wrapper.classList.remove('has-value');
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+// Undo/Redo keyboard shortcuts for text inputs and textareas
+document.addEventListener('keydown', (e) => {
+  const el = document.activeElement;
+  if (!el || !el.matches('input[type="text"], input[type="password"], textarea')) return;
+  if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+    if (e.key === 'z') {
+      e.preventDefault();
+      document.execCommand('undo');
+    } else if (e.key === 'y') {
+      e.preventDefault();
+      document.execCommand('redo');
+    }
+  }
 });
 
 // Log unhandled errors

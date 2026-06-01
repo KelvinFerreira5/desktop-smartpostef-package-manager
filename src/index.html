@@ -153,7 +153,14 @@
             <div class="form-grid">
               <div class="form-group">
                 <label for="deploy-version">Main Version *</label>
-                <input type="text" id="deploy-version" placeholder="e.g., 2.5.1">
+                <div class="input-clearable">
+                  <input type="text" id="deploy-version" placeholder="e.g., 2.5.1">
+                  <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg></button>
+                </div>
                 <p id="deploy-version-error" class="error-text">Please enter a version to continue</p>
               </div>
               <div class="form-group">
@@ -181,7 +188,14 @@
 
             <div class="form-group">
               <label for="deploy-description">Description</label>
-              <input type="text" id="deploy-description" placeholder="Brief description of this release...">
+              <div class="input-clearable">
+                <input type="text" id="deploy-description" placeholder="Brief description of this release...">
+                <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg></button>
+              </div>
             </div>
 
             <div id="release-notes-section" class="form-group">
@@ -191,8 +205,15 @@
                 <button type="button" class="tab-btn" data-tab="preview">Preview</button>
               </div>
               <div class="notes-content">
-                <textarea id="deploy-notes" class="tab-content active"
-                  placeholder="Write release notes in Markdown..."></textarea>
+                <div class="input-clearable">
+                  <textarea id="deploy-notes" class="tab-content active"
+                    placeholder="Write release notes in Markdown..."></textarea>
+                  <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg></button>
+                </div>
                 <div id="deploy-notes-preview" class="tab-content markdown-preview"></div>
               </div>
             </div>
@@ -204,13 +225,27 @@
             <div class="form-grid">
               <div class="form-group">
                 <label for="upload-version">Main Version *</label>
-                <input type="text" id="upload-version" placeholder="e.g., 2.5.1">
+                <div class="input-clearable">
+                  <input type="text" id="upload-version" placeholder="e.g., 2.5.1">
+                  <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg></button>
+                </div>
                 <p id="upload-version-error" class="error-text">Please enter a version to continue</p>
               </div>
             </div>
             <div class="form-group">
               <label for="upload-description">Description</label>
-              <input type="text" id="upload-description" placeholder="Brief description of this deploy...">
+              <div class="input-clearable">
+                <input type="text" id="upload-description" placeholder="Brief description of this deploy...">
+                <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg></button>
+              </div>
             </div>
           </div>
 
@@ -361,12 +396,17 @@
         </div>
 
         <div class="releases-toolbar">
-          <div class="releases-search-wrapper">
+          <div class="releases-search-wrapper input-clearable">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input type="text" id="releases-search" placeholder="Search version, notes, package names...">
+            <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg></button>
           </div>
           <select id="releases-sort">
             <option value="created-desc">Created (Newest)</option>
@@ -522,8 +562,13 @@
                 <h3>JFrog Artifactory</h3>
                 <div class="form-group">
                   <label for="settings-api-key">API Key</label>
-                  <div class="input-with-toggle">
+                  <div class="input-with-toggle input-clearable">
                     <input type="password" id="jfrog-api-key" placeholder="Enter your JFrog API Key">
+                    <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg></button>
                     <button type="button" class="toggle-visibility" id="btn-toggle-api-key" data-target="jfrog-api-key"
                       title="Toggle visibility">
                       <svg class="icon-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -543,12 +588,26 @@
                 <div class="form-grid">
                   <div class="form-group">
                     <label for="jfrog-base-url">Base URL</label>
-                    <input type="text" id="jfrog-base-url" placeholder="https://artifactory.example.com/artifactory">
+                    <div class="input-clearable">
+                      <input type="text" id="jfrog-base-url" placeholder="https://artifactory.example.com/artifactory">
+                      <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg></button>
+                    </div>
                     <p class="help-text">The base URL of your JFrog Artifactory instance.</p>
                   </div>
                   <div class="form-group">
                     <label for="jfrog-default-repo">Default Repository</label>
-                    <input type="text" id="jfrog-default-repo" placeholder="packages">
+                    <div class="input-clearable">
+                      <input type="text" id="jfrog-default-repo" placeholder="packages">
+                      <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg></button>
+                    </div>
                     <p class="help-text">The default repository path for package uploads.</p>
                   </div>
                 </div>
@@ -583,11 +642,25 @@
                 <div class="form-grid">
                   <div class="form-group">
                     <label for="settings-html-title">Page Title</label>
-                    <input type="text" id="settings-html-title" placeholder="SmartPosTef Release">
+                    <div class="input-clearable">
+                      <input type="text" id="settings-html-title" placeholder="SmartPosTef Release">
+                      <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg></button>
+                    </div>
                   </div>
                   <div class="form-group">
                     <label for="settings-html-subtitle">Subtitle</label>
-                    <input type="text" id="settings-html-subtitle" placeholder="Aditum Pagamentos LTDA">
+                    <div class="input-clearable">
+                      <input type="text" id="settings-html-subtitle" placeholder="Aditum Pagamentos LTDA">
+                      <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg></button>
+                    </div>
                   </div>
                 </div>
                 <div class="form-grid">
@@ -768,7 +841,14 @@
               <div class="form-grid">
                 <div class="form-group">
                   <label for="pwd-app-version">Application Version</label>
-                  <input type="text" id="pwd-app-version" placeholder="e.g., 2.3.4, 234..." />
+                  <div class="input-clearable">
+                    <input type="text" id="pwd-app-version" placeholder="e.g., 2.3.4, 234..." />
+                    <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg></button>
+                  </div>
                   <span class="help-text">Version of the portal (without dots becomes the integer seed)</span>
                 </div>
                 <div class="form-group">
@@ -833,7 +913,14 @@
               <div class="form-grid">
                 <div class="form-group">
                   <label for="cd-name">Device Name</label>
-                  <input type="text" id="cd-name" placeholder="e.g., MyTerminal X100" />
+                  <div class="input-clearable">
+                    <input type="text" id="cd-name" placeholder="e.g., MyTerminal X100" />
+                    <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg></button>
+                  </div>
                 </div>
                 <div class="form-group">
                   <label for="cd-type">Device Type</label>
@@ -845,7 +932,14 @@
                 </div>
                 <div class="form-group">
                   <label for="cd-identifier">URL Identifier</label>
-                  <input type="text" id="cd-identifier" placeholder="e.g., x100 (used to match in URLs)" />
+                  <div class="input-clearable">
+                    <input type="text" id="cd-identifier" placeholder="e.g., x100 (used to match in URLs)" />
+                    <button type="button" class="btn-clear-input" title="Clear"><svg viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg></button>
+                  </div>
                   <span class="help-text">Lowercase string used to detect this device in JFrog URLs</span>
                 </div>
               </div>
