@@ -9,9 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Uninstaller custom icon**: Added `uninstallerIcon` to NSIS config so the Windows uninstaller (`uninstall.exe`) displays the app's custom icon instead of the default NSIS icon.
+
+- **Window icon at runtime**: Application window now sets the taskbar/title bar icon programmatically via `set_icon()` using the 256×256 PNG, ensuring correct icon display across all platforms.
+
 - **Signature exemption for TefSdk, Doc, AAR packages**: Packages from TefSdk, Doc, AAR, SDK Integration, orphan PaymentExample, and TefSdk PaymentExample are now exempt from signature requirements — they no longer show the `encrypted`/`encrypted_off` icon in release summary and do not affect the release-level signed/unsigned badge.
 
 - **New A2A PaymentExample filename format**: Detection now supports `PaymentExample-A2A-{P|D}-{device}-{version}+{hash}-release.apk` (device-specific format with `-A2A-` separator), in addition to the existing `.A2A.` dot-separated format.
+
+### Changed
+
+- **Tauri upgraded to 2.11**: Updated `tauri` crate (2.11.2), `tauri-cli` (2.11.2), and `@tauri-apps/api` (2.11.0) from 2.10.x. Enables `uninstallerIcon` support and adds `image-png` feature.
+
+- **Icon file regenerated**: `icon.ico` rebuilt with higher quality/larger embedded sizes (91KB → 202KB).
 
 ### Fixed
 
