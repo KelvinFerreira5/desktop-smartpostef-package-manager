@@ -5,6 +5,62 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.18] - 2026-06-01
+
+### Added
+
+- **Signature exemption for TefSdk, Doc, AAR packages**: Packages from TefSdk, Doc, AAR, SDK Integration, orphan PaymentExample, and TefSdk PaymentExample are now exempt from signature requirements — they no longer show the `encrypted`/`encrypted_off` icon in release summary and do not affect the release-level signed/unsigned badge.
+
+- **New A2A PaymentExample filename format**: Detection now supports `PaymentExample-A2A-{P|D}-{device}-{version}+{hash}-release.apk` (device-specific format with `-A2A-` separator), in addition to the existing `.A2A.` dot-separated format.
+
+### Fixed
+
+- **JFrog path `None` for orphan/TefSdk PaymentExample (Rust)**: When a PaymentExample package doesn't match DEVICE_MAP (e.g., TefSdk PaymentExample or orphan), the Rust backend now assigns a correct fallback JFrog path (`packages/[dev/]app-to-app/payment_example/`) instead of returning `None`.
+
+- **`buildJfrogPath` ordering (JS)**: Payment example check moved before TefSdk check to prevent TefSdk from swallowing PaymentExample packages into the wrong path.
+
+- **Help modal — outdated icons replaced**: Replaced all inline SVG icons in the "Icons & Indicators" section with actual Material Symbols (`publish`, `storefront`, `science`, `encrypted`, `encrypted_off`, `calendar_today`, `schedule`) matching the real UI.
+
+- **Help modal — non-existent Edit action removed**: Removed "Edit" from Advanced → Custom Devices help section (only Add/Delete exist in the actual UI).
+
+- **Generated HTML — client section icon**: Replaced the SVG icon in client-specific group headers with the `storefront` Material Symbol matching the release list page. Added Material Symbols Outlined font to the generated HTML `<head>`.
+
+## [3.3.17] - 2026-05-29
+
+### Added
+
+- **Release Summary — signed/unsigned icon**: New `sigIcon()` helper renders a Material Symbol icon (`encrypted` / `encrypted_off`) with green/red coloring and a tooltip on each package in the release summary, replacing the need to read badge text to determine signature status.
+
+- **`normalizeDeviceKey()` function**: New canonical device key normalizer that strips non-alphanumeric characters and uppercases the result (e.g., `P2_LITE_SE`, `P2-Lite-SE` → `P2LITESE`). Includes an alias table (`P2LITE → P2LITESE`). Used consistently across `DEVICE_MAP` lookups, grouping, and display normalization.
+
+- **`lookupDevice()` helper**: Wraps `DEVICE_MAP` lookup via `normalizeDeviceKey()` so all lookup sites (STA and A2A branches of `buildJfrogPath()`, release summary grouping) use the same normalization path.
+
+- **HTML Generation Settings — Reset to Default button**: New "Reset to Default" button in the HTML Generation Settings card restores title, subtitle, primary color (`#2e1773`), and secondary color (`#2f2256`) to their built-in defaults with a single click.
+
+### Fixed
+
+- **Finalize button stays disabled after re-scan**: `btnFinalizeRelease` and `btnFinalizeDeployOnly` now explicitly set `.disabled = false` when all uploads succeed, fixing the regression where the button would remain greyed out after fixing filenames and re-uploading.
+
+- **A2A Release Summary — device-centric grouping**: Device APKs and PaymentExample examples are now merged into a single section grouped by device, displayed using the same `sta-device-group` card layout as STA. Examples are matched to their device group using `pkg.device` (SPF field) first, falling back to URL filename parsing only when the field is empty. Two labeled sub-headers added: **"Integration"** (SDK/Doc) and **"A2A Packages"** (device groups + orphan examples).
+
+- **SPF import — signature fallback detection**: When an SPF line has an empty signature field, the parser now inspects the URL filename for `_sign.` or `_sign/` and auto-sets `"Signed"`, preventing unsigned display on signed packages imported from older SPF files.
+
+- **`renderPlatformTabs()` duplicate tabs**: Platform tab grouping now uses `normalizeDeviceKey()` instead of the raw device string, preventing duplicate tabs when the same device appears with different separator styles.
+
+- **`DEVICE_MAP` underscore keys**: Removed keys with underscores (`P2_LITE_SE`, `P2_MINI`, `L3_2024`, `X990_PRO`, `X990_UX`) — all lookups now go through `normalizeDeviceKey()` which strips underscores before matching, so both forms resolve correctly.
+
+- **`normalizeDeviceName()` / `normalizeA2ADisplayName()` expanded**: Both functions now use `normalizeDeviceKey()` for map lookups and cover additional devices: `EX4000`, `GPOS700`, `L300`, `L400`, `P2MINI`. `P2LITESE` display name corrected to `"P2 Lite SE"` (was `"P2 Lite"`).
+
+- **HTML Generation Settings not persisted**: `populateSettings()` now reads `htmlTitle`, `htmlSubtitle`, `primaryColor`, and `secondaryColor` from `portalSettings` and populates the form fields on load. `saveSettings()` now writes all four fields back to the settings object.
+
+### Changed
+
+- **HTML Generation default colors updated**: Default primary color changed from `#48297c` to `#2e1773` and secondary from `#9c2671` to `#2f2256` — deeper/darker purple palette that matches the app's current design direction.
+
+- **`PortalSettings` struct (Rust)**: Added four new serde-mapped fields — `htmlTitle`, `htmlSubtitle`, `primaryColor`, `secondaryColor` — all with `#[serde(default)]` for backward compatibility.
+
+- **`generate_html_content()` (Rust)**: Page title and subtitle now prefer the new `htmlTitle`/`htmlSubtitle` fields over the legacy `portalTitle`/`companyName`. The `--primary` and `--secondary` CSS variables in generated HTML are now injected from user settings (with `rgba()` dim variants computed from RGB decomposition) instead of being hardcoded.
+
 ## [3.3.16] - 2026-05-28
 
 ### Changed

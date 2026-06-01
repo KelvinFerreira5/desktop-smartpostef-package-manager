@@ -39,6 +39,14 @@ pub struct PortalSettings {
     pub portal_title: String,
     #[serde(rename = "companyName", default)]
     pub company_name: String,
+    #[serde(rename = "htmlTitle", default)]
+    pub html_title: String,
+    #[serde(rename = "htmlSubtitle", default)]
+    pub html_subtitle: String,
+    #[serde(rename = "primaryColor", default)]
+    pub primary_color: String,
+    #[serde(rename = "secondaryColor", default)]
+    pub secondary_color: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1508,6 +1516,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
             } else {
                 format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             });
+        } else {
+            // TefSdk/orphan payment examples go to root payment_example/ (no manufacturer subfolder)
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
+            });
         }
         
         return pkg;
@@ -1539,6 +1554,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
                 format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             } else {
                 format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples are signature-exempt — no unsigned/ prefix
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
             });
         }
         
@@ -1701,6 +1723,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
             } else {
                 format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             });
+        } else {
+            // TefSdk/orphan payment examples go to root payment_example/ (no manufacturer subfolder)
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
+            });
         }
         
         return pkg;
@@ -1732,6 +1761,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
                 format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             } else {
                 format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples are signature-exempt — no unsigned/ prefix
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
             });
         }
         
@@ -3276,8 +3312,35 @@ mod commands {
 
     fn generate_html_content(release: &Release, portal: &PortalSettings) -> String {
         let favicon_b64 = base64::engine::general_purpose::STANDARD.encode(include_bytes!("../../src/assets/html-favicon.ico"));
-        let portal_title = if portal.portal_title.is_empty() { "SmartPosTef Release Portal".to_string() } else { portal.portal_title.clone() };
-        let company_name = if portal.company_name.is_empty() { "Aditum Serviços Digitais LTDA".to_string() } else { portal.company_name.clone() };
+        let portal_title = if !portal.html_title.is_empty() {
+            portal.html_title.clone()
+        } else if !portal.portal_title.is_empty() {
+            portal.portal_title.clone()
+        } else {
+            "SmartPosTef Release Portal".to_string()
+        };
+        let company_name = if !portal.html_subtitle.is_empty() {
+            portal.html_subtitle.clone()
+        } else if !portal.company_name.is_empty() {
+            portal.company_name.clone()
+        } else {
+            "Aditum Serviços Digitais LTDA".to_string()
+        };
+
+        // Color settings — derive from user config with defaults
+        let hex_to_rgb = |hex: &str| -> (u8, u8, u8) {
+            let hex = hex.trim_start_matches('#');
+            let r = u8::from_str_radix(hex.get(0..2).unwrap_or("a0"), 16).unwrap_or(160);
+            let g = u8::from_str_radix(hex.get(2..4).unwrap_or("64"), 16).unwrap_or(100);
+            let b = u8::from_str_radix(hex.get(4..6).unwrap_or("ff"), 16).unwrap_or(255);
+            (r, g, b)
+        };
+        let primary_color = if portal.primary_color.is_empty() { "#a064ff".to_string() } else { portal.primary_color.clone() };
+        let secondary_color = if portal.secondary_color.is_empty() { "#e040a0".to_string() } else { portal.secondary_color.clone() };
+        let (pr, pg, pb) = hex_to_rgb(&primary_color);
+        let primary_dim_12 = format!("rgba({},{},{},0.12)", pr, pg, pb);
+        let primary_dim_09 = format!("rgba({},{},{},0.09)", pr, pg, pb);
+        let primary_dim_06 = format!("rgba({},{},{},0.06)", pr, pg, pb);
 
         let release_type_raw = release.release_type.to_lowercase();
         let release_type = if release_type_raw == "deploy-only" {
@@ -3402,11 +3465,12 @@ mod commands {
 <title>{portal_title} — {version}</title>
 <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,{favicon_b64}"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
 <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('spt-theme')||'dark');</script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-[data-theme="dark"]{{--primary:#a064ff;--primary-dim:rgba(160,100,255,0.12);--secondary:#e040a0;--bg-page:#0a0618;--bg-container:#100a2e;--bg-card:rgba(24,14,56,0.95);--bg-card-hover:rgba(34,20,72,0.98);--bg-group:rgba(16,10,40,0.6);--text-primary:#f0eaf8;--text-secondary:#c4b0e8;--text-muted:#7a6a9a;--border:rgba(160,100,255,0.16);--border-strong:rgba(160,100,255,0.32);--border-top:rgba(255,255,255,0.07);--gradient-text:linear-gradient(135deg,#c090ff 0%,#f070c0 100%);--gradient-page:linear-gradient(135deg,#0a0618 0%,#16213e 100%);--badge-launcher-bg:rgba(160,100,255,0.13);--badge-launcher-fg:#c090ff;--badge-launcher-br:rgba(160,100,255,0.28);--badge-app-bg:rgba(224,64,160,0.13);--badge-app-fg:#f080c8;--badge-app-br:rgba(224,64,160,0.28);--badge-sig-bg:rgba(59,130,246,0.13);--badge-sig-fg:#93c5fd;--badge-sig-br:rgba(59,130,246,0.28);--badge-client-bg:rgba(34,197,94,0.13);--badge-client-fg:#86efac;--badge-client-br:rgba(34,197,94,0.28);--badge-arch-bg:rgba(249,115,22,0.13);--badge-arch-fg:#fb923c;--badge-arch-br:rgba(249,115,22,0.28);--badge-ex-bg:rgba(34,197,94,0.13);--badge-ex-fg:#86efac;--badge-ex-br:rgba(34,197,94,0.28);--badge-sdk-bg:rgba(160,100,255,0.13);--badge-sdk-fg:#c090ff;--badge-sdk-br:rgba(160,100,255,0.28);--badge-doc-bg:rgba(59,130,246,0.13);--badge-doc-fg:#93c5fd;--badge-doc-br:rgba(59,130,246,0.28);--badge-win-bg:rgba(59,130,246,0.13);--badge-win-fg:#93c5fd;--badge-win-br:rgba(59,130,246,0.28);--badge-lin-bg:rgba(249,115,22,0.13);--badge-lin-fg:#fb923c;--badge-lin-br:rgba(249,115,22,0.28);--badge-lin64-bg:rgba(192,38,211,0.13);--badge-lin64-fg:#e879f9;--badge-lin64-br:rgba(192,38,211,0.28);--badge-lin32-bg:rgba(234,179,8,0.13);--badge-lin32-fg:#fde047;--badge-lin32-br:rgba(234,179,8,0.28);--badge-emb-bg:rgba(251,191,36,0.13);--badge-emb-fg:#fde68a;--badge-emb-br:rgba(251,191,36,0.28);--badge-prod-bg:rgba(34,197,94,0.12);--badge-prod-fg:#4ade80;--badge-prod-br:rgba(34,197,94,0.25);--badge-dev-bg:rgba(249,115,22,0.12);--badge-dev-fg:#fb923c;--badge-dev-br:rgba(249,115,22,0.25);--copy-bg:rgba(160,100,255,0.12);--copy-bg-hover:rgba(160,100,255,0.24);--copy-fg:#c090ff;--copy-bg-ok:rgba(34,197,94,0.15);--copy-fg-ok:#4ade80;--copy-br-ok:rgba(34,197,94,0.3);--link-fg:#93c5fd;--installer-online-bg:rgba(34,197,94,0.1);--installer-online-fg:#4ade80;--installer-online-br:rgba(34,197,94,0.25);--installer-offline-bg:rgba(249,115,22,0.1);--installer-offline-fg:#fb923c;--installer-offline-br:rgba(249,115,22,0.25);}}
-[data-theme="light"]{{--primary:#7c3aed;--primary-dim:rgba(124,58,237,0.09);--secondary:#c026d3;--bg-page:#ede8f8;--bg-container:#ffffff;--bg-card:rgba(255,255,255,0.97);--bg-card-hover:rgba(248,245,255,1);--bg-group:rgba(240,235,255,0.65);--text-primary:#1a1030;--text-secondary:#4a3580;--text-muted:#8878b8;--border:rgba(124,58,237,0.16);--border-strong:rgba(124,58,237,0.32);--border-top:rgba(255,255,255,0.8);--gradient-text:linear-gradient(135deg,#7c3aed 0%,#c026d3 100%);--gradient-page:linear-gradient(135deg,#ede8f8 0%,#dcd5f5 100%);--badge-launcher-bg:rgba(124,58,237,0.08);--badge-launcher-fg:#6d28d9;--badge-launcher-br:rgba(124,58,237,0.22);--badge-app-bg:rgba(192,38,211,0.08);--badge-app-fg:#a21caf;--badge-app-br:rgba(192,38,211,0.22);--badge-sig-bg:rgba(59,130,246,0.08);--badge-sig-fg:#1d4ed8;--badge-sig-br:rgba(59,130,246,0.22);--badge-client-bg:rgba(22,163,74,0.08);--badge-client-fg:#15803d;--badge-client-br:rgba(22,163,74,0.22);--badge-arch-bg:rgba(194,65,12,0.08);--badge-arch-fg:#9a3412;--badge-arch-br:rgba(194,65,12,0.22);--badge-ex-bg:rgba(22,163,74,0.08);--badge-ex-fg:#15803d;--badge-ex-br:rgba(22,163,74,0.22);--badge-sdk-bg:rgba(124,58,237,0.08);--badge-sdk-fg:#6d28d9;--badge-sdk-br:rgba(124,58,237,0.22);--badge-doc-bg:rgba(59,130,246,0.08);--badge-doc-fg:#1d4ed8;--badge-doc-br:rgba(59,130,246,0.22);--badge-win-bg:rgba(37,99,235,0.08);--badge-win-fg:#1d4ed8;--badge-win-br:rgba(37,99,235,0.22);--badge-lin-bg:rgba(194,65,12,0.08);--badge-lin-fg:#9a3412;--badge-lin-br:rgba(194,65,12,0.22);--badge-lin64-bg:rgba(126,34,206,0.08);--badge-lin64-fg:#7c3aed;--badge-lin64-br:rgba(126,34,206,0.22);--badge-lin32-bg:rgba(202,138,4,0.08);--badge-lin32-fg:#ca8a04;--badge-lin32-br:rgba(202,138,4,0.22);--badge-emb-bg:rgba(161,98,7,0.08);--badge-emb-fg:#92400e;--badge-emb-br:rgba(161,98,7,0.22);--badge-prod-bg:rgba(22,163,74,0.08);--badge-prod-fg:#166534;--badge-prod-br:rgba(22,163,74,0.22);--badge-dev-bg:rgba(194,65,12,0.08);--badge-dev-fg:#9a3412;--badge-dev-br:rgba(194,65,12,0.22);--copy-bg:rgba(124,58,237,0.08);--copy-bg-hover:rgba(124,58,237,0.18);--copy-fg:#6d28d9;--copy-bg-ok:rgba(22,163,74,0.1);--copy-fg-ok:#15803d;--copy-br-ok:rgba(22,163,74,0.25);--link-fg:#2563eb;--installer-online-bg:rgba(22,163,74,0.08);--installer-online-fg:#15803d;--installer-online-br:rgba(22,163,74,0.22);--installer-offline-bg:rgba(194,65,12,0.08);--installer-offline-fg:#9a3412;--installer-offline-br:rgba(194,65,12,0.22);}}
+[data-theme="dark"]{{--primary:{primary_color};--primary-dim:{primary_dim_12};--secondary:{secondary_color};--bg-page:#0a0618;--bg-container:#100a2e;--bg-card:rgba(24,14,56,0.95);--bg-card-hover:rgba(34,20,72,0.98);--bg-group:rgba(16,10,40,0.6);--text-primary:#f0eaf8;--text-secondary:#c4b0e8;--text-muted:#7a6a9a;--border:rgba(160,100,255,0.16);--border-strong:rgba(160,100,255,0.32);--border-top:rgba(255,255,255,0.07);--gradient-text:linear-gradient(135deg,#c090ff 0%,#f070c0 100%);--gradient-page:linear-gradient(135deg,#0a0618 0%,#16213e 100%);--badge-launcher-bg:rgba(160,100,255,0.13);--badge-launcher-fg:#c090ff;--badge-launcher-br:rgba(160,100,255,0.28);--badge-app-bg:rgba(224,64,160,0.13);--badge-app-fg:#f080c8;--badge-app-br:rgba(224,64,160,0.28);--badge-sig-bg:rgba(59,130,246,0.13);--badge-sig-fg:#93c5fd;--badge-sig-br:rgba(59,130,246,0.28);--badge-client-bg:rgba(34,197,94,0.13);--badge-client-fg:#86efac;--badge-client-br:rgba(34,197,94,0.28);--badge-arch-bg:rgba(249,115,22,0.13);--badge-arch-fg:#fb923c;--badge-arch-br:rgba(249,115,22,0.28);--badge-ex-bg:rgba(34,197,94,0.13);--badge-ex-fg:#86efac;--badge-ex-br:rgba(34,197,94,0.28);--badge-sdk-bg:rgba(160,100,255,0.13);--badge-sdk-fg:#c090ff;--badge-sdk-br:rgba(160,100,255,0.28);--badge-doc-bg:rgba(59,130,246,0.13);--badge-doc-fg:#93c5fd;--badge-doc-br:rgba(59,130,246,0.28);--badge-win-bg:rgba(59,130,246,0.13);--badge-win-fg:#93c5fd;--badge-win-br:rgba(59,130,246,0.28);--badge-lin-bg:rgba(249,115,22,0.13);--badge-lin-fg:#fb923c;--badge-lin-br:rgba(249,115,22,0.28);--badge-lin64-bg:rgba(192,38,211,0.13);--badge-lin64-fg:#e879f9;--badge-lin64-br:rgba(192,38,211,0.28);--badge-lin32-bg:rgba(234,179,8,0.13);--badge-lin32-fg:#fde047;--badge-lin32-br:rgba(234,179,8,0.28);--badge-emb-bg:rgba(251,191,36,0.13);--badge-emb-fg:#fde68a;--badge-emb-br:rgba(251,191,36,0.28);--badge-prod-bg:rgba(34,197,94,0.12);--badge-prod-fg:#4ade80;--badge-prod-br:rgba(34,197,94,0.25);--badge-dev-bg:rgba(249,115,22,0.12);--badge-dev-fg:#fb923c;--badge-dev-br:rgba(249,115,22,0.25);--copy-bg:rgba(160,100,255,0.12);--copy-bg-hover:rgba(160,100,255,0.24);--copy-fg:#c090ff;--copy-bg-ok:rgba(34,197,94,0.15);--copy-fg-ok:#4ade80;--copy-br-ok:rgba(34,197,94,0.3);--link-fg:#93c5fd;--installer-online-bg:rgba(34,197,94,0.1);--installer-online-fg:#4ade80;--installer-online-br:rgba(34,197,94,0.25);--installer-offline-bg:rgba(249,115,22,0.1);--installer-offline-fg:#fb923c;--installer-offline-br:rgba(249,115,22,0.25);}}
+[data-theme="light"]{{--primary:{primary_color};--primary-dim:{primary_dim_09};--secondary:{secondary_color};--bg-page:#ede8f8;--bg-container:#ffffff;--bg-card:rgba(255,255,255,0.97);--bg-card-hover:rgba(248,245,255,1);--bg-group:rgba(240,235,255,0.65);--text-primary:#1a1030;--text-secondary:#4a3580;--text-muted:#8878b8;--border:rgba(124,58,237,0.16);--border-strong:rgba(124,58,237,0.32);--border-top:rgba(255,255,255,0.8);--gradient-text:linear-gradient(135deg,#7c3aed 0%,#c026d3 100%);--gradient-page:linear-gradient(135deg,#ede8f8 0%,#dcd5f5 100%);--badge-launcher-bg:rgba(124,58,237,0.08);--badge-launcher-fg:#6d28d9;--badge-launcher-br:rgba(124,58,237,0.22);--badge-app-bg:rgba(192,38,211,0.08);--badge-app-fg:#a21caf;--badge-app-br:rgba(192,38,211,0.22);--badge-sig-bg:rgba(59,130,246,0.08);--badge-sig-fg:#1d4ed8;--badge-sig-br:rgba(59,130,246,0.22);--badge-client-bg:rgba(22,163,74,0.08);--badge-client-fg:#15803d;--badge-client-br:rgba(22,163,74,0.22);--badge-arch-bg:rgba(194,65,12,0.08);--badge-arch-fg:#9a3412;--badge-arch-br:rgba(194,65,12,0.22);--badge-ex-bg:rgba(22,163,74,0.08);--badge-ex-fg:#15803d;--badge-ex-br:rgba(22,163,74,0.22);--badge-sdk-bg:rgba(124,58,237,0.08);--badge-sdk-fg:#6d28d9;--badge-sdk-br:rgba(124,58,237,0.22);--badge-doc-bg:rgba(59,130,246,0.08);--badge-doc-fg:#1d4ed8;--badge-doc-br:rgba(59,130,246,0.22);--badge-win-bg:rgba(37,99,235,0.08);--badge-win-fg:#1d4ed8;--badge-win-br:rgba(37,99,235,0.22);--badge-lin-bg:rgba(194,65,12,0.08);--badge-lin-fg:#9a3412;--badge-lin-br:rgba(194,65,12,0.22);--badge-lin64-bg:rgba(126,34,206,0.08);--badge-lin64-fg:#7c3aed;--badge-lin64-br:rgba(126,34,206,0.22);--badge-lin32-bg:rgba(202,138,4,0.08);--badge-lin32-fg:#ca8a04;--badge-lin32-br:rgba(202,138,4,0.22);--badge-emb-bg:rgba(161,98,7,0.08);--badge-emb-fg:#92400e;--badge-emb-br:rgba(161,98,7,0.22);--badge-prod-bg:rgba(22,163,74,0.08);--badge-prod-fg:#166534;--badge-prod-br:rgba(22,163,74,0.22);--badge-dev-bg:rgba(194,65,12,0.08);--badge-dev-fg:#9a3412;--badge-dev-br:rgba(194,65,12,0.22);--copy-bg:rgba(124,58,237,0.08);--copy-bg-hover:rgba(124,58,237,0.18);--copy-fg:#6d28d9;--copy-bg-ok:rgba(22,163,74,0.1);--copy-fg-ok:#15803d;--copy-br-ok:rgba(22,163,74,0.25);--link-fg:#2563eb;--installer-online-bg:rgba(22,163,74,0.08);--installer-online-fg:#15803d;--installer-online-br:rgba(22,163,74,0.22);--installer-offline-bg:rgba(194,65,12,0.08);--installer-offline-fg:#9a3412;--installer-offline-br:rgba(194,65,12,0.22);}}
 *,*::before,*::after{{box-sizing:border-box;}}
 body{{font-family:'Inter',sans-serif;background:var(--gradient-page);color:var(--text-primary);min-height:100vh;margin:0;padding:1.5rem 1rem;transition:background .2s,color .2s;}}
 .container{{max-width:1220px;margin:0 auto;background:var(--bg-container);border-radius:16px;border:1px solid var(--border);border-top-color:var(--border-top);box-shadow:0 8px 40px rgba(0,0,0,.35),inset 0 1px 0 var(--border-top);overflow:hidden;}}
@@ -3418,7 +3482,7 @@ body{{font-family:'Inter',sans-serif;background:var(--gradient-page);color:var(-
 .release-version{{font-size:1.5rem;font-weight:700;color:var(--text-primary);}}.release-date{{font-size:.78rem;color:var(--text-muted);}}
 .theme-btn{{background:var(--primary-dim);border:1px solid var(--border);color:var(--copy-fg);cursor:pointer;padding:.45rem;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background .2s;flex-shrink:0;}}
 .theme-btn:hover{{background:var(--copy-bg-hover);}}
-.content{{padding:1.5rem 2rem 2.5rem;display:flex;gap:1.4rem;align-items:flex-start;}}.content>.notes-box{{flex:0 0 65%;max-width:65%;min-width:200px;position:sticky;top:1rem;margin-bottom:0;}}.packages-col{{flex:0 0 35%;max-width:35%;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:calc(100vh - 6rem);scrollbar-width:thin;scrollbar-color:var(--primary-dim) var(--bg-group);background:var(--bg-group);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;}}.packages-col::-webkit-scrollbar{{width:5px;}}.packages-col::-webkit-scrollbar-track{{background:var(--bg-group);}}.packages-col::-webkit-scrollbar-thumb{{background:var(--primary-dim);border-radius:99px;}}.packages-col::-webkit-scrollbar-thumb:hover{{background:var(--primary);}}.content:not(:has(.notes-box)){{display:block;}}.content:not(:has(.notes-box)) .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;}}.container:not(:has(.notes-box)){{max-width:900px;}}.content:has(.notes-box) .variant-file{{display:none;}}.content:has(.notes-box) .pkg-row-file{{display:none;}}.no-notes .content{{display:block;}}.no-notes .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;border-radius:10px;}}.container.no-notes{{max-width:900px;}}.has-notes .variant-file{{display:none;}}.has-notes .pkg-row-file{{display:none;}}.packages-col .device-divider{{height:1px;background:var(--border);margin:.4rem 0;}}.packages-col .device-card{{background:transparent;border:none;border-radius:6px;box-shadow:none;}}.packages-col .device-card:hover{{background:rgba(160,100,255,0.06);box-shadow:none;}}.packages-col .device-card-head{{background:transparent;border:none;}}.packages-col .sdk-card{{background:transparent;border:none;border-radius:0;}}.packages-col .sdk-card:hover{{background:var(--primary-dim);box-shadow:none;}}.packages-col .pkg-box{{background:transparent;border:none;border-radius:0;}}.packages-col .variant-row{{border-bottom:none;}}.packages-col .variant-row:last-child{{border-bottom:none;}}.packages-col .pkg-row{{border-bottom:none;}}.packages-col .mfr-head{{background:var(--bg-group);border:1px solid var(--border);border-radius:7px;display:inline-flex;align-self:flex-start;margin-top:.5rem;margin-bottom:.65rem;}}.packages-col .plat-head{{background:transparent;border:none;border-radius:0;padding-left:0;}}.packages-col .section-head{{border-bottom:1px solid var(--border-strong);margin-left:-.9rem;margin-right:-.9rem;padding-left:.9rem;padding-right:.9rem;}}
+.content{{padding:1.5rem 2rem 2.5rem;display:flex;gap:1.4rem;align-items:flex-start;}}.content>.notes-box{{flex:0 0 65%;max-width:65%;min-width:200px;position:sticky;top:1rem;margin-bottom:0;}}.packages-col{{flex:0 0 35%;max-width:35%;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:calc(100vh - 6rem);scrollbar-width:thin;scrollbar-color:var(--primary-dim) var(--bg-group);background:var(--bg-group);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;}}.packages-col::-webkit-scrollbar{{width:5px;}}.packages-col::-webkit-scrollbar-track{{background:var(--bg-group);}}.packages-col::-webkit-scrollbar-thumb{{background:var(--primary-dim);border-radius:99px;}}.packages-col::-webkit-scrollbar-thumb:hover{{background:var(--primary);}}.content:not(:has(.notes-box)){{display:block;}}.content:not(:has(.notes-box)) .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;}}.container:not(:has(.notes-box)){{max-width:900px;}}.content:has(.notes-box) .variant-file{{display:none;}}.content:has(.notes-box) .pkg-row-file{{display:none;}}.no-notes .content{{display:block;}}.no-notes .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;border-radius:10px;}}.container.no-notes{{max-width:900px;}}.has-notes .variant-file{{display:none;}}.has-notes .pkg-row-file{{display:none;}}.packages-col .device-divider{{height:1px;background:var(--border);margin:.4rem 0;}}.packages-col .device-card{{background:transparent;border:none;border-radius:6px;box-shadow:none;}}.packages-col .device-card:hover{{background:{primary_dim_06};box-shadow:none;}}.packages-col .device-card-head{{background:transparent;border:none;}}.packages-col .sdk-card{{background:transparent;border:none;border-radius:0;}}.packages-col .sdk-card:hover{{background:var(--primary-dim);box-shadow:none;}}.packages-col .pkg-box{{background:transparent;border:none;border-radius:0;}}.packages-col .variant-row{{border-bottom:none;}}.packages-col .variant-row:last-child{{border-bottom:none;}}.packages-col .pkg-row{{border-bottom:none;}}.packages-col .mfr-head{{background:var(--bg-group);border:1px solid var(--border);border-radius:7px;display:inline-flex;align-self:flex-start;margin-top:.5rem;margin-bottom:.65rem;}}.packages-col .plat-head{{background:transparent;border:none;border-radius:0;padding-left:0;}}.packages-col .section-head{{border-bottom:1px solid var(--border-strong);margin-left:-.9rem;margin-right:-.9rem;padding-left:.9rem;padding-right:.9rem;}}
 .section{{margin-bottom:2rem;}}
 .section-head{{display:flex;align-items:center;gap:.65rem;margin-bottom:1.1rem;padding-bottom:.7rem;border-bottom:1px solid var(--border);}}
 .section-icon{{width:30px;height:30px;border-radius:7px;background:var(--primary-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary);}}
@@ -3591,7 +3655,7 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
 
     fn client_card_open(client: &str) -> String {
         format!(
-            r#"<div class="client-group"><div class="client-group-head"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v13h16V8"/><rect x="6" y="11" width="5" height="5"/><rect x="13" y="15" width="4" height="6"/></svg><span class="client-group-name">{}</span></div><div class="client-group-body">"#,
+            r#"<div class="client-group"><div class="client-group-head"><span class="material-symbols-outlined" style="font-size:16px;color:var(--badge-client-fg)">storefront</span><span class="client-group-name">{}</span></div><div class="client-group-body">"#,
             client
         )
     }
@@ -3778,12 +3842,12 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
                     let cat_lower = pkg.category.to_lowercase();
                     let badge = if sig_lower.contains("launcher") || cat_lower.contains("launcher") {
                         r#"<span class="badge badge-launcher">Launcher</span>"#
-                    } else if sig_lower.contains("sig") || cat_lower.contains("sig") || cat_lower.contains("assinado") || cat_lower.contains("signed") {
+                    } else if (sig_lower.contains("sig") || cat_lower.contains("sig") || cat_lower.contains("assinado") || cat_lower.contains("signed")) && sig_lower != "signed" {
                         r#"<span class="badge badge-sig">Sig</span>"#
                     } else {
                         r#"<span class="badge badge-app">App</span>"#
                     };
-                    let sig_badge = if !pkg.signature.is_empty() {
+                    let sig_badge = if !pkg.signature.is_empty() && sig_lower != "signed" {
                         format!(r#"<span class="badge badge-sig">{}</span>"#, pkg.signature)
                     } else {
                         String::new()
@@ -3928,7 +3992,7 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
                 }
                 for (pkg, badge) in entries {
                     let filename = extract_filename(&pkg.url);
-                    let sig_badge = if !pkg.signature.is_empty() {
+                    let sig_badge = if !pkg.signature.is_empty() && pkg.signature.to_lowercase() != "signed" {
                         format!(r#"<span class="badge badge-sig">{}</span>"#, pkg.signature)
                     } else {
                         String::new()

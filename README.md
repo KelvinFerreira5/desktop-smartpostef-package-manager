@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.3.0 (Tauri Edition)
+# SmartPosTEF Package Manager v3.3.18 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -64,6 +64,7 @@ The application automatically detects and categorizes packages based on file nam
 | A2A SDK Integration | A2A | AditumSdkIntegration-A2A-D-2.4.4+8e450cfb1-release.aar |
 | A2A Device APK | A2A | SmartPosTef-A2A-D-L3-2.4.4+8e450cfb1-release_sign.apk |
 | A2A Payment Example | A2A | PaymentExample-A2A-P-2.4.4+8e450cfb1-release.apk |
+| A2A Payment Example (device) | A2A | PaymentExample-A2A-D-TefSdk-2.4.4+8e450cfb1-release.apk |
 
 > **v2 naming convention**: Packages using the newer `+hexhash` format (e.g., `2.5.4+0d05ce0`) are fully supported alongside the legacy `.numericHash` format.
 >

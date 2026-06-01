@@ -107,14 +107,15 @@ const HELP_CONTENT = {
       {
         heading: 'Icons & Indicators', body: `
         <table class="help-table">
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Blue upload arrow</td><td>Deploy Only — upload-only release</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="16" height="16"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> Green package</td><td>Production release</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="16" height="16"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Amber code brackets</td><td>Development release</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Green lock</td><td>All packages are signed</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg> Red open lock</td><td>Contains unsigned packages</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/></svg> Calendar</td><td>Release date</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> Clock</td><td>Creation timestamp</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#3b82f6">publish</span> Publish</td><td>Deploy Only — upload-only release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#06b6d4">storefront</span> Storefront</td><td>Production release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#f59e0b">science</span> Science</td><td>Development release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#22c55e">encrypted</span> Encrypted</td><td>All packages are signed</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#ef4444">encrypted_off</span> Encrypted Off</td><td>Contains unsigned packages</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:currentColor">calendar_today</span> Calendar</td><td>Release date</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:currentColor">schedule</span> Clock</td><td>Creation timestamp</td></tr>
         </table>
+        <p style="margin-top:8px;font-size:0.85em;color:#94a3b8;"><strong>Signature-exempt packages</strong> (do not affect signed/unsigned badge): TefSdk, Doc, AAR, SDK Integration, orphan PaymentExample, and TefSdk PaymentExample — same as Windows/Linux.</p>
       ` },
       {
         heading: 'Card Actions', body: `
@@ -222,11 +223,10 @@ const HELP_CONTENT = {
       {
         heading: 'Custom Devices', body: `
         <table class="help-table">
-          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name and detection pattern</td></tr>
-          <tr><td><strong>Edit</strong></td><td>Modify an existing custom device</td></tr>
-          <tr><td><strong>Delete</strong></td><td>Remove a custom device</td></tr>
+          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name, type, and URL identifier pattern</td></tr>
+          <tr><td><strong>Delete</strong></td><td>Remove a custom device from the list</td></tr>
         </table>
-        <p>Custom devices are used during package filename detection to identify hardware targets.</p>
+        <p>Custom devices extend the built-in detection rules. They are used during package filename/URL detection to identify hardware targets not covered by the default device map.</p>
       ` },
     ]
   },
@@ -1575,7 +1575,10 @@ function updateActionButtons() {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
     if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
     if (allUploaded) {
-      if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'inline-flex';
+      if (btnFinalizeRelease) {
+        btnFinalizeRelease.style.display = 'inline-flex';
+        btnFinalizeRelease.disabled = false;
+      }
     } else {
       if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
     }
@@ -1584,7 +1587,10 @@ function updateActionButtons() {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
     if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
     if (allUploaded) {
-      if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'inline-flex';
+      if (btnFinalizeDeployOnly) {
+        btnFinalizeDeployOnly.style.display = 'inline-flex';
+        btnFinalizeDeployOnly.disabled = false;
+      }
     } else {
       if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
     }
@@ -2313,9 +2319,20 @@ function isReleaseUnsigned(release) {
 
   // Android check: for STA/A2A packages, check if ANY lacks _sign in filename
   // (applies to .apk, .zip, or extensionless files)
+  // TefSdk, Doc, AAR, SDK, orphan PaymentExample, and TefSdk PaymentExample packages are exempt (like Windows/Linux)
+  const sigExemptGenericNames = ['', 'generic', 'example', 'unknown'];
+  const sigExemptDevices = ['tefsdk', 'doc', 'aar', 'sdk integration', 'documentation', 'sdk'];
   const androidPkgs = pkgs.filter(p => {
     const platform = (p.platform || '').toUpperCase();
-    return platform === 'STA' || platform === 'A2A';
+    if (platform !== 'STA' && platform !== 'A2A') return false;
+    // TefSdk, Doc, AAR, SDK packages don't require signature
+    const device = (p.device || '').toLowerCase();
+    if (sigExemptDevices.includes(device)) return false;
+    // Orphan PaymentExample packages (no/generic device + example category/device) don't require signature
+    const isExample = (p.category || '').toLowerCase().includes('example') ||
+      device.includes('example');
+    if (isExample && sigExemptGenericNames.includes(device)) return false;
+    return true;
   });
 
   if (androidPkgs.length > 0) {
@@ -2709,6 +2726,17 @@ function renderReleaseSummary(release) {
     return `<span class="summary-tag summary-tag-${color}">${text}</span>`;
   };
 
+  // Helper to create signed/unsigned icon
+  const sigIcon = (pkg) => {
+    const lowerSig = (pkg.signature || '').toLowerCase();
+    const fileName = (pkg.url || '').split('/').filter(s => s.length > 0).pop() || '';
+    const isSigned = lowerSig === 'signed' || fileName.toLowerCase().includes('_sign.');
+    const icon = isSigned ? 'encrypted' : 'encrypted_off';
+    const cls = isSigned ? 'sig-icon-signed' : 'sig-icon-unsigned';
+    const title = isSigned ? 'Signed' : 'Unsigned';
+    return `<span class="material-symbols-outlined sig-icon ${cls}" title="${title}">${icon}</span>`;
+  };
+
   // Helper to create copy URL button
   const copyUrlBtn = (url) => {
     if (!url) return '';
@@ -2832,7 +2860,7 @@ function renderReleaseSummary(release) {
       });
     }
 
-    // A2A packages - Group into SDK/Doc, Device APKs, and Examples
+    // A2A packages - Integration (SDK/Doc) + Device APKs (with examples merged)
     if (platformGroups['A2A']) {
       const a2aPkgs = platformGroups['A2A'];
 
@@ -2844,8 +2872,9 @@ function renderReleaseSummary(release) {
         p.device?.toLowerCase()?.includes('example'));
       const deviceApks = a2aPkgs.filter(p => !sdkDocs.includes(p) && !examples.includes(p) && p.device);
 
-      // SDK/Documentation
+      // Integration (SDK/Documentation)
       if (sdkDocs.length > 0) {
+        html += '<h6 class="platform-packages-subtitle">Integration</h6>';
         sdkDocs.forEach(pkg => {
           const icon = getPlatformIcon('A2A', pkg);
           let name = '';
@@ -2865,43 +2894,120 @@ function renderReleaseSummary(release) {
         });
       }
 
-      // Examples - extract device name from URL
-      if (examples.length > 0) {
-        examples.forEach(pkg => {
-          const icon = getPlatformIcon('A2A', pkg);
-          // Extract device from URL (e.g., PaymentExample-A910-D-2.3.9...)
-          let deviceName = '';
+      // Device APKs + Examples merged - grouped by device (normalized keys)
+      const a2aDevices = {};       // key: normalizedKey, value: { displayName, pkgs[] }
+      deviceApks.forEach(pkg => {
+        const device = pkg.device || 'Unknown';
+        const key = normalizeDeviceKey(device);
+        if (!a2aDevices[key]) a2aDevices[key] = { displayName: device, pkgs: [] };
+        a2aDevices[key].pkgs.push(pkg);
+      });
+
+      // Merge examples into their respective device groups
+      const orphanExamples = [];
+      const genericNames = ['', 'generic', 'example', 'unknown'];
+      examples.forEach(pkg => {
+        pkg._isExample = true;
+        // Use pkg.device directly (from SPF) — much more reliable than URL parsing
+        let deviceName = pkg.device || '';
+        // If device is empty or too generic, try extracting from URL filename
+        if (!deviceName || genericNames.includes(deviceName.toLowerCase())) {
+          deviceName = ''; // Reset before URL attempt
           if (pkg.url) {
             const urlFileName = pkg.url.split('/').filter(s => s.length > 0).pop() || '';
-            const deviceMatch = urlFileName.match(/PaymentExample-([A-Za-z0-9_]+)-/i);
+            const deviceMatch = urlFileName.match(/PaymentExample-(?:[A-Za-z0-9]+-){2}([A-Za-z0-9_]+)-/i);
             if (deviceMatch) deviceName = deviceMatch[1];
           }
-          const name = deviceName ? `PaymentExample (${normalizeA2ADisplayName(deviceName)})` : 'PaymentExample';
-          html += `
-          <div class="platform-package-item">
-            <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="package-name">${name}</span>
-            ${copyUrlBtn(pkg.url)}
-          </div>`;
-        });
-      }
+        }
+        if (deviceName && !genericNames.includes(deviceName.toLowerCase())) {
+          const key = normalizeDeviceKey(deviceName);
+          if (a2aDevices[key]) {
+            a2aDevices[key].pkgs.push(pkg);
+          } else {
+            a2aDevices[key] = { displayName: deviceName, pkgs: [pkg] };
+          }
+        } else {
+          orphanExamples.push(pkg);
+        }
+      });
 
-      // Device APKs - list each device individually
-      if (deviceApks.length > 0) {
-        deviceApks.forEach(pkg => {
-          const icon = getPlatformIcon('A2A', pkg);
-          const deviceName = pkg.device || 'Device';
-          const sigTag = pkg.signature ? makeTag(pkg.signature, 'blue') : '';
-          const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+      // Render device groups
+      if (Object.keys(a2aDevices).length > 0 || orphanExamples.length > 0) {
+        html += '<h6 class="platform-packages-subtitle">A2A Packages</h6>';
+
+        for (const [key, group] of Object.entries(a2aDevices)) {
+          const devPkgs = group.pkgs;
+          const firstNonExample = devPkgs.find(p => !p._isExample) || devPkgs[0];
+          const icon = getPlatformIcon('A2A', firstNonExample);
+          // TefSdk packages (and TefSdk PaymentExamples) don't need signature
+          const isTefSdkGroup = key === 'TEFSDK';
           html += `
-          <div class="platform-package-item">
-            <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="package-name">${normalizeA2ADisplayName(deviceName)}</span>
-            ${sigTag}
-            ${clientTag}
-            ${copyUrlBtn(pkg.url)}
+          <div class="sta-device-group">
+            <div class="sta-device-header">
+              <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
+              <span class="sta-device-name">${normalizeA2ADisplayName(group.displayName)}</span>
+            </div>
+            <div class="sta-device-variants">`;
+
+          devPkgs.forEach(pkg => {
+            if (pkg._isExample) {
+              const exampleTag = makeTag('Example', 'gray');
+              const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+              const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+              html += `
+              <div class="sta-variant-row">
+                ${exampleTag}
+                ${sigTag}
+                ${clientTag}
+                ${isTefSdkGroup ? '' : sigIcon(pkg)}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+            } else {
+              const categoryTag = pkg.category ? makeTag(pkg.category, 'gray') : makeTag('Device APK', 'gray');
+              const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+              const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+              html += `
+              <div class="sta-variant-row">
+                ${categoryTag}
+                ${sigTag}
+                ${clientTag}
+                ${isTefSdkGroup ? '' : sigIcon(pkg)}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+            }
+          });
+
+          html += `
+            </div>
           </div>`;
-        });
+        }
+
+        // Orphan examples (no device detected from URL)
+        if (orphanExamples.length > 0) {
+          html += `
+          <div class="sta-device-group">
+            <div class="sta-device-header">
+              <img src="assets/images/payexample.svg" alt="Example" class="platform-icon" onerror="this.style.display='none'" />
+              <span class="sta-device-name">Android Payment Example</span>
+            </div>
+            <div class="sta-device-variants">`;
+
+          orphanExamples.forEach(pkg => {
+            const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+            const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+            html += `
+              <div class="sta-variant-row">
+                ${makeTag('Example', 'gray')}
+                ${sigTag}
+                ${clientTag}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+          });
+
+          html += `
+            </div>
+          </div>`;
+        }
       }
     }
   }
@@ -2910,21 +3016,23 @@ function renderReleaseSummary(release) {
   if (platformGroups['STA'] && platformGroups['STA'].length > 0) {
     html += '<h5 class="platform-packages-title sta-title">STA DEVICES</h5>';
 
-    // Group STA packages by device
+    // Group STA packages by device (normalized keys)
     const staDevices = {};
     platformGroups['STA'].forEach(pkg => {
       const device = pkg.device || 'Unknown';
-      if (!staDevices[device]) staDevices[device] = [];
-      staDevices[device].push(pkg);
+      const key = normalizeDeviceKey(device);
+      if (!staDevices[key]) staDevices[key] = { displayName: device, pkgs: [] };
+      staDevices[key].pkgs.push(pkg);
     });
 
-    for (const [device, devicePkgs] of Object.entries(staDevices)) {
+    for (const [key, group] of Object.entries(staDevices)) {
+      const devicePkgs = group.pkgs;
       const icon = getPlatformIcon('STA', devicePkgs[0]);
       html += `
         <div class="sta-device-group">
           <div class="sta-device-header">
             <img src="${icon}" alt="STA" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="sta-device-name">${displayDeviceName(device)}</span>
+            <span class="sta-device-name">${displayDeviceName(group.displayName)}</span>
           </div>
           <div class="sta-device-variants">`;
 
@@ -2932,7 +3040,7 @@ function renderReleaseSummary(release) {
       devicePkgs.forEach(pkg => {
         const category = pkg.category || 'Package';
         const categoryTag = makeTag(category, 'gray');
-        const sigTag = pkg.signature ? makeTag(pkg.signature, 'blue') : '';
+        const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
         const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
 
         html += `
@@ -2940,6 +3048,7 @@ function renderReleaseSummary(release) {
               ${categoryTag}
               ${sigTag}
               ${clientTag}
+              ${sigIcon(pkg)}
               ${copyUrlBtn(pkg.url)}
             </div>`;
       });
@@ -3416,6 +3525,36 @@ function initSettingsPage() {
     });
   }
 
+  // Reset HTML defaults button
+  const btnResetHtmlDefaults = document.getElementById('btn-reset-html-defaults');
+  if (btnResetHtmlDefaults) {
+    btnResetHtmlDefaults.addEventListener('click', (e) => {
+      e.preventDefault();
+      const HTML_DEFAULTS = {
+        title: 'SmartPosTef Release',
+        subtitle: 'Aditum Pagamentos LTDA',
+        primaryColor: '#2e1773',
+        secondaryColor: '#2f2256'
+      };
+      const titleInput = document.getElementById('settings-html-title');
+      const subtitleInput = document.getElementById('settings-html-subtitle');
+      const primaryPicker = document.getElementById('settings-html-primary');
+      const primaryText = document.getElementById('settings-html-primary-text');
+      const secondaryPicker = document.getElementById('settings-html-secondary');
+      const secondaryText = document.getElementById('settings-html-secondary-text');
+      if (titleInput) titleInput.value = HTML_DEFAULTS.title;
+      if (subtitleInput) subtitleInput.value = HTML_DEFAULTS.subtitle;
+      if (primaryPicker) primaryPicker.value = HTML_DEFAULTS.primaryColor;
+      if (primaryText) primaryText.value = HTML_DEFAULTS.primaryColor;
+      if (primaryPicker) primaryPicker.closest('.color-swatch').style.backgroundColor = HTML_DEFAULTS.primaryColor;
+      if (secondaryPicker) secondaryPicker.value = HTML_DEFAULTS.secondaryColor;
+      if (secondaryText) secondaryText.value = HTML_DEFAULTS.secondaryColor;
+      if (secondaryPicker) secondaryPicker.closest('.color-swatch').style.backgroundColor = HTML_DEFAULTS.secondaryColor;
+      frontendLog('INFO', 'SETTINGS: HTML settings reset to defaults');
+      showToast('info', 'HTML settings reset to defaults. Click Save to apply.');
+    });
+  }
+
   // Add mapping button
   const btnAddMapping = document.getElementById('btn-add-mapping');
   if (btnAddMapping) {
@@ -3545,6 +3684,25 @@ function populateSettings() {
   }
   if (companyNameInput && settings.portalSettings?.companyName) {
     companyNameInput.value = settings.portalSettings.companyName;
+  }
+
+  // HTML Generation Settings
+  const htmlTitleInput = document.getElementById('settings-html-title');
+  const htmlSubtitleInput = document.getElementById('settings-html-subtitle');
+  const htmlPrimaryPicker = document.getElementById('settings-html-primary');
+  const htmlPrimaryText = document.getElementById('settings-html-primary-text');
+  const htmlSecondaryPicker = document.getElementById('settings-html-secondary');
+  const htmlSecondaryText = document.getElementById('settings-html-secondary-text');
+
+  if (htmlTitleInput) htmlTitleInput.value = settings.portalSettings?.htmlTitle || '';
+  if (htmlSubtitleInput) htmlSubtitleInput.value = settings.portalSettings?.htmlSubtitle || '';
+  if (settings.portalSettings?.primaryColor) {
+    if (htmlPrimaryPicker) htmlPrimaryPicker.value = settings.portalSettings.primaryColor;
+    if (htmlPrimaryText) htmlPrimaryText.value = settings.portalSettings.primaryColor;
+  }
+  if (settings.portalSettings?.secondaryColor) {
+    if (htmlSecondaryPicker) htmlSecondaryPicker.value = settings.portalSettings.secondaryColor;
+    if (htmlSecondaryText) htmlSecondaryText.value = settings.portalSettings.secondaryColor;
   }
 
   // Client mappings
@@ -3691,7 +3849,11 @@ async function saveSettings() {
   settings.jfrogDefaultRepo = defaultRepoInput ? defaultRepoInput.value : '';
   settings.portalSettings = {
     portalTitle: portalTitleInput ? portalTitleInput.value : '',
-    companyName: companyNameInput ? companyNameInput.value : ''
+    companyName: companyNameInput ? companyNameInput.value : '',
+    htmlTitle: document.getElementById('settings-html-title')?.value || '',
+    htmlSubtitle: document.getElementById('settings-html-subtitle')?.value || '',
+    primaryColor: document.getElementById('settings-html-primary-text')?.value || '',
+    secondaryColor: document.getElementById('settings-html-secondary-text')?.value || ''
   };
 
   // Filter out empty mappings
@@ -4353,6 +4515,25 @@ function parseSpfContent(content) {
   }
 }
 
+// Detect client by checking if the version's patch segment ends with a client mapping number.
+// Mirrors Rust extract_client_from_version logic.
+// Version patterns: X.Y.PATCH.HASH (e.g., 2.5.6687.873895) or X.Y.PATCH+HEX (v2 format)
+function detectClientFromVersion(fileName) {
+  if (!settings.clientMappings || settings.clientMappings.length === 0) return '';
+  // Match version pattern in filename: digits.digits.digits.digits or digits.digits.digits+hex
+  const versionMatch = fileName.match(/(\d+\.\d+\.\d+)[\.\+]/);
+  if (!versionMatch) return '';
+  const versionParts = versionMatch[1].split('.');
+  const patchSegment = versionParts[2];
+  if (!patchSegment || patchSegment.length <= 1) return '';
+  for (const mapping of settings.clientMappings) {
+    if (patchSegment.endsWith(mapping.number) && patchSegment.length > mapping.number.length) {
+      return mapping.name;
+    }
+  }
+  return '';
+}
+
 function detectPackageFromUrl(url) {
   // Detect platform, device, category, signature, client from URL
   const fileName = url.split('/').filter(s => s.length > 0).pop() || '';
@@ -4417,10 +4598,11 @@ function detectPackageFromUrl(url) {
     }
   }
 
-  // Detect client from client mappings
-  if (settings.clientMappings && settings.clientMappings.length > 0) {
+  // Detect client from version patch segment (primary) or URL path segments (fallback)
+  client = detectClientFromVersion(fileName);
+  if (!client && settings.clientMappings && settings.clientMappings.length > 0) {
     for (const mapping of settings.clientMappings) {
-      if (lowerName.includes(mapping.number) || lowerUrl.includes(`/${mapping.number}/`) || lowerUrl.includes(`-${mapping.number}-`) || lowerUrl.includes(`-${mapping.number}/`)) {
+      if (lowerUrl.includes(`/${mapping.number}/`) || lowerUrl.includes(`-${mapping.number}-`) || lowerUrl.includes(`-${mapping.number}/`)) {
         client = mapping.name;
         break;
       }
@@ -4742,11 +4924,36 @@ async function handleImportAddPackages() {
   const releaseVersion = importReleaseState.release ? importReleaseState.release.version : '';
   const releaseBaseVersion = extractBaseVersion(releaseVersion);
 
-  for (const filePath of files) {
-    const fileName = filePath.split(/[/\\]/).pop() || '';
+  // Use Rust scan_files for accurate package detection (single source of truth)
+  let scannedPackages;
+  try {
+    scannedPackages = await invoke('scan_files', { filePaths: files });
+  } catch (err) {
+    frontendLog('ERROR', 'IMPORT: scan_files failed, falling back to JS detection', err.toString());
+    // Fallback to JS detection if Rust invocation fails
+    scannedPackages = files.map(filePath => {
+      const fileName = filePath.split(/[/\\]/).pop() || '';
+      const pkg = detectPackageFromFileName(fileName, filePath);
+      return { ...pkg, file_name: fileName, file_path: filePath };
+    });
+  }
 
-    // Detect package info from filename
-    const pkg = detectPackageFromFileName(fileName, filePath);
+  let addedCount = 0;
+  for (const scanned of scannedPackages) {
+    const filePath = scanned.filePath || scanned.file_path;
+    const fileName = scanned.fileName || scanned.file_name || filePath.split(/[/\\]/).pop() || '';
+
+    // Map PackageInfo from Rust to the import page format
+    const pkg = {
+      platform: scanned.platform || 'Unknown',
+      device: scanned.device || '',
+      category: scanned.category || '',
+      signature: scanned.signature || '',
+      client: scanned.client || '',
+      url: '',
+      version: scanned.version || '',
+      isDev: scanned.isDev || scanned.is_dev || false,
+    };
 
     // Version validation: compare package version with release version
     if (releaseBaseVersion && pkg.version) {
@@ -4772,11 +4979,12 @@ async function handleImportAddPackages() {
 
     importReleaseState.newPackages.push(pkg);
     importReleaseState.packages.push(pkg);
-    frontendLog('INFO', 'IMPORT: Package added', `File: ${fileName}, Platform: ${pkg.platform}, Device: ${pkg.device}`);
+    addedCount++;
+    frontendLog('INFO', 'IMPORT: Package added', `File: ${fileName}, Platform: ${pkg.platform}, Device: ${pkg.device}, Signature: ${pkg.signature}`);
   }
 
   renderImportReleasePage();
-  showToast('success', `Added ${files.length} package(s)`);
+  showToast('success', `Added ${addedCount} package(s)`);
 }
 
 // Device map matching Rust DEVICE_MAP (src-tauri/src/lib.rs)
@@ -4784,11 +4992,10 @@ const DEVICE_MAP = {
   'A910': { manufacturer: 'pax', path: 'a910' },
   'S920': { manufacturer: 'pax', path: 's920' },
   'P2': { manufacturer: 'sunmi', path: 'p2' },
-  'P2_LITE_SE': { manufacturer: 'sunmi', path: 'p2litese' },
   'P2LITESE': { manufacturer: 'sunmi', path: 'p2litese' },
-  'P2_MINI': { manufacturer: 'sunmi', path: 'p2_mini' },
+  'P2MINI': { manufacturer: 'sunmi', path: 'p2_mini' },
   'L3': { manufacturer: 'positivo', path: 'l3' },
-  'L3_2024': { manufacturer: 'positivo', path: 'l3_2024' },
+  'L32024': { manufacturer: 'positivo', path: 'l3_2024' },
   'L300': { manufacturer: 'positivo', path: 'l300' },
   'L400': { manufacturer: 'positivo', path: 'l400' },
   'GPOS700': { manufacturer: 'gertec', path: 'gpos700' },
@@ -4797,9 +5004,14 @@ const DEVICE_MAP = {
   'DX8000': { manufacturer: 'ingenico', path: 'dx8000' },
   'DX4000': { manufacturer: 'ingenico', path: 'dx4000' },
   'EX4000': { manufacturer: 'ingenico', path: 'ex4000' },
-  'X990_PRO': { manufacturer: 'verifone', path: 'x990_pro' },
-  'X990_UX': { manufacturer: 'verifone', path: 'x990_ux' },
+  'X990PRO': { manufacturer: 'verifone', path: 'x990_pro' },
+  'X990UX': { manufacturer: 'verifone', path: 'x990_ux' },
 };
+
+// Lookup device info from DEVICE_MAP using normalized key
+function lookupDevice(deviceName) {
+  return DEVICE_MAP[normalizeDeviceKey(deviceName)];
+}
 
 // Display-only device name normalization (just replace _ with space, keep casing)
 function displayDeviceName(name) {
@@ -4809,41 +5021,66 @@ function displayDeviceName(name) {
 // Normalize device names for display (used by A2A and STA packages)
 function normalizeDeviceName(deviceRaw) {
   if (!deviceRaw) return '';
-  const upper = deviceRaw.toUpperCase();
+  const key = normalizeDeviceKey(deviceRaw);
 
-  // Known device name mappings
+  // Known device name mappings (keys are already normalized)
   const mappings = {
-    'P2LITESE': 'P2 Lite',
+    'P2LITESE': 'P2 Lite SE',
     'P2LITE': 'P2 Lite',
-    'P2_LITE': 'P2 Lite',
-    'L3_2024': 'L3 2024',
+    'P2MINI': 'P2 Mini',
+    'L32024': 'L3 2024',
     'DX4000': 'DX4000',
     'DX8000': 'DX8000',
+    'EX4000': 'EX4000',
+    'GPOS700': 'GPOS700',
     'GPOS720': 'GPOS720',
     'GPOS760': 'GPOS760',
+    'X990PRO': 'X990 Pro',
+    'X990UX': 'X990 UX',
     'A910': 'A910',
     'A920': 'A920',
     'P2': 'P2',
     'L3': 'L3',
+    'L300': 'L300',
+    'L400': 'L400',
     'S920': 'S920'
   };
 
-  if (mappings[upper]) return mappings[upper];
+  if (mappings[key]) return mappings[key];
 
-  // Default: replace underscores with spaces
-  return deviceRaw.replace(/_/g, ' ');
+  // Default: replace underscores/hyphens with spaces
+  return deviceRaw.replace(/[_-]/g, ' ');
+}
+
+// Normalize device name to a canonical key for comparison/grouping (strips non-alphanumeric, uppercases)
+// e.g. "P2_Lite_SE", "P2-Lite-SE", "P2LiteSE", "P2 Lite SE", "P2_Lite" → "P2LITESE"
+function normalizeDeviceKey(name) {
+  if (!name) return '';
+  const key = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  // Known aliases — abbreviated names that refer to the same device
+  const aliases = {
+    'P2LITE': 'P2LITESE',
+  };
+  return aliases[key] || key;
 }
 
 // Normalize A2A device names for display (preserves SE suffix etc.)
 function normalizeA2ADisplayName(name) {
   if (!name) return '';
   const map = {
-    'P2_LITE_SE': 'P2 Lite SE', 'P2LITESE': 'P2 Lite SE',
-    'X990_PRO': 'X990 Pro', 'X990_UX': 'X990 UX',
-    'L3_2024': 'L3 2024', 'DX4000': 'DX4000', 'DX8000': 'DX8000',
-    'GPOS720': 'GPOS720', 'GPOS760': 'GPOS760',
+    'P2LITESE': 'P2 Lite SE',
+    'P2MINI': 'P2 Mini',
+    'X990PRO': 'X990 Pro',
+    'X990UX': 'X990 UX',
+    'L32024': 'L3 2024',
+    'DX4000': 'DX4000',
+    'DX8000': 'DX8000',
+    'EX4000': 'EX4000',
+    'GPOS700': 'GPOS700',
+    'GPOS720': 'GPOS720',
+    'GPOS760': 'GPOS760',
   };
-  return map[name.toUpperCase()] || name.replace(/_/g, ' ');
+  return map[normalizeDeviceKey(name)] || name.replace(/[_-]/g, ' ');
 }
 
 // Detect package info from filename (for locally added files)
@@ -4852,9 +5089,22 @@ function detectPackageFromFileName(fileName, filePath) {
 
   let platform = 'Unknown', device = '', category = '', signature = '', client = '', version = '', isDev = false;
 
-  // Detect signature
+  // Detect signature — extract actual signer name from filename (mirrors Rust extract_signature)
   if (lowerName.includes('_sign.')) {
-    signature = 'Signed';
+    const excluded = ['release', 'debug', 'sign', 'signed', 'unsigned', 'offline', 'online'];
+    // Try v2 format: version+hexhash-SIGNATURE-release_sign.ext
+    const v2Match = fileName.match(/\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+    if (v2Match && !excluded.includes(v2Match[1].toLowerCase())) {
+      signature = v2Match[1];
+    } else {
+      // Try v1 format: version.hash-SIGNATURE-release_sign.ext or version.A2A.hash-SIGNATURE-release_sign.ext
+      const v1Match = fileName.match(/\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+      if (v1Match && !excluded.includes(v1Match[1].toLowerCase())) {
+        signature = v1Match[1];
+      } else {
+        signature = 'Signed';
+      }
+    }
   }
 
   // Extract version from filename (try v2 hex hash first, then A2A v1, then STA v1)
@@ -4931,6 +5181,17 @@ function detectPackageFromFileName(fileName, filePath) {
     platform = 'Embedded';
     device = 'S920';
     category = 'Package';
+    // A2A PaymentExample: new format PaymentExample-A2A-{envType}-{device}-{version}-release.apk
+  } else if (lowerName.includes('paymentexample') && lowerName.includes('-a2a')) {
+    platform = 'A2A';
+    category = 'Example';
+    // Extract device: PaymentExample-A2A-[PD]-{Device}-...
+    const exampleA2AMatch = fileName.match(/PaymentExample-A2A-[PD]-([A-Za-z0-9_]+)-/i);
+    if (exampleA2AMatch) {
+      device = exampleA2AMatch[1];
+    } else {
+      device = 'Generic';
+    }
     // A2A: packages with .A2A. pattern in filename
   } else if (lowerName.includes('.a2a.')) {
     platform = 'A2A';
@@ -5005,15 +5266,8 @@ function detectPackageFromFileName(fileName, filePath) {
     }
   }
 
-  // Detect client from client mappings
-  if (settings.clientMappings && settings.clientMappings.length > 0) {
-    for (const mapping of settings.clientMappings) {
-      if (lowerName.includes(mapping.number)) {
-        client = mapping.name;
-        break;
-      }
-    }
-  }
+  // Detect client from version patch segment
+  client = detectClientFromVersion(fileName);
 
   return { platform, device, category, signature, client, url: '', version, filePath, isDev };
 }
@@ -5205,8 +5459,7 @@ function buildJfrogPath(pkg, fileName) {
   } else if (pkg.platform === 'Embedded') {
     return `${repo}/${devPrefix}pax/s920/`;
   } else if (pkg.platform === 'STA') {
-    const deviceKey = (pkg.device || '').toUpperCase();
-    const info = DEVICE_MAP[deviceKey];
+    const info = lookupDevice(pkg.device);
     if (info) {
       let prefix;
       if (isDev) {
@@ -5228,22 +5481,21 @@ function buildJfrogPath(pkg, fileName) {
       return `${repo}/${devPrefix}app-to-app/sdk_integration/`;
     } else if (pkg.device === 'Doc' || (lowerFile.startsWith('doc-') && lowerFile.endsWith('.zip'))) {
       return `${repo}/${devPrefix}app-to-app/sdk_integration/doc/`;
-    } else if (pkg.device === 'TefSdk' || lowerFile.includes('tefsdk')) {
-      const arch = (pkg.category === 'v7a' || lowerFile.includes('v7a')) ? 'v7a' : 'v8a';
-      return `${repo}/${devPrefix}app-to-app/tef-android/${arch}/`;
     } else if (pkg.category === 'Example' || lowerFile.includes('paymentexample')) {
-      if (pkg.device && pkg.device !== 'Generic') {
-        const deviceKey = pkg.device.toUpperCase();
-        const info = DEVICE_MAP[deviceKey];
+      // TefSdk/orphan payment examples go to payment_example/ root (no manufacturer subfolder)
+      if (pkg.device && pkg.device !== 'Generic' && pkg.device !== 'TefSdk') {
+        const info = lookupDevice(pkg.device);
         if (info) {
           const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
           return `${repo}/${signPrefix}app-to-app/payment_example/${info.manufacturer}/${info.path}/`;
         }
       }
       return `${repo}/${devPrefix}app-to-app/payment_example/`;
+    } else if (pkg.device === 'TefSdk' || lowerFile.includes('tefsdk')) {
+      const arch = (pkg.category === 'v7a' || lowerFile.includes('v7a')) ? 'v7a' : 'v8a';
+      return `${repo}/${devPrefix}app-to-app/tef-android/${arch}/`;
     } else {
-      const deviceKey = (pkg.device || '').toUpperCase();
-      const info = DEVICE_MAP[deviceKey];
+      const info = lookupDevice(pkg.device);
       if (info) {
         const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
         return `${repo}/${signPrefix}app-to-app/apk/${info.manufacturer}/${info.path}/`;
@@ -5702,12 +5954,13 @@ function renderAccordionContent(platform, pkgs) {
  * Render TEF platform packages with tabs (Library, Installer, etc.).
  */
 function renderPlatformTabs(platform, pkgs) {
-  // Group by device (TEF Library, Installer, etc.)
+  // Group by device (normalized keys)
   const deviceGroups = {};
   pkgs.forEach(pkg => {
     const device = pkg.device || 'Other';
-    if (!deviceGroups[device]) deviceGroups[device] = [];
-    deviceGroups[device].push(pkg);
+    const key = normalizeDeviceKey(device);
+    if (!deviceGroups[key]) deviceGroups[key] = { displayName: device, pkgs: [] };
+    deviceGroups[key].pkgs.push(pkg);
   });
 
   const devices = Object.keys(deviceGroups);
@@ -5715,18 +5968,19 @@ function renderPlatformTabs(platform, pkgs) {
 
   // If only one device, no tabs needed
   if (devices.length === 1) {
-    return renderPackageTable(deviceGroups[devices[0]]);
+    return renderPackageTable(deviceGroups[devices[0]].pkgs);
   }
 
   const tabId = `tabs-${platform.toLowerCase()}-${Date.now()}`;
   let tabsHtml = `<div class="platform-tabs" id="${tabId}">`;
   let contentHtml = '';
 
-  devices.forEach((device, i) => {
+  devices.forEach((key, i) => {
+    const group = deviceGroups[key];
     const isActive = i === 0 ? ' active' : '';
     const tabContentId = `${tabId}-${i}`;
-    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(displayDeviceName(device))} (${deviceGroups[device].length})</button>`;
-    contentHtml += `<div class="platform-tab-content${isActive}" data-tab-index="${i}">${renderPackageTable(deviceGroups[device])}</div>`;
+    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(displayDeviceName(group.displayName))} (${group.pkgs.length})</button>`;
+    contentHtml += `<div class="platform-tab-content${isActive}" data-tab-index="${i}">${renderPackageTable(group.pkgs)}</div>`;
   });
 
   tabsHtml += '</div>';
@@ -5833,16 +6087,17 @@ function renderSTADeviceList(pkgs) {
   const deviceGroups = {};
   pkgs.forEach(pkg => {
     const device = pkg.device || 'Unknown';
-    if (!deviceGroups[device]) deviceGroups[device] = [];
-    deviceGroups[device].push(pkg);
+    const key = normalizeDeviceKey(device);
+    if (!deviceGroups[key]) deviceGroups[key] = { displayName: device, pkgs: [] };
+    deviceGroups[key].pkgs.push(pkg);
   });
 
   let html = '';
-  Object.keys(deviceGroups).sort().forEach(device => {
-    const devicePkgs = deviceGroups[device];
+  Object.keys(deviceGroups).sort().forEach(key => {
+    const group = deviceGroups[key];
     html += `<div class="sta-device-group">`;
-    html += `<div class="sta-device-name">${escapeHtml(displayDeviceName(device))} (${devicePkgs.length})</div>`;
-    html += renderPackageTable(devicePkgs);
+    html += `<div class="sta-device-name">${escapeHtml(displayDeviceName(group.displayName))} (${group.pkgs.length})</div>`;
+    html += renderPackageTable(group.pkgs);
     html += `</div>`;
   });
 

@@ -3677,6 +3677,31 @@ select::-webkit-scrollbar-thumb {
 
 /* sta-variant-category removed - now using summary-tag-gray for category tags */
 
+/* Signed/Unsigned icon */
+.sig-icon {
+  font-size: 0.8rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.sig-icon-signed {
+  color: #22c55e;
+}
+
+.sig-icon-unsigned {
+  color: #ef4444;
+}
+
+/* A2A sub-section subtitle */
+.platform-packages-subtitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0.6rem 0 0.3rem 0;
+}
+
 .no-packages {
   color: var(--text-muted);
   font-style: italic;
