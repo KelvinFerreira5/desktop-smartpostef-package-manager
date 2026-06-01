@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartPosTef Release 3.3.12 — Full Release Mock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        /* ── CSS custom properties — injected from portalSettings at render time ── */
+        :root {
+            --primary: #a064ff;
+            --primary-light: #b482ff;
+            --secondary: #e040a0;
+            --card-bg: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(160, 100, 255, 0.18);
+            --card-highlight: rgba(255, 255, 255, 0.10);
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0520 0%, #0d1b35 55%, #0a0a1a 100%);
+            min-height: 100vh;
+            transition: background 300ms ease, color 300ms ease;
+        }
+
+        body.light {
+            background: linear-gradient(135deg, #f0eaf8 0%, #e8f0fc 55%, #f5f0ff 100%);
+            color: #1a1033;
+        }
+
+        /* ── Glass card ── */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-top-color: var(--card-highlight);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border-radius: 14px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--card-highlight);
+        }
+
+        body.light .glass-card {
+            background: rgba(255, 255, 255, 0.72);
+            border-color: rgba(160, 100, 255, 0.20);
+            border-top-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 24px rgba(160, 100, 255, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        /* ── Device card ── */
+        .device-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            transition: background 200ms ease, border-color 200ms ease;
+        }
+
+        body.light .device-card {
+            background: rgba(160, 100, 255, 0.04);
+            border-color: rgba(160, 100, 255, 0.12);
+        }
+
+        .device-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(160, 100, 255, 0.25);
+        }
+
+        body.light .device-card:hover {
+            background: rgba(160, 100, 255, 0.08);
+        }
+
+        /* ── Package row ── */
+        .pkg-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 8px;
+            transition: background 150ms ease;
+        }
+
+        .pkg-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        body.light .pkg-row {
+            background: rgba(160, 100, 255, 0.04);
+            border-color: rgba(160, 100, 255, 0.10);
+        }
+
+        body.light .pkg-row:hover {
+            background: rgba(160, 100, 255, 0.08);
+        }
+
+        /* ── Section heading gradient ── */
+        .section-title {
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ── Manufacturer group label ── */
+        .mfr-header {
+            border-left: 3px solid var(--primary);
+            padding-left: 10px;
+        }
+
+        .device-group-label {
+            border-left: 2px solid var(--primary);
+            padding-left: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.55);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+
+        body.light .device-group-label {
+            color: rgba(0, 0, 0, 0.45);
+        }
+
+        /* ── Sub-section header ── */
+        .subsection-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .subsection-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            padding: 2px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+
+        .badge-launcher {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.25);
+        }
+
+        .badge-app {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        .badge-sig {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.25);
+        }
+
+        .badge-client {
+            background: rgba(167, 139, 250, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(167, 139, 250, 0.25);
+        }
+
+        .badge-sdk {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.25);
+        }
+
+        .badge-doc {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.25);
+        }
+
+        .badge-apk {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        .badge-example {
+            background: rgba(249, 115, 22, 0.15);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.25);
+        }
+
+        .badge-arch {
+            background: rgba(167, 139, 250, 0.13);
+            color: #a78bfa;
+            border: 1px solid rgba(167, 139, 250, 0.22);
+        }
+
+        .badge-win {
+            background: rgba(96, 165, 250, 0.14);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.24);
+        }
+
+        .badge-linux {
+            background: rgba(251, 191, 36, 0.13);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.24);
+        }
+
+        .badge-embedded {
+            background: rgba(167, 139, 250, 0.13);
+            color: #a78bfa;
+            border: 1px solid rgba(167, 139, 250, 0.22);
+        }
+
+        .badge-online {
+            background: rgba(52, 211, 153, 0.14);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.24);
+        }
+
+        .badge-offline {
+            background: rgba(249, 115, 22, 0.13);
+            color: #f97316;
+            border: 1px solid rgba(249, 115, 22, 0.24);
+        }
+
+        .badge-lib {
+            background: rgba(167, 139, 250, 0.13);
+            color: #a78bfa;
+            border: 1px solid rgba(167, 139, 250, 0.22);
+        }
+
+        .type-prod {
+            background: rgba(52, 211, 153, 0.12);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.28);
+        }
+
+        .type-dev {
+            background: rgba(251, 146, 60, 0.12);
+            color: #fb923c;
+            border: 1px solid rgba(251, 146, 60, 0.28);
+        }
+
+        body.light .badge-launcher {
+            background: rgba(37, 99, 235, 0.10);
+            color: #2563eb;
+            border-color: rgba(37, 99, 235, 0.25);
+        }
+
+        body.light .badge-app {
+            background: rgba(5, 150, 105, 0.10);
+            color: #059669;
+            border-color: rgba(5, 150, 105, 0.25);
+        }
+
+        body.light .badge-sig {
+            background: rgba(217, 119, 6, 0.10);
+            color: #d97706;
+            border-color: rgba(217, 119, 6, 0.25);
+        }
+
+        body.light .badge-sdk {
+            background: rgba(37, 99, 235, 0.10);
+            color: #2563eb;
+            border-color: rgba(37, 99, 235, 0.25);
+        }
+
+        body.light .badge-doc {
+            background: rgba(217, 119, 6, 0.10);
+            color: #d97706;
+            border-color: rgba(217, 119, 6, 0.25);
+        }
+
+        body.light .badge-apk {
+            background: rgba(5, 150, 105, 0.10);
+            color: #059669;
+            border-color: rgba(5, 150, 105, 0.25);
+        }
+
+        body.light .badge-example {
+            background: rgba(234, 88, 12, 0.10);
+            color: #ea580c;
+            border-color: rgba(234, 88, 12, 0.25);
+        }
+
+        /* ── Copy button ── */
+        .btn-copy {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(160, 100, 255, 0.30);
+            color: var(--primary-light);
+            background: rgba(160, 100, 255, 0.08);
+            cursor: pointer;
+            transition: background 150ms ease, border-color 150ms ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .btn-copy:hover {
+            background: rgba(160, 100, 255, 0.18);
+            border-color: rgba(160, 100, 255, 0.50);
+        }
+
+        .btn-copy.copied {
+            color: #34d399;
+            border-color: rgba(52, 211, 153, 0.40);
+            background: rgba(52, 211, 153, 0.10);
+        }
+
+        body.light .btn-copy {
+            color: #6d28d9;
+            border-color: rgba(109, 40, 217, 0.30);
+            background: rgba(109, 40, 217, 0.07);
+        }
+
+        body.light .btn-copy:hover {
+            background: rgba(109, 40, 217, 0.14);
+            border-color: rgba(109, 40, 217, 0.50);
+        }
+
+        /* ── Theme toggle ── */
+        .theme-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: background 150ms, border-color 150ms, color 150ms;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        body.light .theme-btn {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(0, 0, 0, 0.04);
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        /* ── Platform icon box ── */
+        .platform-icon-box {
+            width: 36px;
+            height: 36px;
+            border-radius: 9px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Section divider ── */
+        .section-divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(160, 100, 255, 0.22), transparent);
+            margin: 36px 0;
+        }
+
+        /* ── Pkg filename ── */
+        .pkg-name {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.42);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 260px;
+        }
+
+        body.light .pkg-name {
+            color: rgba(0, 0, 0, 0.38);
+        }
+
+        /* ── Back to top ── */
+        #back-to-top {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 200ms ease, transform 200ms ease;
+            box-shadow: 0 4px 16px rgba(160, 100, 255, 0.4);
+        }
+
+        #back-to-top.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        /* ── Release Notes markdown ── */
+        .markdown-content h1 {
+            font-size: 1.4em;
+            font-weight: 700;
+            margin: 0.6em 0 0.4em;
+        }
+
+        .markdown-content h2 {
+            font-size: 1.15em;
+            font-weight: 700;
+            margin: 0.6em 0 0.3em;
+            border-bottom: 1px solid rgba(160, 100, 255, 0.15);
+            padding-bottom: 4px;
+        }
+
+        .markdown-content h3 {
+            font-size: 1em;
+            font-weight: 600;
+            margin: 0.5em 0 0.25em;
+        }
+
+        .markdown-content p {
+            margin: 0.4em 0;
+            line-height: 1.7;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            padding-left: 1.5em;
+            margin: 0.4em 0;
+        }
+
+        .markdown-content li {
+            margin: 0.2em 0;
+        }
+
+        .markdown-content code {
+            font-family: monospace;
+            font-size: 0.88em;
+            background: rgba(160, 100, 255, 0.12);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+
+        body.light .markdown-content code {
+            background: rgba(109, 40, 217, 0.10);
+        }
+
+        .markdown-content a {
+            color: var(--primary-light);
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body class="font-sans text-white">
+
+    <!-- ── HEADER ── -->
+    <header class="sticky top-0 z-50 border-b border-white/8 backdrop-blur-xl" style="background: rgba(10,5,24,0.82);">
+        <div class="max-w-5xl mx-auto px-6 py-3 flex items-center gap-4">
+            <div class="flex-1">
+                <h1 class="text-base font-bold tracking-tight" style="color: var(--primary-light);">SmartPosTef Release
+                    Portal</h1>
+                <p class="text-xs text-white/40 mt-0.5">Aditum Serviços Digitais LTDA</p>
+            </div>
+            <!-- Platform quick-jump nav -->
+            <nav class="hidden md:flex items-center gap-2">
+                <a href="#tef-section" class="btn-copy text-xs">TEF</a>
+                <a href="#sta-section" class="btn-copy text-xs">Smart POS</a>
+                <a href="#a2a-section" class="btn-copy text-xs">A2A</a>
+                <a href="#embedded-section" class="btn-copy text-xs">Embedded</a>
+            </nav>
+            <button id="theme-toggle" class="theme-btn" title="Toggle dark / light mode">
+                <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+                <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="max-w-5xl mx-auto px-6 py-8">
+
+        <!-- ── RELEASE META ── -->
+        <div class="glass-card p-6 mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <h2 class="text-3xl font-extrabold tracking-tight section-title">3.3.12</h2>
+                        <span class="badge type-prod">Production</span>
+                    </div>
+                    <p class="text-sm text-white/50 mt-1">Release Date: <span
+                            class="text-white/70 font-medium">2026-05-26</span></p>
+                    <p class="text-sm text-white/50 mt-0.5">62 packages across 4 platforms</p>
+                    <p class="text-sm text-white/40 italic mt-1">Full integration release — TEF, Smart POS, A2A,
+                        Embedded</p>
+                </div>
+                <div class="flex flex-wrap gap-2 md:hidden">
+                    <a href="#tef-section" class="btn-copy text-xs">TEF</a>
+                    <a href="#sta-section" class="btn-copy text-xs">Smart POS</a>
+                    <a href="#a2a-section" class="btn-copy text-xs">A2A</a>
+                    <a href="#embedded-section" class="btn-copy text-xs">Embedded</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════
+         RELEASE NOTES
+    ══════════════════════════════════════ -->
+        <div class="glass-card p-5 mb-8">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="platform-icon-box"
+                    style="background: rgba(160,100,255,0.12); border: 1px solid rgba(160,100,255,0.22);">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--primary)"
+                        stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-white">Release Notes</h2>
+            </div>
+            <div class="markdown-content text-sm text-white/70 leading-relaxed" id="release-notes-content"></div>
+            <script>
+                const rawNotes = `## What's New in 3.3.12
+
+### Improvements
+- Improved stability across all Android POS platforms
+- Updated TefSdk A2A integration layer to version 3.3.12
+
+### Bug Fixes
+- Fixed timeout handling on GPOS720 in offline mode
+- Fixed installer detection for Linux 32-bit packages
+
+### Breaking Changes
+- None`;
+                document.getElementById('release-notes-content').innerHTML = rawNotes
+                    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                    .replace(/^- (.+)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+                    .replace(/\n/g, '');
+            </script>
+        </div>
+
+        <hr class="section-divider" />
+
+        <!-- ══════════════════════════════════════
+         TEF SECTION (Windows + Linux)
+    ══════════════════════════════════════ -->
+        <section id="tef-section" class="mb-10">
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="platform-icon-box"
+                    style="background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.22);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#60a5fa" stroke-width="1.8">
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">TEF</h2>
+                    <p class="text-xs text-white/40">Windows · Linux 64-bit · Linux 32-bit</p>
+                </div>
+            </div>
+
+            <!-- Windows -->
+            <div class="glass-card p-5 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="badge badge-win">Windows</span>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">TEF Library</span>
+                            <span class="badge badge-lib">DLL</span>
+                            <span class="pkg-name">AditumTefLibrary-3.3.12+a1b2c3d4.zip</span>
+                        </div>
+                        <button class="btn-copy"
+                            onclick="copyUrl(this, 'https://artifactory.aditum.com.br/artifactory/smartpostef-releases/3.3.12/windows/AditumTefLibrary-3.3.12+a1b2c3d4.zip')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">Installer</span>
+                            <span class="badge badge-online">Online</span>
+                            <span class="pkg-name">smartpostef-windows-online-3.3.12.exe</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this, '#')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">Installer</span>
+                            <span class="badge badge-offline">Offline</span>
+                            <span class="pkg-name">smartpostef-windows-offline-3.3.12.exe</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this, '#')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Linux 64-bit -->
+            <div class="glass-card p-5 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="badge badge-linux">Linux 64-bit</span>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">TEF Library</span>
+                            <span class="badge badge-lib">x86_64</span>
+                            <span class="pkg-name">libtef-x86_64-3.3.12.so</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this, '#')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">Installer</span>
+                            <span class="badge badge-online">Online</span>
+                            <span class="pkg-name">smartpostef-linux64-online-3.3.12</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this, '#')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-sm font-medium text-white">Installer</span>
+                            <span class="badge badge-offline">Offline</span>
+                            <span class="pkg-name">smartpostef-linux64-offline-3.3.12</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this, '#')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Copy URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <hr class="section-divider" />
+
+        <!-- ══════════════════════════════════════
+         SMART POS (STA) SECTION
+    ══════════════════════════════════════ -->
+        <section id="sta-section" class="mb-10">
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="platform-icon-box"
+                    style="background: rgba(160,100,255,0.15); border: 1px solid rgba(160,100,255,0.25);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--primary)"
+                        stroke-width="1.8">
+                        <path d="M6 18V12a6 6 0 0 1 12 0v6" />
+                        <path d="M2 18h20" />
+                        <path d="M6 7.5 4 5.5M18 7.5l2-2" />
+                        <circle cx="9" cy="10" r="0.5" fill="var(--primary)" />
+                        <circle cx="15" cy="10" r="0.5" fill="var(--primary)" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Smart POS</h2>
+                    <p class="text-xs text-white/40">STA — Standalone Android App</p>
+                </div>
+            </div>
+
+            <!-- PAX -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">PAX
+                        Technology</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">A910</span>
+                            <span class="text-xs text-white/30">pax</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">S920</span>
+                            <span class="text-xs text-white/30">pax</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sunmi -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Sunmi</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">P2</span>
+                            <span class="text-xs text-white/30">sunmi</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">P2 Lite SE</span>
+                            <span class="text-xs text-white/30">sunmi</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gertec -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Gertec</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">GPOS700</span>
+                            <span class="text-xs text-white/30">gertec</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">GPOS720</span>
+                            <span class="text-xs text-white/30">gertec</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-launcher">Launcher</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <span class="badge badge-app">App</span>
+                            <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg> Copy URL</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <hr class="section-divider" />
+
+        <!-- ══════════════════════════════════════
+         A2A SECTION
+    ══════════════════════════════════════ -->
+        <section id="a2a-section" class="mb-10">
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="platform-icon-box"
+                    style="background: rgba(160,100,255,0.15); border: 1px solid rgba(160,100,255,0.25);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--primary)"
+                        stroke-width="1.8">
+                        <polyline points="16 3 21 3 21 8" />
+                        <line x1="4" y1="20" x2="21" y2="3" />
+                        <polyline points="21 16 21 21 16 21" />
+                        <line x1="15" y1="15" x2="21" y2="21" />
+                        <line x1="4" y1="4" x2="9" y2="9" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">App to App</h2>
+                    <p class="text-xs text-white/40">A2A — Android Integration Layer</p>
+                </div>
+            </div>
+
+            <!-- SDK & Integration -->
+            <div class="glass-card p-5 mb-4">
+                <div class="subsection-header">
+                    <div class="subsection-icon"
+                        style="background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.22);">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#60a5fa" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6" />
+                            <polyline points="8 6 2 12 8 18" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">SDK &amp; Integration</h3>
+                        <p class="text-xs text-white/40">AAR library and documentation</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="badge badge-sdk">AAR</span>
+                            <span class="pkg-name">TefSdk.a2a.3.3.12.A2A.454389-release.aar</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="badge badge-doc">DOC</span>
+                            <span class="pkg-name">Doc-Integration.a2a.3.3.12.A2A.454389.zip</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device APKs -->
+            <div class="glass-card p-5 mb-4">
+                <div class="subsection-header">
+                    <div class="subsection-icon"
+                        style="background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.22);">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#34d399" stroke-width="2">
+                            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                            <line x1="12" y1="18" x2="12.01" y2="18" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">Device APKs</h3>
+                        <p class="text-xs text-white/40">SmartPosTef APK per device</p>
+                    </div>
+                </div>
+                <div class="device-group-label">PAX Technology</div>
+                <div class="flex flex-col gap-2 mb-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <span class="font-medium text-sm text-white">A910</span>
+                            <span class="badge badge-arch">armeabi-v7a</span>
+                            <span class="badge badge-apk">APK</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <span class="font-medium text-sm text-white">A910</span>
+                            <span class="badge badge-arch">arm64-v8a</span>
+                            <span class="badge badge-apk">APK</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                </div>
+                <div class="device-group-label">Sunmi</div>
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <span class="font-medium text-sm text-white">P2</span>
+                            <span class="badge badge-arch">armeabi-v7a</span>
+                            <span class="badge badge-apk">APK</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Examples -->
+            <div class="glass-card p-5 mb-4">
+                <div class="subsection-header">
+                    <div class="subsection-icon"
+                        style="background: rgba(249,115,22,0.12); border: 1px solid rgba(249,115,22,0.22);">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f97316" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">Payment Examples</h3>
+                        <p class="text-xs text-white/40">Demo APK per device</p>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <span class="font-medium text-sm text-white">A910</span>
+                            <span class="badge badge-example">Example</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 flex-wrap min-w-0">
+                            <span class="font-medium text-sm text-white">P2</span>
+                            <span class="badge badge-example">Example</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <hr class="section-divider" />
+
+        <!-- ══════════════════════════════════════
+         EMBEDDED SECTION
+    ══════════════════════════════════════ -->
+        <section id="embedded-section" class="mb-10">
+
+            <div class="flex items-center gap-3 mb-6">
+                <div class="platform-icon-box"
+                    style="background: rgba(167,139,250,0.14); border: 1px solid rgba(167,139,250,0.24);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#a78bfa" stroke-width="1.8">
+                        <rect x="4" y="4" width="16" height="16" rx="2" />
+                        <rect x="9" y="9" width="6" height="6" />
+                        <line x1="9" y1="1" x2="9" y2="4" />
+                        <line x1="15" y1="1" x2="15" y2="4" />
+                        <line x1="9" y1="20" x2="9" y2="23" />
+                        <line x1="15" y1="20" x2="15" y2="23" />
+                        <line x1="20" y1="9" x2="23" y2="9" />
+                        <line x1="20" y1="14" x2="23" y2="14" />
+                        <line x1="1" y1="9" x2="4" y2="9" />
+                        <line x1="1" y1="14" x2="4" y2="14" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Embedded Linux</h2>
+                    <p class="text-xs text-white/40">S920 — Embedded PAX device</p>
+                </div>
+            </div>
+
+            <div class="glass-card p-5">
+                <div class="flex flex-col gap-2">
+                    <div class="pkg-row">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-medium text-sm text-white">S920</span>
+                            <span class="badge badge-embedded">Embedded</span>
+                            <span class="pkg-name">s920_smartpostef_3.3.12.zip</span>
+                        </div>
+                        <button class="btn-copy" onclick="copyUrl(this,'#')"><svg viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" width="13" height="13">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg> Copy URL</button>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ── FOOTER ── -->
+        <footer class="mt-12 pt-6 border-t border-white/8 text-center">
+            <p class="text-xs text-white/30">SmartPosTef Release Portal · Aditum Serviços Digitais LTDA</p>
+        </footer>
+
+    </div>
+
+    <button id="back-to-top" title="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+            <polyline points="18 15 12 9 6 15" />
+        </svg>
+    </button>
+
+    <script>
+        const body = document.body;
+        const moon = document.getElementById('icon-moon');
+        const sun = document.getElementById('icon-sun');
+
+        function applyTheme(dark) {
+            if (dark) {
+                body.classList.remove('light');
+                body.style.color = '';
+                moon.style.display = 'block'; sun.style.display = 'none';
+            } else {
+                body.classList.add('light');
+                body.style.color = '#1a1033';
+                moon.style.display = 'none'; sun.style.display = 'block';
+            }
+        }
+        applyTheme(localStorage.getItem('spt-html-theme') !== 'light');
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const wasDark = !body.classList.contains('light');
+            localStorage.setItem('spt-html-theme', wasDark ? 'light' : 'dark');
+            applyTheme(!wasDark);
+        });
+
+        function copyUrl(btn, url) {
+            navigator.clipboard.writeText(url).then(() => {
+                const orig = btn.innerHTML;
+                btn.classList.add('copied');
+                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+                setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
+            }).catch(() => prompt('Copy this URL:', url));
+        }
+
+        const btt = document.getElementById('back-to-top');
+        window.addEventListener('scroll', () => btt.classList.toggle('visible', window.scrollY > 300));
+    </script>
+
+</body>
+
+</html>

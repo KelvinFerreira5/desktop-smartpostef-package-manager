@@ -12,7 +12,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tokio-util = { version = "0.7", features = ["io"] }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"

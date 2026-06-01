@@ -39,6 +39,14 @@ pub struct PortalSettings {
     pub portal_title: String,
     #[serde(rename = "companyName", default)]
     pub company_name: String,
+    #[serde(rename = "htmlTitle", default)]
+    pub html_title: String,
+    #[serde(rename = "htmlSubtitle", default)]
+    pub html_subtitle: String,
+    #[serde(rename = "primaryColor", default)]
+    pub primary_color: String,
+    #[serde(rename = "secondaryColor", default)]
+    pub secondary_color: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,12 +58,49 @@ pub struct CustomDevice {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExportOptions {
+    pub releases: bool,
+    #[serde(rename = "defaultTheme")]
+    pub default_theme: bool,
+    #[serde(rename = "jfrogSettings")]
+    pub jfrog_settings: bool,
+    #[serde(rename = "clientMappings")]
+    pub client_mappings: bool,
+    #[serde(rename = "htmlSettings")]
+    pub html_settings: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportOptions {
+    pub releases: bool,
+    #[serde(rename = "defaultTheme")]
+    pub default_theme: bool,
+    #[serde(rename = "jfrogSettings")]
+    pub jfrog_settings: bool,
+    #[serde(rename = "clientMappings")]
+    pub client_mappings: bool,
+    #[serde(rename = "htmlSettings")]
+    pub html_settings: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportSummary {
+    pub imported: Vec<String>,
+    pub skipped: Vec<String>,
+    #[serde(rename = "releaseCount")]
+    pub release_count: usize,
+    pub theme: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Release {
     pub id: String,
     pub version: String,
     pub date: String,
     #[serde(rename = "type")]
     pub release_type: String,
+    #[serde(default)]
+    pub description: String,
     #[serde(rename = "releaseNotes")]
     pub release_notes: String,
     pub packages: Vec<PackageData>,
@@ -186,6 +231,18 @@ impl Default for Settings {
 fn get_app_data_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
     base.join("smartpostef-package-manager")
+}
+
+fn get_type_short(release: &Release) -> &'static str {
+    let rtype = release.release_type.to_lowercase();
+    if rtype == "production" {
+        let is_unsigned = release.packages.iter().any(|p| p.url.contains("/unsigned/"));
+        if is_unsigned { "unsigned" } else { "prod" }
+    } else if rtype == "deploy-only" {
+        "deploy"
+    } else {
+        "dev"
+    }
 }
 
 fn ensure_directories() {
@@ -487,6 +544,19 @@ fn extract_signature(file_name: &str) -> Option<String> {
         return None;
     }
     
+    // Try v2 format first: version+hexhash-SIGNATURE-release_sign.ext
+    let re_v2 = Regex::new(r"\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
+    if let Some(caps) = re_v2.captures(file_name) {
+        if let Some(sig) = caps.get(1) {
+            let potential_sig = sig.as_str().to_lowercase();
+            let excluded = ["release", "debug", "sign", "signed", "unsigned", "offline", "online"];
+            if !excluded.contains(&potential_sig.as_str()) {
+                return Some(sig.as_str().to_string());
+            }
+        }
+    }
+
+    // v1 format: version.hash-SIGNATURE-release_sign.ext or version.A2A.hash-SIGNATURE-release_sign.ext
     let re = Regex::new(r"\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$").ok()?;
     if let Some(caps) = re.captures(file_name) {
         if let Some(sig) = caps.get(1) {
@@ -503,8 +573,17 @@ fn extract_signature(file_name: &str) -> Option<String> {
 // Extract base version (Major.Minor.Patch) from full version string
 // "2.5.1.183749" -> "2.5.1"
 // "2.4.1.A2A.96873" -> "2.4.1"
+// "2.5.4+0d05ce0" -> "2.5.4"
 // "0.16.1" -> "0.16.1"
 fn extract_base_version(version: &str) -> Option<String> {
+    // Handle v2 versions with hex hash: X.X.X+HEXHASH -> X.X.X
+    if version.contains('+') {
+        let parts: Vec<&str> = version.split('+').collect();
+        if !parts.is_empty() {
+            return Some(parts[0].to_string());
+        }
+    }
+
     // Handle A2A versions: X.X.X.A2A.HASH -> X.X.X
     if version.contains(".A2A.") {
         let parts: Vec<&str> = version.split(".A2A.").collect();
@@ -556,6 +635,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== WINDOWS PACKAGES ====================
     
+    // Windows DLL v2: AditumTefLibrary-{P|D}-{version}+{hexhash}.zip
+    let re = Regex::new(r"^AditumTefLibrary-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("DLL".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/dll/" } else { "packages/windows/dll/" }.to_string());
+        return pkg;
+    }
+
+    // Windows Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86-online.exe
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86-online\.exe$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/" } else { "packages/windows/" }.to_string());
+        return pkg;
+    }
+
+    // Windows Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86-offline.exe
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86-offline\.exe$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Windows".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/windows/" } else { "packages/windows/" }.to_string());
+        return pkg;
+    }
+
     // Windows DLL: AditumTefLibrary-{P|D}-{version}-{hash}.zip
     let re = Regex::new(r"^AditumTefLibrary-([PD])-(\d+\.\d+\.\d+)-(\d+)\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -609,6 +727,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== LINUX 64 PACKAGES ====================
     
+    // Linux 64 Library v2: AditumTEFLib-{P|D}-amd64-{version}+{hexhash}(-{rev})?.(zip|tar)
+    let re = Regex::new(r"^AditumTEFLib-([PD])-amd64-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-(\d+))?\.(zip|tar)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("Library".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/library/" } else { "packages/linux/64/library/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 64 Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86_64-online
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86_64-online$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/" } else { "packages/linux/64/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 64 Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-x86_64-offline
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-x86_64-offline$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux64".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/64/" } else { "packages/linux/64/" }.to_string());
+        return pkg;
+    }
+
     // Linux 64 Library: AditumTEFLib-{P|D}-amd64-{version}.{hash}(-{rev})?.zip
     let re = Regex::new(r"^AditumTEFLib-([PD])-amd64-(\d+\.\d+\.\d+)\.(\d+)(?:-(\d+))?\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -662,6 +819,45 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== LINUX 32 PACKAGES ====================
     
+    // Linux 32 Library v2: AditumTEFLib-{P|D}-i386-{version}+{hexhash}(-{rev})?.(zip|tar)
+    let re = Regex::new(r"^AditumTEFLib-([PD])-i386-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-(\d+))?\.(zip|tar)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("TEF Library".to_string());
+        pkg.category = Some("Library".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/library/" } else { "packages/linux/32/library/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 32 Installer Online v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-i386-online
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-i386-online$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Online".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/" } else { "packages/linux/32/" }.to_string());
+        return pkg;
+    }
+
+    // Linux 32 Installer Offline v2: AditumTEF-installer-{P|D}-{version}+{hexhash}-i386-offline
+    let re = Regex::new(r"^AditumTEF-installer-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-i386-offline$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Linux32".to_string());
+        pkg.device = Some("Installer".to_string());
+        pkg.category = Some("Offline".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/linux/32/" } else { "packages/linux/32/" }.to_string());
+        return pkg;
+    }
+
     // Linux 32 Library: AditumTEFLib-{P|D}-i386-{version}.{hash}(-{rev})?.zip
     let re = Regex::new(r"^AditumTEFLib-([PD])-i386-(\d+\.\d+\.\d+)\.(\d+)(?:-(\d+))?\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -715,6 +911,37 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== EMBEDDED S920 PACKAGES ====================
     
+    // Embedded S920 Signed v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}_sign.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)_sign\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Embedded".to_string());
+        pkg.device = Some("S920".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/pax/s920/" }.to_string());
+        return pkg;
+    }
+
+    // Embedded S920 Unsigned v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("Embedded".to_string());
+        pkg.device = Some("S920".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/unsigned/pax/s920/" }.to_string());
+        if !pkg.is_dev {
+            let folder_name = file_name.trim_end_matches(".zip").to_string();
+            pkg.special_handling = Some("extract-s920-root".to_string());
+            pkg.extract_folder = Some(folder_name);
+        }
+        return pkg;
+    }
+
     // Embedded S920 Signed (new format): SmartPosTef-{P|D}-S920-{version}.{hash}_sign.zip
     let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\.(\d+)_sign\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -783,6 +1010,52 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== STA LAUNCHER PACKAGES (LP) ====================
     
+    // STA Launcher Production v2: SmartPosTef-LP-{device}-{version}+{hexhash}(-{signature})?-release(_sign)?.(zip|apk)
+    let re = Regex::new(r"^SmartPosTef-LP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        let has_signed = caps.get(5).is_some();
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Launcher".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_signed = has_signed;
+        pkg.is_dev = false;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = if has_signed {
+                format!("packages/{}/{}/launcher/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/{}/{}/launcher/", info.manufacturer, info.path)
+            };
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // STA Launcher Production: SmartPosTef-LP-{device}-{version}.{hash}(-{signature})?-release(_sign)?.(zip|apk)
     let re = Regex::new(r"^SmartPosTef-LP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -831,6 +1104,52 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== STA APP PACKAGES (AP) ====================
     
+    // STA App Production v2: SmartPosTef-AP-{device}-{version}+{hexhash}(-{signature})?-release(_sign)?.(zip|apk)
+    let re = Regex::new(r"^SmartPosTef-AP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        let has_signed = caps.get(5).is_some();
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("App".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_signed = has_signed;
+        pkg.is_dev = false;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = if has_signed {
+                format!("packages/{}/{}/app/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/{}/{}/app/", info.manufacturer, info.path)
+            };
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // STA App Production: SmartPosTef-AP-{device}-{version}.{hash}(-{signature})?-release(_sign)?.(zip|apk)
     let re = Regex::new(r"^SmartPosTef-AP-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release(_sign)?\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -879,6 +1198,46 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== DEVELOPMENT STA PACKAGES (LD/AD) ====================
     
+    // Dev Launcher v2 (LD): SmartPosTef-LD-{device}-{version}+{hexhash}...
+    let re = Regex::new(r"^SmartPosTef-LD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Launcher".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = true;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = format!("packages/dev/{}/{}/launcher/", info.manufacturer, info.path);
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
     // Dev Launcher (LD): SmartPosTef-LD-{device}-{version}.{hash}...
     let re = Regex::new(r"^SmartPosTef-LD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -909,6 +1268,46 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         
         if let Some(info) = device_info {
             let base_path = format!("packages/dev/{}/{}/launcher/", info.manufacturer, info.path);
+            pkg.jfrog_path = Some(if let Some(ref c) = client {
+                format!("{}{}/", base_path, c.to_lowercase())
+            } else {
+                base_path
+            });
+        }
+        
+        return pkg;
+    }
+
+    // Dev App v2 (AD): SmartPosTef-AD-{device}-{version}+{hexhash}...
+    let re = Regex::new(r"^SmartPosTef-AD-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+\d*)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?.*\.(?:zip|apk)$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(1).unwrap().as_str();
+        let version_with_client = caps.get(2).unwrap().as_str();
+        let hash = caps.get(3).unwrap().as_str();
+        let signature_from_name = caps.get(4).map(|m| m.as_str().to_string());
+        
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("STA".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("App".to_string());
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = true;
+        
+        if let Some(sig) = signature_from_name {
+            let sig_lower = sig.to_lowercase();
+            if !["release", "debug"].contains(&sig_lower.as_str()) {
+                pkg.signature = Some(sig);
+            }
+        }
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client.clone();
+        
+        if let Some(info) = device_info {
+            let base_path = format!("packages/dev/{}/{}/app/", info.manufacturer, info.path);
             pkg.jfrog_path = Some(if let Some(ref c) = client {
                 format!("{}{}/", base_path, c.to_lowercase())
             } else {
@@ -961,6 +1360,213 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== A2A PACKAGES ====================
     
+    // A2A AAR v2: AditumSdkIntegration-A2A-{P|D}-{version}+{hexhash}-release.aar
+    let re = Regex::new(r"^AditumSdkIntegration-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.aar$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("SDK Integration".to_string());
+        pkg.category = Some("AAR".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/app-to-app/sdk_integration/" } else { "packages/app-to-app/sdk_integration/" }.to_string());
+        return pkg;
+    }
+
+    // A2A Doc v2: Doc-AditumSdkIntegration-A2A-{P|D}-{version}+{hexhash}.zip
+    let re = Regex::new(r"^Doc-AditumSdkIntegration-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)\.zip$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("SDK Integration".to_string());
+        pkg.category = Some("Documentation".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/app-to-app/sdk_integration/doc/" } else { "packages/app-to-app/sdk_integration/doc/" }.to_string());
+        return pkg;
+    }
+
+    // A2A TefSdk v2: AditumSdkService-A2A-{P|D}-TefSdk-{arch}-{version}+{hexhash}-release.apk
+    let re = Regex::new(r"^AditumSdkService-A2A-([PD])-TefSdk-(arm64-v8a|armeabi-v7a)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let arch = caps.get(2).unwrap().as_str();
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("TefSdk".to_string());
+        pkg.category = Some(if arch == "armeabi-v7a" { "v7a" } else { "v8a" }.to_string());
+        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        let arch_path = if arch == "armeabi-v7a" { "v7a" } else { "v8a" };
+        pkg.jfrog_path = Some(if pkg.is_dev { 
+            format!("packages/dev/app-to-app/tef-android/{}/", arch_path) 
+        } else { 
+            format!("packages/app-to-app/tef-android/{}/", arch_path) 
+        });
+        return pkg;
+    }
+
+    // A2A Device APK Signed v2: SmartPosTef-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^SmartPosTef-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Device APK".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Device APK Unsigned v2: SmartPosTef-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release.apk
+    let re = Regex::new(r"^SmartPosTef-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Device APK".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/app-to-app/apk/{}/{}/", info.manufacturer, info.path)
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Generic v2: PaymentExample-A2A-{P|D}-{version}+{hexhash}-release.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some("Generic".to_string());
+        pkg.category = Some("Payment Example".to_string());
+        pkg.version = Some(caps.get(2).unwrap().as_str().to_string());
+        pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        
+        pkg.jfrog_path = Some(if pkg.is_dev {
+            "packages/dev/app-to-app/payment_example/".to_string()
+        } else {
+            "packages/app-to-app/payment_example/".to_string()
+        });
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Signed v2: PaymentExample-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release_sign.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release_sign\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Payment Example".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = true;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples go to root payment_example/ (no manufacturer subfolder)
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
+            });
+        }
+        
+        return pkg;
+    }
+
+    // A2A Payment Example Unsigned v2: PaymentExample-A2A-{P|D}-{device}-{version}+{hexhash}[-{signature}]-release.apk
+    let re = Regex::new(r"^PaymentExample-A2A-([PD])-([A-Za-z0-9_]+)-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?-release\.apk$").unwrap();
+    if let Some(caps) = re.captures(file_name) {
+        let device_name = caps.get(2).unwrap().as_str();
+        let device_key = device_name.to_uppercase();
+        let device_info = DEVICE_MAP.get(device_key.as_str());
+        
+        pkg.platform = Some("A2A".to_string());
+        pkg.device = Some(device_name.to_string());
+        pkg.category = Some("Payment Example".to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
+        pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
+        pkg.is_signed = false;
+        pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
+        
+        if let Some(info) = device_info {
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            } else {
+                format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples are signature-exempt — no unsigned/ prefix
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
+            });
+        }
+        
+        return pkg;
+    }
+
     // A2A AAR: AditumSdkIntegration-{P|D}-{version}.A2A.{hash}-release.aar
     let re = Regex::new(r"^AditumSdkIntegration-([PD])-(\d+\.\d+\.\d+)\.A2A\.(\d+)-release\.aar$").unwrap();
     if let Some(caps) = re.captures(file_name) {
@@ -1016,11 +1622,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Device APK".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1043,11 +1654,16 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Device APK".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
@@ -1090,17 +1706,29 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Payment Example".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
                 format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             } else {
                 format!("packages/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples go to root payment_example/ (no manufacturer subfolder)
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
             });
         }
         
@@ -1117,17 +1745,29 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.platform = Some("A2A".to_string());
         pkg.device = Some(device_name.to_string());
         pkg.category = Some("Payment Example".to_string());
-        pkg.version = Some(caps.get(3).unwrap().as_str().to_string());
-        pkg.hash = Some(caps.get(4).unwrap().as_str().to_string());
+        let version_with_client = caps.get(3).unwrap().as_str();
+        let hash = caps.get(4).unwrap().as_str();
+        pkg.hash = Some(hash.to_string());
         pkg.is_dev = caps.get(2).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = false;
         pkg.signature = caps.get(5).map(|m| m.as_str().to_string());
+        
+        let (base_version, client, _) = extract_client_from_version(&format!("{}.{}", version_with_client, hash), settings);
+        pkg.version = Some(base_version);
+        pkg.client = client;
         
         if let Some(info) = device_info {
             pkg.jfrog_path = Some(if pkg.is_dev {
                 format!("packages/dev/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
             } else {
                 format!("packages/unsigned/app-to-app/payment_example/{}/{}/", info.manufacturer, info.path)
+            });
+        } else {
+            // TefSdk/orphan payment examples are signature-exempt — no unsigned/ prefix
+            pkg.jfrog_path = Some(if pkg.is_dev {
+                "packages/dev/app-to-app/payment_example/".to_string()
+            } else {
+                "packages/app-to-app/payment_example/".to_string()
             });
         }
         
@@ -1847,7 +2487,9 @@ mod commands {
         file_path: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let upload_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -1881,8 +2523,8 @@ mod commands {
         let file_size = fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
         
         let url = format!(
-            "https://artifactory.aditum.com.br/artifactory/{}{}",
-            jfrog_path, file_name
+            "{}/{}{}",
+            base_url, jfrog_path, file_name
         );
         
         log_to_file("DEBUG", "UPLOAD: Preparing upload request", Some(&format!(
@@ -1996,7 +2638,9 @@ mod commands {
         extract_folder: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let operation_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -2167,8 +2811,8 @@ mod commands {
             // Build the JFrog URL: jfrog_path + extract_folder + relative_path
             let relative_str = relative_path.to_string_lossy().replace("\\", "/");
             let url = format!(
-                "https://artifactory.aditum.com.br/artifactory/{}{}/{}",
-                jfrog_path, extract_folder, relative_str
+                "{}/{}{}/{}",
+                base_url, jfrog_path, extract_folder, relative_str
             );
             
             log_to_file("DEBUG", &format!("EXTRACT_UPLOAD: Uploading file - {}", file_name), Some(&format!(
@@ -2238,7 +2882,7 @@ mod commands {
             
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, extract_folder),
+                url: format!("{}/{}{}/", base_url, jfrog_path, extract_folder),
                 message: format!("Uploaded {} files from folder {}", uploaded_files.len(), extract_folder),
             })
         } else if uploaded_files.is_empty() && !failed_files.is_empty() {
@@ -2274,7 +2918,7 @@ mod commands {
             // Include the list of failed files in the message for user information
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, extract_folder),
+                url: format!("{}/{}{}/", base_url, jfrog_path, extract_folder),
                 message: format!("Uploaded {} files. Failed: {}", uploaded_files.len(), failed_file_names.join(", ")),
             })
         }
@@ -2288,7 +2932,9 @@ mod commands {
         folder_name: String,
         jfrog_path: String,
         api_key: String,
+        base_url: Option<String>,
     ) -> Result<UploadResult, String> {
+        let base_url = base_url.unwrap_or_else(|| "https://artifactory.aditum.com.br/artifactory".to_string());
         let operation_start = std::time::Instant::now();
         let api_key_masked = if api_key.len() > 8 {
             format!("{}...{}", &api_key[..4], &api_key[api_key.len()-4..])
@@ -2428,8 +3074,8 @@ mod commands {
             // Build the JFrog URL: jfrog_path + folder_name + / + relative_path
             let relative_str = relative_path.to_string_lossy().replace("\\", "/");
             let url = format!(
-                "https://artifactory.aditum.com.br/artifactory/{}{}/{}",
-                jfrog_path, folder_name, relative_str
+                "{}/{}{}/{}",
+                base_url, jfrog_path, folder_name, relative_str
             );
             
             log_to_file("DEBUG", &format!("EXTRACT_ROOT_UPLOAD: Uploading file - {}", file_name), Some(&format!(
@@ -2499,7 +3145,7 @@ mod commands {
             
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, folder_name),
+                url: format!("{}/{}{}/", base_url, jfrog_path, folder_name),
                 message: format!("Extracted and uploaded {} files to {}{}/", uploaded_files.len(), jfrog_path, folder_name),
             })
         } else if uploaded_files.is_empty() && !failed_files.is_empty() {
@@ -2522,7 +3168,7 @@ mod commands {
             )));
             Ok(UploadResult {
                 success: true,
-                url: format!("https://artifactory.aditum.com.br/artifactory/{}{}/", jfrog_path, folder_name),
+                url: format!("{}/{}{}/", base_url, jfrog_path, folder_name),
                 message: format!("Uploaded {} files. Failed: {}", uploaded_files.len(), failed_file_names.join(", ")),
             })
         }
@@ -2588,6 +3234,9 @@ mod commands {
         // type should be lowercase: "production" or "development"
         let release_type_lower = release.release_type.to_lowercase();
         content.push_str(&format!("type={}\n", release_type_lower));
+        if !release.description.is_empty() {
+            content.push_str(&format!("description={}\n", release.description));
+        }
         content.push_str("</release_info>\n\n");
         
         // Section 2: <release_notes>
@@ -2646,13 +3295,13 @@ mod commands {
         let html_dir = get_app_data_dir().join("html");
         fs::create_dir_all(&html_dir).map_err(|e| e.to_string())?;
         
-        let release_type = &release.release_type;
-        let type_short = if release_type.to_lowercase() == "production" { "prod" } else { "dev" };
+        let type_short = get_type_short(&release);
         let filename = format!("release_{}-{}-{}.html", release.version, release.date, type_short);
         let html_path = html_dir.join(&filename);
         
-        // Generate HTML content
-        let html_content = generate_html_content(&release);
+        // Load portal settings to inject title / company name
+        let settings = get_settings();
+        let html_content = generate_html_content(&release, &settings.portal_settings);
         
         fs::write(&html_path, html_content).map_err(|e| e.to_string())?;
         
@@ -2661,8 +3310,45 @@ mod commands {
         Ok(html_path.to_string_lossy().to_string())
     }
 
-    fn generate_html_content(release: &Release) -> String {
-        let release_type = &release.release_type;
+    fn generate_html_content(release: &Release, portal: &PortalSettings) -> String {
+        let favicon_b64 = base64::engine::general_purpose::STANDARD.encode(include_bytes!("../../src/assets/html-favicon.ico"));
+        let portal_title = if !portal.html_title.is_empty() {
+            portal.html_title.clone()
+        } else if !portal.portal_title.is_empty() {
+            portal.portal_title.clone()
+        } else {
+            "SmartPosTef Release Portal".to_string()
+        };
+        let company_name = if !portal.html_subtitle.is_empty() {
+            portal.html_subtitle.clone()
+        } else if !portal.company_name.is_empty() {
+            portal.company_name.clone()
+        } else {
+            "Aditum Serviços Digitais LTDA".to_string()
+        };
+
+        // Color settings — derive from user config with defaults
+        let hex_to_rgb = |hex: &str| -> (u8, u8, u8) {
+            let hex = hex.trim_start_matches('#');
+            let r = u8::from_str_radix(hex.get(0..2).unwrap_or("a0"), 16).unwrap_or(160);
+            let g = u8::from_str_radix(hex.get(2..4).unwrap_or("64"), 16).unwrap_or(100);
+            let b = u8::from_str_radix(hex.get(4..6).unwrap_or("ff"), 16).unwrap_or(255);
+            (r, g, b)
+        };
+        let primary_color = if portal.primary_color.is_empty() { "#a064ff".to_string() } else { portal.primary_color.clone() };
+        let secondary_color = if portal.secondary_color.is_empty() { "#e040a0".to_string() } else { portal.secondary_color.clone() };
+        let (pr, pg, pb) = hex_to_rgb(&primary_color);
+        let primary_dim_12 = format!("rgba({},{},{},0.12)", pr, pg, pb);
+        let primary_dim_09 = format!("rgba({},{},{},0.09)", pr, pg, pb);
+        let primary_dim_06 = format!("rgba({},{},{},0.06)", pr, pg, pb);
+
+        let release_type_raw = release.release_type.to_lowercase();
+        let release_type = if release_type_raw == "deploy-only" {
+            "Deploy Only".to_string()
+        } else {
+            release.release_type.clone()
+        };
+        let release_type = &release_type;
         let packages = &release.packages;
         let release_notes = &release.release_notes;
         
@@ -2699,23 +3385,25 @@ mod commands {
         
         // TEF Section (Windows, Linux)
         if !windows_packages.is_empty() || !linux64_packages.is_empty() || !linux32_packages.is_empty() {
-            sections_html.push_str(r#"
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                TEF
-            </h2>"#);
-            
+            let tef_count = windows_packages.len() + linux64_packages.len() + linux32_packages.len();
+            sections_html.push_str(&format!(
+                r#"<section class="section"><div class="section-head"><div class="section-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><span class="section-title">TEF</span><span class="section-meta">{} packages</span></div>"#,
+                tef_count
+            ));
+            sections_html.push_str(r#"<div class="device-stack">"#);
             if !windows_packages.is_empty() {
                 sections_html.push_str(&generate_platform_section("Windows", &windows_packages));
+                sections_html.push_str(r#"<div class="device-divider"></div>"#);
             }
             if !linux64_packages.is_empty() {
-                sections_html.push_str(&generate_platform_section("Linux 64bits", &linux64_packages));
+                sections_html.push_str(&generate_platform_section("Linux 64-bit", &linux64_packages));
+                sections_html.push_str(r#"<div class="device-divider"></div>"#);
             }
             if !linux32_packages.is_empty() {
-                sections_html.push_str(&generate_platform_section("Linux 32bits", &linux32_packages));
+                sections_html.push_str(&generate_platform_section("Linux 32-bit", &linux32_packages));
+                sections_html.push_str(r#"<div class="device-divider"></div>"#);
             }
-            
-            sections_html.push_str("\n        </section>");
+            sections_html.push_str("</div></section>");
         }
         
         // Smart POS Section
@@ -2738,175 +3426,198 @@ mod commands {
             sections_html.push_str(&generate_other_section(&other_packages));
         }
         
-        // Release notes section
-        let release_notes_html = if !release_notes.is_empty() {
-            // Escape backticks and backslashes for safe embedding in JS template literal
-            let escaped_notes = release_notes
-                .replace("\\", "\\\\")
-                .replace("`", "\\`")
-                .replace("${", "\\${");
-            format!(r#"
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                Release Notes
-            </h2>
-            <div id="release-notes-content" class="markdown-preview text-gray-700 dark:text-gray-300">
-            </div>
-            <script>
-                (function() {{
-                    const rawNotes = `{}`;
-                    if (typeof marked !== 'undefined') {{
-                        document.getElementById('release-notes-content').innerHTML = marked.parse(rawNotes);
-                    }} else {{
-                        document.getElementById('release-notes-content').innerHTML = rawNotes.replace(/\n/g, '<br>');
-                    }}
-                }})();
-            </script>
-        </section>"#, escaped_notes)
+        // Build the final HTML document
+        let release_type_badge_class = if release_type_raw == "production" { "badge-prod" } else { "badge-dev" };
+
+        // Description line (shown only when non-empty)
+        let description_line = if !release.description.is_empty() {
+            format!("<p style=\"color:var(--text-muted);font-size:.82rem;font-style:italic;margin:.5rem 0 0\">{}</p>", release.description)
         } else {
             String::new()
         };
-        
-        format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
+
+        // Release notes section
+        let release_notes_html = if !release_notes.is_empty() {
+            let escaped_notes = release_notes
+                .replace('\\', "\\\\")
+                .replace('`', "\\`")
+                .replace("${", "\\${");
+            format!(
+                r#"<div class="notes-box"><div class="notes-label">Release Notes</div><div class="notes-body" id="notes-content"></div></div><script>(function(){{var raw=`{}`;if(typeof marked!=='undefined'){{document.getElementById('notes-content').innerHTML=marked.parse(raw);}}else{{document.getElementById('notes-content').textContent=raw;}}}})()</script>"#,
+                escaped_notes
+            )
+        } else {
+            String::new()
+        };
+
+        let container_class = if !release_notes.is_empty() { "has-notes" } else { "no-notes" };
+
+        let formatted_date = {
+            let parts: Vec<&str> = release.date.splitn(3, '-').collect();
+            if parts.len() == 3 { format!("{}/{}/{}", parts[2], parts[1], parts[0]) } else { release.date.clone() }
+        };
+
+        format!(r##"<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartPosTef Release {version}</title>
-    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAIAEBAAAAEAIAAoBAAAJgAAACAgAAABACAAKBAAAE4EAAAoAAAAEAAAACAAAAABACAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHUogj9zJ4WddSeJ3XQnjP9zJ5D/cyeU3XIll51xKJo/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHYoeZp1J33/dCeB/3QnhP90J4j/cyaM/3MmkP9yJpP/ciaX/3EmnJoAAAAAAAAAAAAAAAAAAAAAAAAAAHcocrh2KHb/did5/3Unff91J4H/dCeF/3QniP9zJ4z/cyeQ/3InlP9yJpf/ciWbuAAAAAAAAAAAAAAAAHcoapp3J27/didy/3Yndf91J3n/dSd9/3Qngf90JoT/cyaI/3MmjP9yJpD/ciaT/3Eml/9xJpqaAAAAAHkoYT94KGf/eChr/3cob/93KHL/dih2/3oufv93Kn//dSeB/3Qnhf90J4j/dCeM/3MnkP9zJ5T/ciaX/3Eomj94KV6deChj/3goZ/93KGv/dydu/49PjP/NsM3/i0mO/3Unff90J4H/jlCb/3QniP9zJoz/cyaQ/3Imk/9yJZedeShc3XkoYP95KGP/j02B/8Ccu//VvNL/rHyp/8Gewf92J3n/fjWF/9O61/+9mcX/i0uc/3MnjP9zJ5D/cieU3XkoWP95KFv/hz9w/+vf6P/Fo77/gjp2/4M6e//cx9v/k1WS/3Unef+AOIf/wJ3G/+nd7P+AOpP/cyaM/3ImkP97KVT/eilY/3opXP+reZv/3cjX/7mQsP96K23/soau/86xzP98MXz/upO8/9zI3v+od6//dCeF/3Qnif90J4z/eyhQ3XooVP96KFj/eShc/4pEdP+tfKD/eyxq/3wwcP/Zw9f/mFyV/6x9rP+HQor/dSd9/3Qngf90J4T/dSeI3XspTJ17KVH/eilU/3opWP95KFz/eShg/3koY/94KGf/n2aV/76Yuv93KHL/dih2/3Ynef91J33/dSeB/3MnhZ15KEk/eylN/3ooUP96KFT/eShY/3koXP95KF//eChj/34zbv+TVIj/dydu/3Yncv92J3X/dSd5/3Unff91KII/AAAAAHwpS5p8KU3/eylR/3spVP96KVj/eilc/3kpYP95KGP/eChn/3goa/93KG//dyhy/3Yodv92KHuaAAAAAAAAAAAAAAAAeypJuHspTf97KFD/eihU/3ooWP95KFz/eShf/3goY/94KGf/dyhr/3cnbv92J3K4AAAAAAAAAAAAAAAAAAAAAAAAAAB8KUmaeylN/3spUf96KVT/eilY/3koXP95KGD/eShj/3goZ/93KGyaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHkoST97KUydeihQ3XooVP95KFj/eShb3XgpXp15KGE/AAAAAAAAAAAAAAAAAAAAACgAAAAgAAAAQAAAAAEAIAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAdieJGnMoh2Z1J4ekdCeL0XMnjO9zJ47/cyeQ/3Mnku9xJ5TRcieVpHMllmZ2J50aAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcil/OHMngah0J4L/dCeF/3Qmhv90J4j/cyaK/3MnjP9zJo7/cyaQ/3Imkf9yJpP/ciaV/3Iml/9wJpmociSbOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf0B/BHYoe5N1J33/dSd//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeK/3MnjP9zJ47/cyeQ/3Mnkv9yJpP/cieW/3Iml/9yJpn/cSaak39AfwQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHQndC50J3fQdSd5/3Une/91J33/dCd//3Qngf90JoL/dCeE/3Mmhv9zJ4j/cyaK/3MmjP9yJo3/ciaQ/3Imkf9yJpP/cSaV/3Iml/9xJpn/cSaa0G8nmy4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB3JnM8dyh08HYodv92KHj/did6/3YofP91J33/dSd//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeL/3MnjP9zJ47/cyeQ/3Mnkv9yJ5T/cieW/3Iml/9yJpn/cSab8HMmnTwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAdCdvLnYncPB2J3L/did0/3Yndv91J3f/dSd5/3Une/91J33/dCd//3Qngf90J4L/dCeF/3Mmhv9zJ4j/cyaK/3MnjP9zJo3/cyaQ/3Imkf9yJpP/ciaV/3Iml/9xJpn/cSab8G8nmy4AAAAAAAAAAAAAAAAAAAAAAAAAAH9AfwR4KG3Qdyhu/3cocP93KHL/dyh0/3Yndv92KHj/did5/3YnfP91J33/dSd//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeK/3MnjP9zJ47/cyeQ/3Mnkv9yJpP/ciaW/3Iml/9yJpn/cSaa0H9AfwQAAAAAAAAAAAAAAAAAAAAAeCZok3coav93J2z/dydu/3YncP92J3L/didz/3Yndf91J3f/dSd5/3Une/91J33/dCd//3Qngf90JoL/dCeE/3Mmhv9zJ4j/cyaK/3MmjP9yJo3/ciaQ/3Imkf9yJpP/cSaV/3Eml/9xJpn/cSaakwAAAAAAAAAAAAAAAHspZDh4KGf/eChp/3goa/94KG3/dyhv/3cocf93KHL/dyh0/3Yodv92KHj/did6/3YofP91J33/dSh//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeL/3MnjP9zJ47/cyeQ/3Mnkv9yJ5T/cieW/3Iml/9yJ5n/ciSbOAAAAAAAAAAAeCdjqHgoZf94KGf/dyho/3coa/93J2z/dyhu/3YncP92J3L/did0/3Yndv91J3f/dSd5/3Une/91J33/dCd//3Qngf90J4L/dCeF/3Qmhv90J4j/cyaK/3MnjP9zJo7/cyaQ/3Imkf9yJpP/ciaV/3Iml/9wJpmoAAAAAHYnYhp5KGL/eShj/3koZf94KGf/eChp/3goa/94KG3/dyhu/3cocP93KHL/dyh0/30yff+OTY//did6/3YofP91J33/dSd//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeK/3MnjP9zJ47/cyeQ/3Mnkv9yJpP/cieW/3Iml/92J50aeChcZnkoX/94KGH/eChj/3goZf94KGf/dydo/3coav93J2z/dydu/3cpcf94KnT/tYu0//r3+v+XXJj/dSd5/3Une/91J33/dCd//3Qngf93KoT/dSmF/3Mmhv9zJ4j/cyaK/3MmjP9yJo3/ciaQ/3Imkf9yJpP/cSaV/3MllmZ5KFykeile/3koYP95KWL/eShj/3koZf94KGf/eChp/3goa/+DOXj/toyy/8Shwf+qeKf/+vf6/86xzv96L3z/did6/3YofP91J33/fzeJ/8Sjyf+1i7z/gDqQ/3Qnh/90J4j/dCeL/3MnjP9zJ47/cyeQ/3Mnkv9yJ5T/cieVpHkoWtF5KFz/eShd/3koX/94KGH/eChj/3goZf94KGf/j02D/+rd6P/8+/z/8ejw/4Q9f//q3un/9e/1/45Mjv91J3f/dSd5/3Une/+FQIz/7+bw//z7/f/u5O//mF+l/3Mmhv9zJ4j/cyaK/3MnjP9zJo3/cyaQ/3Imkf9xJpLReidX73opWv95KFz/eSle/3koX/95KGL/hTtx/7qRsP/07fL/+PP3/9G2zf+JQ3//dyhu/5thlv/69/n/wZy//3Yndv92KHj/did5/3YnfP+HRI7/zbHR//bx9//59fn/xaXM/41Onf90J4j/dCeK/3MnjP9zJ47/cyeQ/3Mnku96KFb/eihY/3koWf95KFz/eShd/4hAcf/ey9n/+/j6/+vg6f+aX47/fC9u/3coav93J2z/eChv/9vG2f/17/T/hT6C/3Yndf91J3f/dSd5/3Une/96L4L/l12f/+nc6//8+/3/59rq/4VBlf9zJ4j/cyaK/3MmjP9yJo3/ciaQ/3spVP97KVf/eilY/3opWv96KFz/ikNy/+jb5P/8+/z/69/o/5tejP99MG3/eChp/3goa/94KG3/o26e//r3+v/KrMj/eCp1/3Yodv92KHj/did6/340g/+lcqr/9fD2//v4+//bxt7/gTuQ/3Qnh/90J4j/dCeL/3MnjP9zJ47/eidS73ooVP96KFb/eihY/3koWv95KFz/kEx4/8elvP/59fj/9vH1/86xx/+KRXv/dyho/3coa/+DOnn/5NXj/+3j7P+NS4r/did0/3Yndv+LSYz/1b7X//n2+f/z7PT/uJC9/385i/90J4L/dCeF/3Qmhv90J4j/cyaK/3MnjO97KVHReylT/3opVP96KVf/eihY/3opWv96KFz/eile/55ji//v5ez//fz9/+7j6/+EO3X/eChp/3goa/+2i7D//Pv8/66Aqv93KHL/hT6C//Lr8v/8+/z/6dzq/45Nk/91J33/dSd//3Ungf91J4P/dCeF/3Qnh/90J4j/dCeK0XsoTqR7KFD/eihS/3ooVP96KFb/eihY/3koWf95KFz/eShd/4U7bf+0iKj/v5q2/380bf94KGf/dydo/3wwcP/r3+n/6+Dq/3otdP9/NXv/wZ7A/7KGsv+AOIL/dSd5/3Une/91J33/dCd//3Qngf90JoL/dCeE/3Mmhv9zJ4ekeihNZnwpT/97KVH/eylT/3spVP97KVf/eilY/3opWv96KFz/eile/3opYf97LGT/eShj/3koZf94KGf/eChp/6dzn//7+fv/uI6z/3cocf95K3T/eCl1/3Yodv92KHj/did6/3YofP91J33/dSd//3Ungf91J4P/dCeF/3Moh2Z/J04aeylN/3soTv97KVH/eihS/3ooVP96KFb/eihY/3koWv95KFz/eShd/3koX/94KGH/eChj/3goZf94KGf/hkB5/+bY5P/x6fD/hD18/3YncP92J3L/did0/3Yndv91J3f/dSd5/3Une/91J33/dCd//3Qngf90J4L/dieJGgAAAAB8KUqoeylN/3spT/97KVH/eylT/3opVP96KVb/eihY/3opWv95KFz/eSle/3koX/95KGL/eShj/3koZf95Kmj/wZy6//38/f+ufqf/dyhu/3cocP93KHL/dyh0/3Yndv92KHj/did5/3YnfP91J33/dSd//3UngagAAAAAAAAAAHspSTh7KEv/eylN/3soTv97KFD/eihS/3ooVP96KFb/eihY/3koWf95KFz/eShd/3koX/94KGH/eChj/3gnZf+DOnT/xqXA/5NVif93J2z/dydu/3YncP92J3L/didz/3Yndf91J3f/dSd5/3Une/91J33/cil/OAAAAAAAAAAAAAAAAHsqSZN8KUv/fClN/3wpT/97KVH/eylT/3spVP97KVf/eilY/3opWv96KFz/eile/3koYP95KWL/eShj/3koZf94KGf/eChp/3goa/94KG3/dyhv/3cocf93KHL/dyh0/3Yodv92KHj/did6/3Yoe5MAAAAAAAAAAAAAAAAAAAAAf0BABHwoStB7KUv/eylN/3spTv97KVH/eihS/3ooVP96KFb/eihY/3koWv95KFz/eShd/3koX/94KGH/eChj/3goZf94KGf/dyho/3coa/93J2z/dyhu/3YncP92J3L/did0/3Yndv90J3fQf0B/BAAAAAAAAAAAAAAAAAAAAAAAAAAAeidILnwpSfB8KUv/eylN/3spT/97KVH/eylT/3opVP96KVf/eihY/3opWv96KFz/eile/3koX/95KGL/eShj/3koZf94KGf/eChp/3goa/94KG3/dyhu/3cocP93KHL/dyh08HQndC4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeypIPHwpSfB7KUv/eylN/3soTv97KFD/eihS/3ooVP96KFb/eihY/3koWf95KFz/eShd/3koX/94KGH/eChj/3goZf94KGf/dydo/3coav93J2z/dydu/3YncPB3JnM8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeidILnwoStB8KUv/eylN/3wpT/97KVH/eylT/3spVP97KVf/eilY/3opWv96KFz/eile/3koYP95KWL/eShj/3koZf94KGf/eChp/3goa/94KG3QdCdvLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf0BABHsqSZN7KUv/eylN/3soTv97KVH/eihS/3ooVP96KFb/eihY/3koWv95KFz/eShd/3koX/94KGH/eChj/3goZf94KGf/eCZok39AfwQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHspSTh8KUqoeylN/3spT/97KVH/eylT/3opVP96KVb/eihY/3opWv95KFz/eSle/3koX/95KGL/eSdjqHspZDgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/J04aeihNZnsoTqR7KFHReidS73ooVP96KFb/eidX73koWdF5KFykeChcZnYnYhoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA">
-    
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Marked.js for Markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {{
-            darkMode: 'class', 
-            theme: {{
-                extend: {{
-                    fontFamily: {{
-                        sans: ['Inter', 'sans-serif'],
-                    }},
-                    colors: {{
-                        'primary': '#48297c',
-                        'secondary': '#9c2671',
-                        'accent': '#6a1b9a',
-                        'light-bg': '#F9FAFB',
-                    }}
-                }}
-            }}
-        }}
-    </script>
-    <style>
-        body {{
-            background: linear-gradient(135deg, #1a0b2e 0%, #16213e 100%);
-            transition: background 300ms ease;
-        }}
-        body.light {{
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        }}
-        
-        /* Markdown Styles */
-        .markdown-preview h1 {{ font-size: 2em; font-weight: 700; margin-top: 0.67em; margin-bottom: 0.67em; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }}
-        .dark .markdown-preview h1 {{ border-bottom-color: #374151; }}
-        .markdown-preview h2 {{ font-size: 1.5em; font-weight: 700; margin-top: 0.83em; margin-bottom: 0.83em; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }}
-        .dark .markdown-preview h2 {{ border-bottom-color: #374151; }}
-        .markdown-preview h3 {{ font-size: 1.25em; font-weight: 700; margin-top: 1em; margin-bottom: 1em; }}
-        .markdown-preview p {{ margin-top: 0.5em; margin-bottom: 0.5em; line-height: 1.7; }}
-        .markdown-preview ul, .markdown-preview ol {{ margin-top: 0.5em; margin-bottom: 0.5em; padding-left: 2em; }}
-        .markdown-preview li {{ margin-top: 0.25em; margin-bottom: 0.25em; }}
-        .markdown-preview code {{ background-color: #f3f4f6; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; font-family: monospace; }}
-        .dark .markdown-preview code {{ background-color: #374151; }}
-        .markdown-preview a {{ color: #48297c; text-decoration: underline; }}
-        .dark .markdown-preview a {{ color: #9c2671; }}
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>{portal_title} — {version}</title>
+<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,{favicon_b64}"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script>document.documentElement.setAttribute('data-theme',localStorage.getItem('spt-theme')||'dark');</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+[data-theme="dark"]{{--primary:{primary_color};--primary-dim:{primary_dim_12};--secondary:{secondary_color};--bg-page:#0a0618;--bg-container:#100a2e;--bg-card:rgba(24,14,56,0.95);--bg-card-hover:rgba(34,20,72,0.98);--bg-group:rgba(16,10,40,0.6);--text-primary:#f0eaf8;--text-secondary:#c4b0e8;--text-muted:#7a6a9a;--border:rgba(160,100,255,0.16);--border-strong:rgba(160,100,255,0.32);--border-top:rgba(255,255,255,0.07);--gradient-text:linear-gradient(135deg,#c090ff 0%,#f070c0 100%);--gradient-page:linear-gradient(135deg,#0a0618 0%,#16213e 100%);--badge-launcher-bg:rgba(160,100,255,0.13);--badge-launcher-fg:#c090ff;--badge-launcher-br:rgba(160,100,255,0.28);--badge-app-bg:rgba(224,64,160,0.13);--badge-app-fg:#f080c8;--badge-app-br:rgba(224,64,160,0.28);--badge-sig-bg:rgba(59,130,246,0.13);--badge-sig-fg:#93c5fd;--badge-sig-br:rgba(59,130,246,0.28);--badge-client-bg:rgba(34,197,94,0.13);--badge-client-fg:#86efac;--badge-client-br:rgba(34,197,94,0.28);--badge-arch-bg:rgba(249,115,22,0.13);--badge-arch-fg:#fb923c;--badge-arch-br:rgba(249,115,22,0.28);--badge-ex-bg:rgba(34,197,94,0.13);--badge-ex-fg:#86efac;--badge-ex-br:rgba(34,197,94,0.28);--badge-sdk-bg:rgba(160,100,255,0.13);--badge-sdk-fg:#c090ff;--badge-sdk-br:rgba(160,100,255,0.28);--badge-doc-bg:rgba(59,130,246,0.13);--badge-doc-fg:#93c5fd;--badge-doc-br:rgba(59,130,246,0.28);--badge-win-bg:rgba(59,130,246,0.13);--badge-win-fg:#93c5fd;--badge-win-br:rgba(59,130,246,0.28);--badge-lin-bg:rgba(249,115,22,0.13);--badge-lin-fg:#fb923c;--badge-lin-br:rgba(249,115,22,0.28);--badge-lin64-bg:rgba(192,38,211,0.13);--badge-lin64-fg:#e879f9;--badge-lin64-br:rgba(192,38,211,0.28);--badge-lin32-bg:rgba(234,179,8,0.13);--badge-lin32-fg:#fde047;--badge-lin32-br:rgba(234,179,8,0.28);--badge-emb-bg:rgba(251,191,36,0.13);--badge-emb-fg:#fde68a;--badge-emb-br:rgba(251,191,36,0.28);--badge-prod-bg:rgba(34,197,94,0.12);--badge-prod-fg:#4ade80;--badge-prod-br:rgba(34,197,94,0.25);--badge-dev-bg:rgba(249,115,22,0.12);--badge-dev-fg:#fb923c;--badge-dev-br:rgba(249,115,22,0.25);--copy-bg:rgba(160,100,255,0.12);--copy-bg-hover:rgba(160,100,255,0.24);--copy-fg:#c090ff;--copy-bg-ok:rgba(34,197,94,0.15);--copy-fg-ok:#4ade80;--copy-br-ok:rgba(34,197,94,0.3);--link-fg:#93c5fd;--installer-online-bg:rgba(34,197,94,0.1);--installer-online-fg:#4ade80;--installer-online-br:rgba(34,197,94,0.25);--installer-offline-bg:rgba(249,115,22,0.1);--installer-offline-fg:#fb923c;--installer-offline-br:rgba(249,115,22,0.25);}}
+[data-theme="light"]{{--primary:{primary_color};--primary-dim:{primary_dim_09};--secondary:{secondary_color};--bg-page:#ede8f8;--bg-container:#ffffff;--bg-card:rgba(255,255,255,0.97);--bg-card-hover:rgba(248,245,255,1);--bg-group:rgba(240,235,255,0.65);--text-primary:#1a1030;--text-secondary:#4a3580;--text-muted:#8878b8;--border:rgba(124,58,237,0.16);--border-strong:rgba(124,58,237,0.32);--border-top:rgba(255,255,255,0.8);--gradient-text:linear-gradient(135deg,#7c3aed 0%,#c026d3 100%);--gradient-page:linear-gradient(135deg,#ede8f8 0%,#dcd5f5 100%);--badge-launcher-bg:rgba(124,58,237,0.08);--badge-launcher-fg:#6d28d9;--badge-launcher-br:rgba(124,58,237,0.22);--badge-app-bg:rgba(192,38,211,0.08);--badge-app-fg:#a21caf;--badge-app-br:rgba(192,38,211,0.22);--badge-sig-bg:rgba(59,130,246,0.08);--badge-sig-fg:#1d4ed8;--badge-sig-br:rgba(59,130,246,0.22);--badge-client-bg:rgba(22,163,74,0.08);--badge-client-fg:#15803d;--badge-client-br:rgba(22,163,74,0.22);--badge-arch-bg:rgba(194,65,12,0.08);--badge-arch-fg:#9a3412;--badge-arch-br:rgba(194,65,12,0.22);--badge-ex-bg:rgba(22,163,74,0.08);--badge-ex-fg:#15803d;--badge-ex-br:rgba(22,163,74,0.22);--badge-sdk-bg:rgba(124,58,237,0.08);--badge-sdk-fg:#6d28d9;--badge-sdk-br:rgba(124,58,237,0.22);--badge-doc-bg:rgba(59,130,246,0.08);--badge-doc-fg:#1d4ed8;--badge-doc-br:rgba(59,130,246,0.22);--badge-win-bg:rgba(37,99,235,0.08);--badge-win-fg:#1d4ed8;--badge-win-br:rgba(37,99,235,0.22);--badge-lin-bg:rgba(194,65,12,0.08);--badge-lin-fg:#9a3412;--badge-lin-br:rgba(194,65,12,0.22);--badge-lin64-bg:rgba(126,34,206,0.08);--badge-lin64-fg:#7c3aed;--badge-lin64-br:rgba(126,34,206,0.22);--badge-lin32-bg:rgba(202,138,4,0.08);--badge-lin32-fg:#ca8a04;--badge-lin32-br:rgba(202,138,4,0.22);--badge-emb-bg:rgba(161,98,7,0.08);--badge-emb-fg:#92400e;--badge-emb-br:rgba(161,98,7,0.22);--badge-prod-bg:rgba(22,163,74,0.08);--badge-prod-fg:#166534;--badge-prod-br:rgba(22,163,74,0.22);--badge-dev-bg:rgba(194,65,12,0.08);--badge-dev-fg:#9a3412;--badge-dev-br:rgba(194,65,12,0.22);--copy-bg:rgba(124,58,237,0.08);--copy-bg-hover:rgba(124,58,237,0.18);--copy-fg:#6d28d9;--copy-bg-ok:rgba(22,163,74,0.1);--copy-fg-ok:#15803d;--copy-br-ok:rgba(22,163,74,0.25);--link-fg:#2563eb;--installer-online-bg:rgba(22,163,74,0.08);--installer-online-fg:#15803d;--installer-online-br:rgba(22,163,74,0.22);--installer-offline-bg:rgba(194,65,12,0.08);--installer-offline-fg:#9a3412;--installer-offline-br:rgba(194,65,12,0.22);}}
+*,*::before,*::after{{box-sizing:border-box;}}
+body{{font-family:'Inter',sans-serif;background:var(--gradient-page);color:var(--text-primary);min-height:100vh;margin:0;padding:1.5rem 1rem;transition:background .2s,color .2s;}}
+.container{{max-width:1220px;margin:0 auto;background:var(--bg-container);border-radius:16px;border:1px solid var(--border);border-top-color:var(--border-top);box-shadow:0 8px 40px rgba(0,0,0,.35),inset 0 1px 0 var(--border-top);overflow:hidden;}}
+.page-header{{padding:1.75rem 2rem 1.25rem;border-bottom:1px solid var(--border);}}
+.brand-row{{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}}
+.brand-title{{font-size:1.65rem;font-weight:800;background:var(--gradient-text);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:0;line-height:1.2;}}
+.brand-sub{{font-size:.78rem;color:var(--text-muted);margin:.2rem 0 0;}}
+.release-meta{{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1.1rem;}}
+.release-version{{font-size:1.5rem;font-weight:700;color:var(--text-primary);}}.release-date{{font-size:.78rem;color:var(--text-muted);}}
+.theme-btn{{background:var(--primary-dim);border:1px solid var(--border);color:var(--copy-fg);cursor:pointer;padding:.45rem;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background .2s;flex-shrink:0;}}
+.theme-btn:hover{{background:var(--copy-bg-hover);}}
+.content{{padding:1.5rem 2rem 2.5rem;display:flex;gap:1.4rem;align-items:flex-start;}}.content>.notes-box{{flex:0 0 65%;max-width:65%;min-width:200px;position:sticky;top:1rem;margin-bottom:0;}}.packages-col{{flex:0 0 35%;max-width:35%;min-width:0;display:flex;flex-direction:column;overflow-y:auto;max-height:calc(100vh - 6rem);scrollbar-width:thin;scrollbar-color:var(--primary-dim) var(--bg-group);background:var(--bg-group);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;}}.packages-col::-webkit-scrollbar{{width:5px;}}.packages-col::-webkit-scrollbar-track{{background:var(--bg-group);}}.packages-col::-webkit-scrollbar-thumb{{background:var(--primary-dim);border-radius:99px;}}.packages-col::-webkit-scrollbar-thumb:hover{{background:var(--primary);}}.content:not(:has(.notes-box)){{display:block;}}.content:not(:has(.notes-box)) .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;}}.container:not(:has(.notes-box)){{max-width:900px;}}.content:has(.notes-box) .variant-file{{display:none;}}.content:has(.notes-box) .pkg-row-file{{display:none;}}.no-notes .content{{display:block;}}.no-notes .packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;border-radius:10px;}}.container.no-notes{{max-width:900px;}}.has-notes .variant-file{{display:none;}}.has-notes .pkg-row-file{{display:none;}}.packages-col .device-divider{{height:1px;background:var(--border);margin:.4rem 0;}}.packages-col .device-card{{background:transparent;border:none;border-radius:6px;box-shadow:none;}}.packages-col .device-card:hover{{background:{primary_dim_06};box-shadow:none;}}.packages-col .device-card-head{{background:transparent;border:none;}}.packages-col .sdk-card{{background:transparent;border:none;border-radius:0;}}.packages-col .sdk-card:hover{{background:var(--primary-dim);box-shadow:none;}}.packages-col .pkg-box{{background:transparent;border:none;border-radius:0;}}.packages-col .variant-row{{border-bottom:none;}}.packages-col .variant-row:last-child{{border-bottom:none;}}.packages-col .pkg-row{{border-bottom:none;}}.packages-col .mfr-head{{background:var(--bg-group);border:1px solid var(--border);border-radius:7px;display:inline-flex;align-self:flex-start;margin-top:.5rem;margin-bottom:.65rem;}}.packages-col .plat-head{{background:transparent;border:none;border-radius:0;padding-left:0;}}.packages-col .section-head{{border-bottom:1px solid var(--border-strong);margin-left:-.9rem;margin-right:-.9rem;padding-left:.9rem;padding-right:.9rem;}}
+.section{{margin-bottom:2rem;}}
+.section-head{{display:flex;align-items:center;gap:.65rem;margin-bottom:1.1rem;padding-bottom:.7rem;border-bottom:1px solid var(--border);}}
+.section-icon{{width:30px;height:30px;border-radius:7px;background:var(--primary-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary);}}
+.section-title{{font-size:1.15rem;font-weight:700;color:var(--text-primary);}}
+.section-meta{{font-size:.68rem;color:var(--text-muted);background:var(--primary-dim);border:1px solid var(--border);border-radius:20px;padding:.12rem .55rem;}}
+.badge{{display:inline-flex;align-items:center;padding:.15rem .55rem;border-radius:20px;font-size:.67rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border:1px solid;white-space:nowrap;}}
+.badge-prod{{background:var(--badge-prod-bg);color:var(--badge-prod-fg);border-color:var(--badge-prod-br);}}
+.badge-dev{{background:var(--badge-dev-bg);color:var(--badge-dev-fg);border-color:var(--badge-dev-br);}}
+.badge-launcher{{background:var(--badge-launcher-bg);color:var(--badge-launcher-fg);border-color:var(--badge-launcher-br);}}
+.badge-app{{background:var(--badge-app-bg);color:var(--badge-app-fg);border-color:var(--badge-app-br);}}
+.badge-lib{{background:var(--badge-app-bg);color:var(--badge-app-fg);border-color:var(--badge-app-br);}}
+.badge-sig{{background:var(--badge-sig-bg);color:var(--badge-sig-fg);border-color:var(--badge-sig-br);}}
+.badge-client{{background:var(--badge-client-bg);color:var(--badge-client-fg);border-color:var(--badge-client-br);}}
+.badge-arch{{background:var(--badge-arch-bg);color:var(--badge-arch-fg);border-color:var(--badge-arch-br);}}
+.badge-ex{{background:var(--badge-ex-bg);color:var(--badge-ex-fg);border-color:var(--badge-ex-br);}}
+.badge-sdk{{background:var(--badge-sdk-bg);color:var(--badge-sdk-fg);border-color:var(--badge-sdk-br);}}
+.badge-doc{{background:var(--badge-doc-bg);color:var(--badge-doc-fg);border-color:var(--badge-doc-br);}}
+.badge-win{{background:var(--badge-win-bg);color:var(--badge-win-fg);border-color:var(--badge-win-br);}}
+.badge-lin{{background:var(--badge-lin-bg);color:var(--badge-lin-fg);border-color:var(--badge-lin-br);}}.badge-lin64{{background:var(--badge-lin64-bg);color:var(--badge-lin64-fg);border-color:var(--badge-lin64-br);}}.badge-lin32{{background:var(--badge-lin32-bg);color:var(--badge-lin32-fg);border-color:var(--badge-lin32-br);}}
+.badge-emb{{background:var(--badge-emb-bg);color:var(--badge-emb-fg);border-color:var(--badge-emb-br);}}
+.badge-online{{background:var(--installer-online-bg);color:var(--installer-online-fg);border-color:var(--installer-online-br);}}
+.badge-offline{{background:var(--installer-offline-bg);color:var(--installer-offline-fg);border-color:var(--installer-offline-br);}}
+.mfr-group{{margin-bottom:1.25rem;}}
+.mfr-head{{display:flex;align-items:center;gap:.45rem;padding:.35rem .7rem;margin-bottom:.65rem;background:var(--bg-group);border:1px solid var(--border);border-radius:7px;}}
+.mfr-dot{{width:7px;height:7px;border-radius:50%;flex-shrink:0;}}
+.mfr-label{{font-size:.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;}}
+.plat-group{{margin-bottom:1.1rem;}}
+.plat-head{{display:flex;align-items:center;gap:.5rem;margin-bottom:.65rem;padding:.4rem .8rem;background:var(--bg-group);border:1px solid var(--border);border-radius:7px;}}
+.plat-label{{font-size:.78rem;font-weight:600;color:var(--text-secondary);}}
+.device-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.7rem;}}
+.device-stack{{display:flex;flex-direction:column;gap:.7rem;}}
+.device-label{{font-size:.82rem;font-weight:700;color:var(--text-primary);padding:.55rem .9rem .2rem;margin-top:.5rem;}}
+.device-label:first-child{{margin-top:0;}}
+.sdk-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.7rem;}}
+.device-card{{background:var(--bg-card);border:1px solid var(--border);border-top-color:var(--border-top);border-radius:10px;overflow:hidden;transition:background .2s,border-color .2s,box-shadow .2s;}}
+.device-card:hover{{background:var(--bg-card-hover);border-color:var(--border-strong);box-shadow:0 2px 14px rgba(0,0,0,.18);}}
+.device-card-head{{padding:.7rem .9rem .45rem;border-bottom:1px solid var(--border);}}
+.device-name{{font-size:.9rem;font-weight:700;color:var(--text-primary);}}
+.device-badges{{display:flex;gap:.3rem;flex-wrap:wrap;margin-top:.35rem;}}
+.variant-row{{display:flex;align-items:center;gap:.45rem;padding:.45rem .9rem;border-bottom:1px solid var(--border);transition:background .15s;}}
+.variant-row:last-child{{border-bottom:none;}}
+.variant-row:hover{{background:var(--primary-dim);}}
+.variant-info{{flex:1;min-width:0;display:flex;align-items:center;gap:.45rem;}}
+.variant-label{{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;flex-shrink:0;}}
+.variant-file{{font-size:.67rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}}
+.variant-file a{{color:var(--link-fg);text-decoration:none;}}
+.variant-file a:hover{{text-decoration:underline;}}
+.sdk-card{{background:var(--bg-card);border:1px solid var(--border);border-top-color:var(--border-top);border-radius:10px;padding:.9rem 1rem;display:flex;flex-direction:column;gap:.55rem;transition:background .2s,box-shadow .2s;}}
+.sdk-card:hover{{background:var(--bg-card-hover);box-shadow:0 2px 14px rgba(0,0,0,.18);}}
+.sdk-card-icon{{width:34px;height:34px;border-radius:8px;background:var(--primary-dim);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--primary);}}
+.sdk-card-name{{font-size:.88rem;font-weight:700;color:var(--text-primary);}}
+.sdk-card-file{{font-size:.68rem;color:var(--text-muted);word-break:break-all;line-height:1.4;}}
+.sdk-card-file a{{color:var(--link-fg);text-decoration:none;}}
+.sdk-card-file a:hover{{text-decoration:underline;}}
+.sdk-card-foot{{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:.3rem;}}
+.pkg-box{{background:var(--bg-card);border:1px solid var(--border);border-top-color:var(--border-top);border-radius:10px;overflow:hidden;}}
+.pkg-row{{display:flex;align-items:center;gap:.5rem;padding:.55rem .9rem;border-bottom:1px solid var(--border);transition:background .15s;}}
+.pkg-row:last-child{{border-bottom:none;}}
+.pkg-row:hover{{background:var(--primary-dim);}}
+.pkg-row-info{{flex:1;min-width:0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;}}
+.pkg-row-label{{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;flex-shrink:0;}}
+.pkg-row-name{{font-size:.72rem;color:var(--text-secondary);font-weight:500;flex-shrink:0;}}
+.pkg-row-file{{font-size:.67rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}}
+.pkg-row-file a{{color:var(--link-fg);text-decoration:none;}}
+.pkg-row-file a:hover{{text-decoration:underline;}}
+.copy-btn{{flex-shrink:0;background:var(--copy-bg);border:1px solid var(--border);color:var(--copy-fg);cursor:pointer;padding:.28rem .55rem;border-radius:6px;display:flex;align-items:center;justify-content:center;gap:.3rem;font-size:.7rem;font-weight:600;white-space:nowrap;transition:background .15s,border-color .15s,color .15s;}}
+.copy-btn:hover{{background:var(--copy-bg-hover);border-color:var(--border-strong);}}
+.copy-btn.ok{{background:var(--copy-bg-ok);color:var(--copy-fg-ok);border-color:var(--copy-br-ok);}}
+.dl-btn{{flex-shrink:0;background:var(--copy-bg);border:1px solid var(--border);color:var(--copy-fg);cursor:pointer;padding:.28rem .55rem;border-radius:6px;display:flex;align-items:center;justify-content:center;gap:.3rem;font-size:.7rem;font-weight:600;text-decoration:none;white-space:nowrap;transition:background .15s,border-color .15s,color .15s;}}
+.dl-btn:hover{{background:var(--copy-bg-hover);border-color:var(--border-strong);}}
+.client-group{{margin-top:1.1rem;border:1px solid var(--badge-client-br);border-radius:10px;overflow:hidden;}}
+.client-group-head{{padding:.5rem .9rem;background:var(--badge-client-bg);border-bottom:1px solid var(--badge-client-br);display:flex;align-items:center;gap:.45rem;}}
+.client-group-name{{font-size:.82rem;font-weight:600;color:var(--badge-client-fg);}}
+.client-group-body{{padding:.9rem;}}
+.subsec{{margin-bottom:1.5rem;}}
+.subsec-head{{display:flex;align-items:center;gap:.55rem;margin-bottom:.8rem;}}
+.subsec-label{{font-size:.78rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.07em;}}
+.subsec-line{{flex:1;height:1px;background:var(--border);}}
+.notes-box{{margin-bottom:0;padding:1rem 0;}}
+.notes-label{{font-size:.68rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem;}}
+.notes-body{{font-size:.85rem;color:var(--text-secondary);line-height:1.65;}}
+.notes-body h1,.notes-body h2,.notes-body h3{{font-weight:700;color:var(--text-primary);margin:.8rem 0 .3rem;border-bottom:1px solid var(--border);padding-bottom:.2rem;}}
+.notes-body h1{{font-size:1.1rem;}}.notes-body h2{{font-size:1rem;}}
+.notes-body h3{{font-size:.9rem;border-bottom:none;}}
+.notes-body ul,.notes-body ol{{padding-left:1.5rem;margin:.3rem 0;}}
+.notes-body li{{margin-bottom:.2rem;}}
+.notes-body code{{background:var(--primary-dim);padding:.1em .4em;border-radius:4px;font-family:monospace;font-size:.85em;}}
+.notes-body a{{color:var(--link-fg);}}
+@media(max-width:980px){{.content{{flex-direction:column;}}.content>.notes-box{{position:static;flex:none;width:100%;max-width:100%;margin-bottom:1rem;}}.packages-col{{flex:none;width:100%;max-width:100%;max-height:none;overflow-y:visible;}}}}@media(max-width:640px){{body{{padding:.75rem .5rem;}}.page-header,.content{{padding-left:1rem;padding-right:1rem;}}.device-grid,.sdk-grid{{grid-template-columns:1fr;}}.brand-title{{font-size:1.35rem;}}}}
+</style>
 </head>
-<body class="font-sans p-4 md:p-8 min-h-screen transition duration-300">
-
-    <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl transition duration-300">
-
-        <!-- Main Title and Theme Toggle Button -->
-        <header class="mb-8 pb-4 border-b-4 border-primary dark:border-gray-600 relative">
-            <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-4 flex-1">
-                    <div class="flex-1">
-                        <h1 class="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-tight">
-                            SmartPosTef Release
-                        </h1>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">by Aditum Serviços Digitais LTDA</p>
-                    </div>
-                </div>
-                <button id="theme-toggle" class="flex-shrink-0 p-2 rounded-full text-secondary hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 transition duration-300 ease-in-out">
-                </button>
-            </div>
-        </header>
-        
-        <!-- Release Version Header -->
-        <div class="mb-6">
-            <h1 class="text-3xl md:text-4xl font-extrabold text-secondary dark:text-white tracking-tight">
-                {version}
-            </h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 font-medium">
-                {release_type}
-            </p>
-            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                Release Date: {date}
-            </p>
-        </div>
+<body>
+<div class="container {container_class}">
+<header class="page-header">
+<div class="brand-row">
+<div><h1 class="brand-title">{portal_title}</h1><p class="brand-sub">{company_name}</p></div>
+<button class="theme-btn" onclick="toggleTheme()" title="Toggle dark / light">
+<svg id="ico-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+<svg id="ico-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+</button>
+</div>
+<div class="release-meta">
+<span class="release-version">{version}</span>
+<span class="badge {release_type_badge}">{release_type}</span>
+<span class="release-date">{date}</span>
+</div>
+{description}
+</header>
+<div class="content">
 {notes}
+<div class="packages-col">
 {sections}
-    </div>
-
-    <script>
-        const body = document.body;
-        const themeToggle = document.getElementById('theme-toggle');
-        const DARK_BG_COLOR = '#111827';
-        const LIGHT_BG_COLOR = '#F9FAFB';
-        const sunIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-        const moonIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-
-        function initTheme() {{
-            const storedTheme = localStorage.getItem('theme');
-            const isDarkDefault = (storedTheme === 'dark' || storedTheme === null);
-            if (isDarkDefault) {{
-                body.classList.add('dark');
-                body.style.backgroundColor = DARK_BG_COLOR;
-            }} else {{
-                body.classList.remove('dark');
-                body.style.backgroundColor = LIGHT_BG_COLOR;
-            }}
-            updateToggleIcon();
-        }}
-
-        function toggleTheme() {{
-            body.classList.toggle('dark');
-            const isDark = body.classList.contains('dark');
-            if (isDark) {{
-                body.style.backgroundColor = DARK_BG_COLOR;
-            }} else {{
-                body.style.backgroundColor = LIGHT_BG_COLOR;
-            }}
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            updateToggleIcon();
-        }}
-
-        function updateToggleIcon() {{
-            const isDark = body.classList.contains('dark');
-            themeToggle.innerHTML = isDark ? sunIcon : moonIcon;
-        }}
-
-        initTheme();
-        themeToggle.addEventListener('click', toggleTheme);
-    </script>
+</div>
+</div>
+</div>
+<script>
+function getTheme(){{return localStorage.getItem('spt-theme')||'dark';}}
+function applyTheme(t){{document.documentElement.setAttribute('data-theme',t);document.getElementById('ico-sun').style.display=t==='dark'?'block':'none';document.getElementById('ico-moon').style.display=t==='dark'?'none':'block';localStorage.setItem('spt-theme',t);}}
+function toggleTheme(){{applyTheme(getTheme()==='dark'?'light':'dark');}}
+applyTheme(getTheme());
+var COPY_ICON='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copiar';
+var CHECK_ICON='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Copiado';
+function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{btn.innerHTML=CHECK_ICON;btn.classList.add('ok');setTimeout(function(){{btn.innerHTML=COPY_ICON;btn.classList.remove('ok');}},2000);}});}}</script>
 </body>
-</html>"#,
+</html>"##,
+            portal_title = portal_title,
+            company_name = company_name,
             version = release.version,
             release_type = release_type,
-            date = release.date,
+            release_type_badge = release_type_badge_class,
+            date = formatted_date,
+            description = description_line,
             sections = sections_html,
-            notes = release_notes_html
+            notes = release_notes_html,
+            container_class = container_class
         )
     }
     
@@ -2943,346 +3654,439 @@ mod commands {
     }
 
     fn client_card_open(client: &str) -> String {
-        format!(r#"
-            <div class="mt-6 p-4 border border-green-400/30 dark:border-green-500/30 rounded-lg bg-green-50/10 dark:bg-green-900/10">
-                <h4 class="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 pb-2 border-b border-green-400/30 dark:border-green-500/30">{}</h4>"#, client)
+        format!(
+            r#"<div class="client-group"><div class="client-group-head"><span class="material-symbols-outlined" style="font-size:16px;color:var(--badge-client-fg)">storefront</span><span class="client-group-name">{}</span></div><div class="client-group-body">"#,
+            client
+        )
     }
 
     fn client_card_close() -> &'static str {
-        r#"
-            </div>"#
+        "</div></div>"
+    }
+
+    fn make_pkg_row(pkg: &PackageData, extra_badges: &str) -> String {
+        let filename = extract_filename(&pkg.url);
+        let cat_lower = pkg.category.to_lowercase();
+        let mut label_badges = String::from(extra_badges);
+        let dev_lower = pkg.device.to_lowercase();
+        if cat_lower.contains("online") {
+            label_badges.push_str(r#"<span class="badge badge-online">Online</span>"#);
+        } else if cat_lower.contains("offline") {
+            label_badges.push_str(r#"<span class="badge badge-offline">Offline</span>"#);
+        } else if dev_lower.contains("lib") || cat_lower.contains("lib") {
+            label_badges.push_str(r#"<span class="badge badge-lib">Lib</span>"#);
+        }
+        let device_label = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else if !pkg.category.is_empty() { pkg.category.clone() } else { filename.clone() };
+        let copy_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>"#;
+        let dl_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>"#;
+        format!(
+            r#"<div class="pkg-row"><div class="pkg-row-info"><div class="pkg-row-label">{}</div><div class="pkg-row-name">{}</div><div class="pkg-row-file"><a href="{}" target="_blank">{}</a></div></div><button class="copy-btn" onclick="copyUrl(this,'{}')">{} Copiar</button><a class="dl-btn" href="{}" target="_blank">{}</a></div>"#,
+            label_badges, device_label, pkg.url, filename, pkg.url, copy_svg, pkg.url, dl_svg
+        )
     }
 
     fn generate_platform_section(title: &str, packages: &[&PackageData]) -> String {
         let (clientless, client_groups) = group_by_client(packages);
-        let mut html = String::new();
-
-        // Render clientless packages
-        if !clientless.is_empty() {
-            html.push_str(&generate_platform_section_inner(title, &clientless));
+        let mut html = format!(
+            r#"<div class="device-card"><div class="device-card-head"><div class="device-name">{}</div></div>"#,
+            title
+        );
+        for pkg in &clientless {
+            html.push_str(&make_pkg_row(pkg, ""));
         }
-
-        // Render each client group
         for (client, pkgs) in &client_groups {
             html.push_str(&client_card_open(client));
-            html.push_str(&generate_platform_section_inner(title, pkgs));
+            html.push_str(r#"<div class="pkg-box">"#);
+            for pkg in pkgs {
+                html.push_str(&make_pkg_row(pkg, ""));
+            }
+            html.push_str("</div>");
             html.push_str(client_card_close());
         }
-
+        html.push_str("</div>");
         html
     }
 
-    fn generate_platform_section_inner(title: &str, packages: &[&PackageData]) -> String {
-        let mut html = format!(r#"
-            
-            <!-- {} Sub-section -->
-            <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
-                <h3 class="text-xl font-semibold text-secondary dark:text-gray-100 mb-3">
-                    {}
-                </h3>"#, title, title);
-        
-        // Group by device/category
-        let mut dll_packages: Vec<&PackageData> = Vec::new();
-        let mut lib_packages: Vec<&PackageData> = Vec::new();
-        let mut installer_packages: Vec<&PackageData> = Vec::new();
-        let mut other_pkgs: Vec<&PackageData> = Vec::new();
-        
-        for pkg in packages {
-            let device_lower = pkg.device.to_lowercase();
-            let _category_lower = pkg.category.to_lowercase();
-            if device_lower.contains("dll") || device_lower.contains("library") {
-                dll_packages.push(pkg);
-            } else if device_lower.contains("biblioteca") || device_lower.contains("lib") {
-                lib_packages.push(pkg);
-            } else if device_lower.contains("installer") || device_lower.contains("instalador") {
-                installer_packages.push(pkg);
-            } else {
-                other_pkgs.push(pkg);
-            }
+    fn sta_manufacturer(device: &str) -> &'static str {
+        let d = device.to_uppercase();
+        if d.starts_with("A910") || d.starts_with("A920") || d.starts_with("A930") || d.starts_with("S920") || d.starts_with("A35") || d.starts_with("A50") || d.starts_with("A77") || d.starts_with("A60") {
+            "PAX"
+        } else if d.starts_with("P2") || d.starts_with("P2_LITE") || d.starts_with("P2LITE") || d.starts_with("T2") {
+            "Sunmi"
+        } else if d.starts_with("L3") || d.starts_with("L300") || d.starts_with("L400") || d.starts_with("L2") {
+            "Positivo"
+        } else if d.starts_with("GPOS") {
+            "Gertec"
+        } else if d.starts_with("DX") || d.starts_with("EX") {
+            "Ingenico"
+        } else if d.starts_with("X990") || d.starts_with("VERIFONE") {
+            "Verifone"
+        } else {
+            "Other"
         }
-        
-        // DLL/Library section
-        if !dll_packages.is_empty() || !lib_packages.is_empty() {
-            html.push_str(r#"
-                <ul class="list-none space-y-2 pl-0">"#);
-            for pkg in dll_packages.iter().chain(lib_packages.iter()) {
-                let label = if pkg.device.is_empty() { "Library".to_string() } else { normalize_device_name(&pkg.device) };
-                html.push_str(&format!(r#"
-                    <li class="flex items-start">
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 w-20 shrink-0 pt-0.5">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all ml-2 dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, label, pkg.url, extract_filename(&pkg.url)));
-            }
-            html.push_str(r#"
-                </ul>"#);
-        }
-        
-        // Installer section
-        if !installer_packages.is_empty() {
-            html.push_str(r#"
-                <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300 mt-4 mb-2 border-l-4 border-primary/70 pl-2">
-                    Instalador
-                </h4>
-                <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
-            for pkg in &installer_packages {
-                let category_label = if pkg.category.to_lowercase().contains("online") { "Online" } else if pkg.category.to_lowercase().contains("offline") { "Offline" } else { &pkg.category };
-                html.push_str(&format!(r#"
-                    <li>
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, category_label, pkg.url, extract_filename(&pkg.url)));
-            }
-            html.push_str(r#"
-                </ul>"#);
-        }
-        
-        // Other packages
-        if !other_pkgs.is_empty() {
-            html.push_str(r#"
-                <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
-            for pkg in &other_pkgs {
-                let label = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else if !pkg.category.is_empty() { pkg.category.clone() } else { "Package".to_string() };
-                html.push_str(&format!(r#"
-                    <li>
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, label, pkg.url, extract_filename(&pkg.url)));
-            }
-            html.push_str(r#"
-                </ul>"#);
-        }
-        
-        html.push_str(r#"
-            </div>"#);
-        
-        html
     }
-    
+
+    fn sta_manufacturer_color(mfr: &str) -> &'static str {
+        match mfr {
+            "PAX" => "#f59e0b",
+            "Sunmi" => "#10b981",
+            "Positivo" => "#3b82f6",
+            "Gertec" => "#38bdf8",
+            "Ingenico" => "#8b5cf6",
+            "Verifone" => "#f43f5e",
+            _ => "var(--text-muted)",
+        }
+    }
+
+    fn a2a_manufacturer(device: &str) -> &'static str {
+        let d = device.to_uppercase();
+        if d.starts_with("A910") || d.starts_with("A920") || d.starts_with("A930") {
+            "PAX"
+        } else if d.starts_with("P2") || d.starts_with("P2_MINI") || d.starts_with("P2MINI") || d.starts_with("P2_LITE") || d.starts_with("P2LITE") {
+            "Sunmi"
+        } else if d.starts_with("L3") {
+            "Positivo"
+        } else if d.starts_with("DX") || d.starts_with("EX") {
+            "Ingênico"
+        } else if d.starts_with("GPOS") {
+            "Gertec"
+        } else if d.starts_with("X990") {
+            "Verifone"
+        } else if d.contains("TEFS") || d.starts_with("TEFSDK") {
+            "Tef SDK"
+        } else if d == "AAR" || d == "DOC" || d == "DOCUMENTATION" || d.contains("SDK") || d.contains("INTEGRATION") {
+            "SDK & Integration"
+        } else if d.contains("EXAMPLE") || d.contains("EXEMPLO") {
+            "Android Payment Example"
+        } else {
+            "Other"
+        }
+    }
+
+    fn a2a_manufacturer_color(mfr: &str) -> &'static str {
+        match mfr {
+            "PAX" => "#3b82f6",
+            "Sunmi" => "#f97316",
+            "Positivo" => "#00b8e5",
+            "Ingênico" => "#79d3eb",
+            "Gertec" => "#eab308",
+            "Verifone" => "#76ffd8",
+            "SDK & Integration" => "var(--primary)",
+            "Tef SDK" => "#2dd4bf",
+            "Android Payment Example" => "var(--badge-ex-fg)",
+            _ => "var(--text-muted)",
+        }
+    }
+
+    fn a2a_mfr_sort_order(mfr: &str) -> u8 {
+        match mfr {
+            "SDK & Integration" => 0,
+            "Tef SDK" => 1,
+            "PAX" => 2,
+            "Sunmi" => 3,
+            "Positivo" => 4,
+            "Ingênico" => 5,
+            "Gertec" => 6,
+            "Verifone" => 7,
+            "Other" => 8,
+            "Android Payment Example" => 9,
+            _ => 10,
+        }
+    }
+
     fn generate_sta_section(packages: &[&PackageData]) -> String {
         let (clientless, client_groups) = group_by_client(packages);
-        let mut html = String::from(r#"
-
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                Smart POS (STA - Standalone)
-            </h2>"#);
-
-        // Render clientless packages
+        let mut html = format!(r#"<section class="section"><div class="section-head"><div class="section-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><span class="section-title">Smart POS</span><span class="section-meta">{} packages</span></div>"#, packages.len());
         if !clientless.is_empty() {
             html.push_str(&generate_sta_devices(&clientless));
         }
-
-        // Render each client group
         for (client, pkgs) in &client_groups {
             html.push_str(&client_card_open(client));
             html.push_str(&generate_sta_devices(pkgs));
             html.push_str(client_card_close());
         }
-
-        html.push_str(r#"
-        </section>"#);
-
+        html.push_str("</section>");
         html
     }
 
     fn generate_sta_devices(packages: &[&PackageData]) -> String {
-        let mut html = String::from(r#"
-            <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
-                <ul class="list-none space-y-4 pl-0 text-gray-700 dark:text-gray-300">"#);
-        
-        // Group by device
-        let mut devices: std::collections::HashMap<String, Vec<&PackageData>> = std::collections::HashMap::new();
+        let mut by_mfr: std::collections::BTreeMap<String, Vec<&PackageData>> = std::collections::BTreeMap::new();
         for pkg in packages {
-            let device = if pkg.device.is_empty() { "Other".to_string() } else { pkg.device.clone() };
-            devices.entry(device).or_insert_with(Vec::new).push(pkg);
+            let mfr = sta_manufacturer(&pkg.device).to_string();
+            by_mfr.entry(mfr).or_insert_with(Vec::new).push(pkg);
         }
-        
-        let mut is_first = true;
-        for (device, pkgs) in &devices {
-            let border_class = if is_first { "" } else { " pt-4 border-t border-gray-300 dark:border-gray-600/50" };
-            html.push_str(&format!(r#"
-                    
-                    <!-- {} -->
-                    <li class="flex items-start flex-col{}">
-                        <strong class="text-xl font-bold text-secondary dark:text-gray-100 w-full shrink-0 mb-2">{}</strong>
-                        <ul class="list-disc list-inside space-y-2 ml-4 w-full">"#, device, border_class, normalize_device_name(device)));
-            
-            for pkg in pkgs {
-                let label_parts: Vec<String> = vec![pkg.signature.clone(), pkg.client.clone(), pkg.category.clone()]
-                    .into_iter()
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                let label = if label_parts.is_empty() { "Package".to_string() } else { label_parts.join(" - ") };
-                html.push_str(&format!(r#"
-                            <li>
-                                <strong class="text-base font-semibold text-gray-700 dark:text-gray-200 pr-1">{}:</strong>
-                                <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                                    {}
-                                </a>
-                            </li>"#, label, pkg.url, extract_filename(&pkg.url)));
+        let copy_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>"#;
+        let dl_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>"#;
+        let mut html = String::new();
+        for (mfr, mfr_pkgs) in &by_mfr {
+            let color = sta_manufacturer_color(mfr);
+            html.push_str(&format!(
+                r#"<div class="mfr-group"><div class="mfr-head"><div class="mfr-dot" style="background:{}"></div><span class="mfr-label">{}</span></div>"#,
+                color, mfr
+            ));
+            let mut by_device: std::collections::BTreeMap<String, Vec<&PackageData>> = std::collections::BTreeMap::new();
+            for pkg in mfr_pkgs {
+                let dev = if pkg.device.is_empty() { "Unknown".to_string() } else { pkg.device.clone() };
+                by_device.entry(dev).or_insert_with(Vec::new).push(pkg);
             }
-            
-            html.push_str(r#"
-                        </ul>
-                    </li>"#);
-            is_first = false;
+            html.push_str(r#"<div class="device-stack">"#);
+            for (device, dev_pkgs) in &by_device {
+                let display_name = normalize_device_name(device);
+                html.push_str(&format!(
+                    r#"<div class="device-card"><div class="device-card-head"><div class="device-name">{}</div></div>"#,
+                    display_name
+                ));
+                for pkg in dev_pkgs {
+                    let filename = extract_filename(&pkg.url);
+                    let sig_lower = pkg.signature.to_lowercase();
+                    let cat_lower = pkg.category.to_lowercase();
+                    let badge = if sig_lower.contains("launcher") || cat_lower.contains("launcher") {
+                        r#"<span class="badge badge-launcher">Launcher</span>"#
+                    } else if (sig_lower.contains("sig") || cat_lower.contains("sig") || cat_lower.contains("assinado") || cat_lower.contains("signed")) && sig_lower != "signed" {
+                        r#"<span class="badge badge-sig">Sig</span>"#
+                    } else {
+                        r#"<span class="badge badge-app">App</span>"#
+                    };
+                    let sig_badge = if !pkg.signature.is_empty() && sig_lower != "signed" {
+                        format!(r#"<span class="badge badge-sig">{}</span>"#, pkg.signature)
+                    } else {
+                        String::new()
+                    };
+                    html.push_str(&format!(
+                        r#"<div class="variant-row"><div class="variant-info"><div class="variant-label">{}{}</div><div class="variant-file"><a href="{}" target="_blank">{}</a></div></div><button class="copy-btn" onclick="copyUrl(this,'{}')">{} Copiar</button><a class="dl-btn" href="{}" target="_blank">{}</a></div>"#,
+                        badge, sig_badge, pkg.url, filename, pkg.url, copy_svg, pkg.url, dl_svg
+                    ));
+                }
+                html.push_str("</div>");
+                html.push_str(r#"<div class="device-divider"></div>"#);
+            }
+            html.push_str("</div></div>");
         }
-        
-        html.push_str(r#"
-                </ul>
-            </div>"#);
-        
         html
     }
-    
+
     fn generate_a2a_section(packages: &[&PackageData]) -> String {
         let (clientless, client_groups) = group_by_client(packages);
-        let mut html = String::from(r#"
-
-        <!-- A2A (App to App) Section -->
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                App to App (A2A)
-            </h2>"#);
-
+        let mut html = format!(r#"<section class="section"><div class="section-head"><div class="section-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div><span class="section-title">App to App (A2A)</span><span class="section-meta">{} packages</span></div>"#, packages.len());
         if !clientless.is_empty() {
             html.push_str(&generate_a2a_list(&clientless));
         }
-
         for (client, pkgs) in &client_groups {
             html.push_str(&client_card_open(client));
             html.push_str(&generate_a2a_list(pkgs));
             html.push_str(client_card_close());
         }
-
-        html.push_str(r#"
-        </section>"#);
-
+        html.push_str("</section>");
         html
     }
 
     fn generate_a2a_list(packages: &[&PackageData]) -> String {
-        let mut html = String::from(r#"
-            <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
-                <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
-        
+        let copy_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>"#;
+        let dl_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>"#;
+
+        // manufacturer -> device -> [(pkg, badge)]
+        let mut by_mfr: std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<(&PackageData, String)>>> = std::collections::BTreeMap::new();
+
         for pkg in packages {
-            let label = if !pkg.device.is_empty() { normalize_a2a_display_name(&pkg.device) } else if !pkg.category.is_empty() { pkg.category.clone() } else { "Package".to_string() };
-            html.push_str(&format!(r#"
-                    <li>
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, label, pkg.url, extract_filename(&pkg.url)));
+            let dev_upper = pkg.device.to_uppercase();
+            let cat_lower = pkg.category.to_lowercase();
+            let filename = extract_filename(&pkg.url);
+            let filename_lower = filename.to_lowercase();
+
+            let is_example = dev_upper.contains("EXAMPLE") || dev_upper.contains("EXEMPLO")
+                || cat_lower.contains("example") || cat_lower.contains("exemplo");
+            let is_tef_sdk = dev_upper.contains("TEFS") || dev_upper.starts_with("TEFSDK");
+            let is_sdk = !is_tef_sdk && (dev_upper == "AAR" || dev_upper == "DOC" || dev_upper == "DOCUMENTATION"
+                || dev_upper.contains("SDK") || dev_upper.contains("INTEGRATION")
+                || cat_lower.contains("sdk") || cat_lower.contains("aar") || cat_lower.contains("documentation") || cat_lower.contains("integration")
+                || filename_lower.ends_with(".aar") || filename_lower.ends_with(".zip"));
+
+            let badge = if is_example {
+                r#"<span class="badge badge-ex">Example</span>"#.to_string()
+            } else if is_tef_sdk {
+                let file_up = filename.to_uppercase();
+                let arch = if dev_upper.contains("ARM64") || dev_upper.contains("V8A") || file_up.contains("ARM64") || file_up.contains("V8A") {
+                    r#"<span class="badge badge-arch">arm64-v8a</span>"#
+                } else if dev_upper.contains("ARMEABI") || dev_upper.contains("V7A") || file_up.contains("ARMEABI") || file_up.contains("V7A") {
+                    r#"<span class="badge badge-arch">armeabi-v7a</span>"#
+                } else { "" };
+                if filename_lower.ends_with(".apk") {
+                    format!(r#"<span class="badge badge-app">APK</span>{}"#, arch)
+                } else {
+                    arch.to_string()
+                }
+            } else if is_sdk {
+                if dev_upper.contains("DOC") || dev_upper == "DOCUMENTATION" || filename_lower.contains("doc") {
+                    r#"<span class="badge badge-doc">DOCS</span>"#.to_string()
+                } else {
+                    r#"<span class="badge badge-sdk">AAR</span>"#.to_string()
+                }
+            } else {
+                let file_up = filename.to_uppercase();
+                let arch = if dev_upper.contains("ARM64") || dev_upper.contains("V8A") || file_up.contains("ARM64") || file_up.contains("V8A") {
+                    r#"<span class="badge badge-arch">arm64-v8a</span>"#
+                } else if dev_upper.contains("ARMEABI") || dev_upper.contains("V7A") || file_up.contains("ARMEABI") || file_up.contains("V7A") {
+                    r#"<span class="badge badge-arch">armeabi-v7a</span>"#
+                } else {
+                    ""
+                };
+                if filename_lower.ends_with(".apk") {
+                    format!(r#"<span class="badge badge-app">APK</span>{}"#, arch)
+                } else {
+                    arch.to_string()
+                }
+            };
+
+            let mfr = if is_example {
+                // If the device maps to a real hardware manufacturer, keep it in that group
+                let candidate = a2a_manufacturer(&pkg.device);
+                if matches!(candidate, "PAX" | "Sunmi" | "Positivo" | "Ingênico" | "Gertec" | "Verifone") {
+                    candidate.to_string()
+                } else {
+                    "Android Payment Example".to_string()
+                }
+            } else if is_tef_sdk {
+                "Tef SDK".to_string()
+            } else if is_sdk {
+                "SDK & Integration".to_string()
+            } else {
+                a2a_manufacturer(&pkg.device).to_string()
+            };
+
+            let device_key = if is_example {
+                let candidate = a2a_manufacturer(&pkg.device);
+                if matches!(candidate, "PAX" | "Sunmi" | "Positivo" | "Ingênico" | "Gertec" | "Verifone") {
+                    normalize_a2a_display_name(&pkg.device)
+                } else {
+                    "Payment App".to_string()
+                }
+            } else {
+                normalize_a2a_display_name(&pkg.device)
+            };
+
+            by_mfr.entry(mfr).or_insert_with(std::collections::BTreeMap::new)
+                .entry(device_key).or_insert_with(Vec::new)
+                .push((pkg, badge));
         }
-        
-        html.push_str(r#"
-                </ul>
-            </div>"#);
-        
+
+        let mut mfr_list: Vec<(String, std::collections::BTreeMap<String, Vec<(&PackageData, String)>>)> = by_mfr.into_iter().collect();
+        mfr_list.sort_by_key(|(mfr, _)| a2a_mfr_sort_order(mfr));
+
+        let mut html = String::new();
+        for (mfr, by_device) in &mfr_list {
+            let color = a2a_manufacturer_color(mfr);
+            html.push_str(&format!(
+                r#"<div class="mfr-group"><div class="mfr-head"><div class="mfr-dot" style="background:{}"></div><span class="mfr-label">{}</span></div>"#,
+                color, mfr
+            ));
+            html.push_str(r#"<div class="device-stack">"#);
+            let hide_device_head = matches!(mfr.as_str(), "SDK & Integration" | "Tef SDK" | "Android Payment Example");
+            for (device, entries) in by_device {
+                if hide_device_head {
+                    html.push_str(r#"<div class="device-card">"#);
+                } else {
+                    html.push_str(&format!(
+                        r#"<div class="device-card"><div class="device-card-head"><div class="device-name">{}</div></div>"#,
+                        device
+                    ));
+                }
+                for (pkg, badge) in entries {
+                    let filename = extract_filename(&pkg.url);
+                    let sig_badge = if !pkg.signature.is_empty() && pkg.signature.to_lowercase() != "signed" {
+                        format!(r#"<span class="badge badge-sig">{}</span>"#, pkg.signature)
+                    } else {
+                        String::new()
+                    };
+                    html.push_str(&format!(
+                        r#"<div class="variant-row"><div class="variant-info"><div class="variant-label">{}{}</div><div class="variant-file"><a href="{}" target="_blank">{}</a></div></div><button class="copy-btn" onclick="copyUrl(this,'{}')">{} Copiar</button><a class="dl-btn" href="{}" target="_blank">{}</a></div>"#,
+                        badge, sig_badge, pkg.url, filename, pkg.url, copy_svg, pkg.url, dl_svg
+                    ));
+                }
+                html.push_str("</div>");
+                html.push_str(r#"<div class="device-divider"></div>"#);
+            }
+            html.push_str("</div></div>");
+        }
         html
     }
-    
+
     fn generate_embedded_section(packages: &[&PackageData]) -> String {
         let (clientless, client_groups) = group_by_client(packages);
-        let mut html = String::from(r#"
-
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                Embedded Linux
-            </h2>"#);
-
+        let mut html = format!(r#"<section class="section"><div class="section-head"><div class="section-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M7 9H3M7 12H3M7 15H3M21 9h-4M21 12h-4M21 15h-4M9 7V3M12 7V3M15 7V3M9 21v-4M12 21v-4M15 21v-4"/></svg></div><span class="section-title">Embedded Linux</span><span class="section-meta">{} packages</span></div>"#, packages.len());
         if !clientless.is_empty() {
+            html.push_str(r#"<div class="device-stack">"#);
             html.push_str(&generate_embedded_list(&clientless));
+            html.push_str("</div>");
         }
-
         for (client, pkgs) in &client_groups {
             html.push_str(&client_card_open(client));
+            html.push_str(r#"<div class="device-stack">"#);
             html.push_str(&generate_embedded_list(pkgs));
+            html.push_str("</div>");
             html.push_str(client_card_close());
         }
-
-        html.push_str(r#"
-        </section>"#);
-
+        html.push_str("</section>");
         html
     }
 
     fn generate_embedded_list(packages: &[&PackageData]) -> String {
-        let mut html = String::from(r#"
-            <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
-                <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
-        
+        let copy_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>"#;
+        let dl_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>"#;
+        let mut by_device: std::collections::BTreeMap<String, Vec<&PackageData>> = std::collections::BTreeMap::new();
         for pkg in packages {
-            let label = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else { "Package".to_string() };
-            html.push_str(&format!(r#"
-                    <li>
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, label, pkg.url, extract_filename(&pkg.url)));
+            let key = if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else { "Package".to_string() };
+            by_device.entry(key).or_insert_with(Vec::new).push(pkg);
         }
-        
-        html.push_str(r#"
-                </ul>
-            </div>"#);
-        
+        let mut html = String::new();
+        for (device, dev_pkgs) in &by_device {
+            html.push_str(&format!(
+                r#"<div class="device-card"><div class="device-card-head"><div class="device-name">{}</div></div>"#,
+                device
+            ));
+            for pkg in dev_pkgs {
+                let filename = extract_filename(&pkg.url);
+                html.push_str(&format!(
+                    r#"<div class="variant-row"><div class="variant-info"><span class="badge badge-emb">Embedded</span><div class="variant-file"><a href="{}" target="_blank">{}</a></div></div><button class="copy-btn" onclick="copyUrl(this,'{}')">{} Copiar</button><a class="dl-btn" href="{}" target="_blank">{}</a></div>"#,
+                    pkg.url, filename, pkg.url, copy_svg, pkg.url, dl_svg
+                ));
+            }
+            html.push_str("</div>");
+            html.push_str(r#"<div class="device-divider"></div>"#);
+        }
         html
     }
-    
+
     fn generate_other_section(packages: &[&PackageData]) -> String {
         let (clientless, client_groups) = group_by_client(packages);
-        let mut html = String::from(r#"
-
-        <section class="mb-10">
-            <h2 class="text-3xl font-bold text-primary dark:text-gray-300 mb-5 mt-8 pb-2 border-b-2 border-primary/50 dark:border-gray-600">
-                Other Packages
-            </h2>"#);
-
+        let mut html = format!(r#"<section class="section"><div class="section-head"><div class="section-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><span class="section-title">Other Packages</span><span class="section-meta">{} packages</span></div>"#, packages.len());
         if !clientless.is_empty() {
+            html.push_str(r#"<div class="pkg-box">"#);
             html.push_str(&generate_other_list(&clientless));
+            html.push_str("</div>");
         }
-
         for (client, pkgs) in &client_groups {
             html.push_str(&client_card_open(client));
+            html.push_str(r#"<div class="pkg-box">"#);
             html.push_str(&generate_other_list(pkgs));
+            html.push_str("</div>");
             html.push_str(client_card_close());
         }
-
-        html.push_str(r#"
-        </section>"#);
-
+        html.push_str("</section>");
         html
     }
 
     fn generate_other_list(packages: &[&PackageData]) -> String {
-        let mut html = String::from(r#"
-            <div class="mb-6 p-4 bg-light-bg dark:bg-gray-700 rounded-lg transition duration-300">
-                <ul class="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-300 ml-4">"#);
-        
+        let copy_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>"#;
+        let dl_svg = r#"<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>"#;
+        let mut html = String::new();
         for pkg in packages {
+            let filename = extract_filename(&pkg.url);
             let label = if !pkg.platform.is_empty() { normalize_device_name(&pkg.platform) } else if !pkg.device.is_empty() { normalize_device_name(&pkg.device) } else { "Package".to_string() };
-            html.push_str(&format!(r#"
-                    <li>
-                        <span class="font-mono text-sm text-gray-600 dark:text-gray-400 pr-1">{}:</span>
-                        <a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out underline break-all dark:text-blue-400 dark:hover:text-blue-300">
-                            {}
-                        </a>
-                    </li>"#, label, pkg.url, extract_filename(&pkg.url)));
+            html.push_str(&format!(
+                r#"<div class="pkg-row"><div class="pkg-row-info"><span class="pkg-row-label">{}</span><a class="pkg-row-file" href="{}" target="_blank">{}</a></div><button class="copy-btn" onclick="copyUrl(this,'{}')">{} Copiar</button><a class="dl-btn" href="{}" target="_blank">{}</a></div>"#,
+                label, pkg.url, filename, pkg.url, copy_svg, pkg.url, dl_svg
+            ));
         }
-        
-        html.push_str(r#"
-                </ul>
-            </div>"#);
-        
         html
     }
     
@@ -3307,119 +4111,252 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn export_data() -> Result<String, String> {
-        log_to_file("INFO", "EXPORT: Exporting application data (v2 with SPF)", None);
+    pub fn export_data(options: ExportOptions, theme: String) -> Result<String, String> {
+        log_to_file("INFO", "EXPORT: Exporting application data (v3 selective)", None);
         
-        let mut settings = get_settings();
-        
-        // Encrypt the API key before exporting
-        if !settings.jfrog_api_key.is_empty() {
-            settings.jfrog_api_key = encrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
+        let settings = get_settings();
+        let mut export_obj = serde_json::Map::new();
+
+        export_obj.insert("version".to_string(), serde_json::json!(3));
+        export_obj.insert("exportedAt".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+        export_obj.insert("included".to_string(), serde_json::json!({
+            "releases": options.releases,
+            "defaultTheme": options.default_theme,
+            "jfrogSettings": options.jfrog_settings,
+            "clientMappings": options.client_mappings,
+            "htmlSettings": options.html_settings,
+        }));
+
+        // Theme
+        if options.default_theme && !theme.is_empty() {
+            export_obj.insert("theme".to_string(), serde_json::json!(theme));
+        }
+
+        // Settings (selective)
+        let mut settings_obj = serde_json::Map::new();
+        if options.jfrog_settings && !settings.jfrog_api_key.is_empty() {
+            let encrypted_key = encrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
                 log_to_file("ERROR", "EXPORT: Failed to encrypt API key", Some(&e));
                 e
             })?;
+            settings_obj.insert("jfrogApiKey".to_string(), serde_json::json!(encrypted_key));
             log_to_file("INFO", "EXPORT: API key encrypted for export", None);
         }
+        if options.client_mappings {
+            settings_obj.insert("clientMappings".to_string(), serde_json::to_value(&settings.client_mappings).unwrap_or_default());
+        }
+        if options.html_settings {
+            settings_obj.insert("portalSettings".to_string(), serde_json::to_value(&settings.portal_settings).unwrap_or_default());
+        }
+        if options.releases {
+            // customPlatforms are contextual to releases
+            settings_obj.insert("customPlatforms".to_string(), serde_json::to_value(&settings.custom_platforms).unwrap_or_default());
+        }
+        if !settings_obj.is_empty() {
+            export_obj.insert("settings".to_string(), serde_json::Value::Object(settings_obj));
+        }
 
-        let releases = load_releases();
-
-        // Collect SPF file contents for each release that has one
-        let spf_dir = get_app_data_dir().join("spf");
-        let mut spf_files: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-        for rel in &releases {
-            if let Some(ref spf_name) = rel.spf_file_name {
-                let spf_path = spf_dir.join(spf_name);
-                if spf_path.exists() {
-                    if let Ok(spf_content) = fs::read_to_string(&spf_path) {
-                        spf_files.insert(spf_name.clone(), serde_json::Value::String(spf_content));
+        // Releases + SPF files
+        if options.releases {
+            let releases = load_releases();
+            let spf_dir = get_app_data_dir().join("spf");
+            let mut spf_files: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+            for rel in &releases {
+                if let Some(ref spf_name) = rel.spf_file_name {
+                    let spf_path = spf_dir.join(spf_name);
+                    if spf_path.exists() {
+                        if let Ok(spf_content) = fs::read_to_string(&spf_path) {
+                            spf_files.insert(spf_name.clone(), serde_json::Value::String(spf_content));
+                        }
                     }
                 }
             }
+            export_obj.insert("releases".to_string(), serde_json::to_value(&releases).unwrap_or_default());
+            export_obj.insert("spfFiles".to_string(), serde_json::Value::Object(spf_files.clone()));
+
+            let result = serde_json::to_string_pretty(&serde_json::Value::Object(export_obj)).map_err(|e| {
+                log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
+                e.to_string()
+            })?;
+            log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
+                "Size: {} bytes, Releases: {}, SPF files: {}",
+                result.len(), releases.len(), spf_files.len()
+            )));
+            Ok(result)
+        } else {
+            let result = serde_json::to_string_pretty(&serde_json::Value::Object(export_obj)).map_err(|e| {
+                log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
+                e.to_string()
+            })?;
+            log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
+                "Size: {} bytes (no releases)", result.len()
+            )));
+            Ok(result)
         }
-        
-        let export_data = serde_json::json!({
-            "version": 2,
-            "settings": settings,
-            "releases": releases,
-            "spfFiles": spf_files,
-            "exportedAt": chrono::Utc::now().to_rfc3339()
-        });
-        let result = serde_json::to_string_pretty(&export_data).map_err(|e| {
-            log_to_file("ERROR", "EXPORT: Failed to serialize export data", Some(&e.to_string()));
-            e.to_string()
-        })?;
-        log_to_file("INFO", "EXPORT: Data exported successfully", Some(&format!(
-            "Size: {} bytes, Releases: {}, SPF files: {}",
-            result.len(), releases.len(), spf_files.len()
-        )));
-        Ok(result)
     }
 
     #[tauri::command]
-    pub fn import_data(data: String) -> Result<(), String> {
-        log_to_file("INFO", "IMPORT: Importing application data", Some(&format!("Data size: {} bytes", data.len())));
+    pub fn import_data(data: String, options: ImportOptions) -> Result<ImportSummary, String> {
+        log_to_file("INFO", "IMPORT: Importing application data (selective)", Some(&format!("Data size: {} bytes", data.len())));
         let parsed: serde_json::Value = serde_json::from_str(&data).map_err(|e| {
             log_to_file("ERROR", "IMPORT: Failed to parse import data", Some(&e.to_string()));
             e.to_string()
         })?;
-        
-        // Import settings
-        if let Some(settings_val) = parsed.get("settings") {
-            log_to_file("INFO", "IMPORT: Importing settings", None);
-            let mut settings: Settings = serde_json::from_value(settings_val.clone()).map_err(|e| e.to_string())?;
-            
-            // Decrypt the API key if it was encrypted
-            if !settings.jfrog_api_key.is_empty() {
-                settings.jfrog_api_key = decrypt_api_key(&settings.jfrog_api_key).map_err(|e| {
-                    log_to_file("ERROR", "IMPORT: Failed to decrypt API key", Some(&e));
-                    e
-                })?;
-                log_to_file("INFO", "IMPORT: API key decrypted successfully", None);
+
+        let mut imported: Vec<String> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        let mut release_count: usize = 0;
+        let mut theme_result: Option<String> = None;
+
+        // Import theme
+        if options.default_theme {
+            if let Some(theme_val) = parsed.get("theme").and_then(|v| v.as_str()) {
+                theme_result = Some(theme_val.to_string());
+                imported.push("defaultTheme".to_string());
+                log_to_file("INFO", "IMPORT: Theme imported", Some(theme_val));
+            } else {
+                skipped.push("defaultTheme".to_string());
             }
-            
-            save_settings(settings)?;
+        } else {
+            skipped.push("defaultTheme".to_string());
         }
         
-        // Import releases
-        if let Some(releases) = parsed.get("releases") {
-            let releases: Vec<Release> = serde_json::from_value(releases.clone()).map_err(|e| e.to_string())?;
-            log_to_file("INFO", "IMPORT: Importing releases", Some(&format!("Count: {}", releases.len())));
-            let releases_path = get_app_data_dir().join("releases.json");
-            let content = serde_json::to_string_pretty(&releases).map_err(|e| e.to_string())?;
-            fs::write(&releases_path, content).map_err(|e| e.to_string())?;
+        // Import settings (partial merge)
+        let mut current_settings = get_settings();
 
-            // Regenerate SPF files for releases that have spfFileName but no local SPF
-            let spf_dir = get_app_data_dir().join("spf");
-            let _ = fs::create_dir_all(&spf_dir);
-            for rel in &releases {
-                if let Some(ref spf_name) = rel.spf_file_name {
-                    let spf_path = spf_dir.join(spf_name);
-                    if !spf_path.exists() {
-                        // Try to get from exported spfFiles first
-                        let mut restored = false;
-                        if let Some(spf_files) = parsed.get("spfFiles") {
-                            if let Some(spf_content) = spf_files.get(spf_name) {
-                                if let Some(content_str) = spf_content.as_str() {
-                                    let _ = fs::write(&spf_path, content_str);
-                                    restored = true;
-                                    log_to_file("INFO", "IMPORT: Restored SPF from export", Some(&format!("File: {}", spf_name)));
-                                }
-                            }
-                        }
-                        // If not in export, regenerate from release data
-                        if !restored {
-                            if let Ok(spf_content) = generate_spf_content(rel.clone()) {
-                                let _ = fs::write(&spf_path, &spf_content);
-                                log_to_file("INFO", "IMPORT: Regenerated SPF from release data", Some(&format!("File: {}", spf_name)));
-                            }
-                        }
+        if options.jfrog_settings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(api_key) = settings_val.get("jfrogApiKey").and_then(|v| v.as_str()) {
+                    if !api_key.is_empty() {
+                        let decrypted = decrypt_api_key(api_key).map_err(|e| {
+                            log_to_file("ERROR", "IMPORT: Failed to decrypt API key", Some(&e));
+                            e
+                        })?;
+                        current_settings.jfrog_api_key = decrypted;
+                        imported.push("jfrogSettings".to_string());
+                        log_to_file("INFO", "IMPORT: JFrog API key imported and decrypted", None);
+                    } else {
+                        skipped.push("jfrogSettings".to_string());
+                    }
+                } else {
+                    skipped.push("jfrogSettings".to_string());
+                }
+            } else {
+                skipped.push("jfrogSettings".to_string());
+            }
+        } else {
+            skipped.push("jfrogSettings".to_string());
+        }
+
+        if options.client_mappings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(mappings) = settings_val.get("clientMappings") {
+                    if let Ok(m) = serde_json::from_value::<Vec<ClientMapping>>(mappings.clone()) {
+                        current_settings.client_mappings = m;
+                        imported.push("clientMappings".to_string());
+                        log_to_file("INFO", "IMPORT: Client mappings imported", None);
+                    } else {
+                        skipped.push("clientMappings".to_string());
+                    }
+                } else {
+                    skipped.push("clientMappings".to_string());
+                }
+            } else {
+                skipped.push("clientMappings".to_string());
+            }
+        } else {
+            skipped.push("clientMappings".to_string());
+        }
+
+        if options.html_settings {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(portal) = settings_val.get("portalSettings") {
+                    if let Ok(p) = serde_json::from_value::<PortalSettings>(portal.clone()) {
+                        current_settings.portal_settings = p;
+                        imported.push("htmlSettings".to_string());
+                        log_to_file("INFO", "IMPORT: HTML/Portal settings imported", None);
+                    } else {
+                        skipped.push("htmlSettings".to_string());
+                    }
+                } else {
+                    skipped.push("htmlSettings".to_string());
+                }
+            } else {
+                skipped.push("htmlSettings".to_string());
+            }
+        } else {
+            skipped.push("htmlSettings".to_string());
+        }
+
+        // Import customPlatforms alongside releases
+        if options.releases {
+            if let Some(settings_val) = parsed.get("settings") {
+                if let Some(platforms) = settings_val.get("customPlatforms") {
+                    if let Ok(p) = serde_json::from_value::<Vec<CustomDevice>>(platforms.clone()) {
+                        current_settings.custom_platforms = p;
                     }
                 }
             }
         }
+
+        save_settings(current_settings)?;
         
-        log_to_file("INFO", "IMPORT: Data imported successfully", None);
-        Ok(())
+        // Import releases
+        if options.releases {
+            if let Some(releases_val) = parsed.get("releases") {
+                let releases: Vec<Release> = serde_json::from_value(releases_val.clone()).map_err(|e| e.to_string())?;
+                release_count = releases.len();
+                log_to_file("INFO", "IMPORT: Importing releases", Some(&format!("Count: {}", releases.len())));
+                let releases_path = get_app_data_dir().join("releases.json");
+                let content = serde_json::to_string_pretty(&releases).map_err(|e| e.to_string())?;
+                fs::write(&releases_path, content).map_err(|e| e.to_string())?;
+
+                // Regenerate SPF files for releases that have spfFileName but no local SPF
+                let spf_dir = get_app_data_dir().join("spf");
+                let _ = fs::create_dir_all(&spf_dir);
+                for rel in &releases {
+                    if let Some(ref spf_name) = rel.spf_file_name {
+                        let spf_path = spf_dir.join(spf_name);
+                        if !spf_path.exists() {
+                            // Try to get from exported spfFiles first
+                            let mut restored = false;
+                            if let Some(spf_files) = parsed.get("spfFiles") {
+                                if let Some(spf_content) = spf_files.get(spf_name) {
+                                    if let Some(content_str) = spf_content.as_str() {
+                                        let _ = fs::write(&spf_path, content_str);
+                                        restored = true;
+                                        log_to_file("INFO", "IMPORT: Restored SPF from export", Some(&format!("File: {}", spf_name)));
+                                    }
+                                }
+                            }
+                            // If not in export, regenerate from release data
+                            if !restored {
+                                if let Ok(spf_content) = generate_spf_content(rel.clone()) {
+                                    let _ = fs::write(&spf_path, &spf_content);
+                                    log_to_file("INFO", "IMPORT: Regenerated SPF from release data", Some(&format!("File: {}", spf_name)));
+                                }
+                            }
+                        }
+                    }
+                }
+                imported.push("releases".to_string());
+            } else {
+                skipped.push("releases".to_string());
+            }
+        } else {
+            skipped.push("releases".to_string());
+        }
+        
+        log_to_file("INFO", "IMPORT: Data imported successfully", Some(&format!(
+            "Imported: {:?}, Skipped: {:?}, Releases: {}", imported, skipped, release_count
+        )));
+
+        Ok(ImportSummary {
+            imported,
+            skipped,
+            release_count,
+            theme: theme_result,
+        })
     }
 
     #[tauri::command]
@@ -3764,6 +4701,8 @@ mod commands {
         pub date: String,
         #[serde(rename = "releaseType")]
         pub release_type: String,
+        #[serde(default)]
+        pub description: String,
         #[serde(rename = "releaseNotes")]
         pub release_notes: String,
         pub packages: Vec<PackageData>,
@@ -3782,6 +4721,7 @@ mod commands {
         let mut version = String::new();
         let mut date = String::new();
         let mut release_type = String::from("Production");
+        let mut description = String::new();
 
         for line in info_content.lines() {
             let line = line.trim();
@@ -3792,6 +4732,8 @@ mod commands {
             } else if let Some(val) = line.strip_prefix("type=") {
                 let t = val.trim().to_lowercase();
                 release_type = if t == "development" { "Development".to_string() } else { "Production".to_string() };
+            } else if let Some(val) = line.strip_prefix("description=") {
+                description = val.trim().to_string();
             }
         }
 
@@ -3854,6 +4796,7 @@ mod commands {
             version,
             date,
             release_type,
+            description,
             release_notes,
             packages,
         })
@@ -3870,7 +4813,7 @@ mod commands {
         let spf_content = generate_spf_content(release.clone())?;
 
         // 2. Determine SPF file name
-        let type_short = if release.release_type.to_lowercase() == "production" { "prod" } else { "dev" };
+        let type_short = get_type_short(&release);
         let spf_file_name = format!("release_{}-{}-{}.spf", release.version, release.date, type_short);
 
         // 3. Save SPF to spf directory
@@ -4015,6 +4958,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            use tauri::Manager;
+            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_icon(icon);
+            }
+            Ok(())
+        })
 
         .invoke_handler(tauri::generate_handler![
             commands::get_app_version,

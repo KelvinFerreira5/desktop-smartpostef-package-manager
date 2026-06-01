@@ -5,6 +5,301 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.18] - 2026-06-01
+
+### Added
+
+- **Uninstaller custom icon**: Added `uninstallerIcon` to NSIS config so the Windows uninstaller (`uninstall.exe`) displays the app's custom icon instead of the default NSIS icon.
+
+- **Window icon at runtime**: Application window now sets the taskbar/title bar icon programmatically via `set_icon()` using the 256×256 PNG, ensuring correct icon display across all platforms.
+
+- **Signature exemption for TefSdk, Doc, AAR packages**: Packages from TefSdk, Doc, AAR, SDK Integration, orphan PaymentExample, and TefSdk PaymentExample are now exempt from signature requirements — they no longer show the `encrypted`/`encrypted_off` icon in release summary and do not affect the release-level signed/unsigned badge.
+
+- **New A2A PaymentExample filename format**: Detection now supports `PaymentExample-A2A-{P|D}-{device}-{version}+{hash}-release.apk` (device-specific format with `-A2A-` separator), in addition to the existing `.A2A.` dot-separated format.
+
+### Changed
+
+- **Tauri upgraded to 2.11**: Updated `tauri` crate (2.11.2), `tauri-cli` (2.11.2), and `@tauri-apps/api` (2.11.0) from 2.10.x. Enables `uninstallerIcon` support and adds `image-png` feature.
+
+- **Icon file regenerated**: `icon.ico` rebuilt with higher quality/larger embedded sizes (91KB → 202KB).
+
+### Fixed
+
+- **JFrog path `None` for orphan/TefSdk PaymentExample (Rust)**: When a PaymentExample package doesn't match DEVICE_MAP (e.g., TefSdk PaymentExample or orphan), the Rust backend now assigns a correct fallback JFrog path (`packages/[dev/]app-to-app/payment_example/`) instead of returning `None`.
+
+- **`buildJfrogPath` ordering (JS)**: Payment example check moved before TefSdk check to prevent TefSdk from swallowing PaymentExample packages into the wrong path.
+
+- **Help modal — outdated icons replaced**: Replaced all inline SVG icons in the "Icons & Indicators" section with actual Material Symbols (`publish`, `storefront`, `science`, `encrypted`, `encrypted_off`, `calendar_today`, `schedule`) matching the real UI.
+
+- **Help modal — non-existent Edit action removed**: Removed "Edit" from Advanced → Custom Devices help section (only Add/Delete exist in the actual UI).
+
+- **Generated HTML — client section icon**: Replaced the SVG icon in client-specific group headers with the `storefront` Material Symbol matching the release list page. Added Material Symbols Outlined font to the generated HTML `<head>`.
+
+## [3.3.17] - 2026-05-29
+
+### Added
+
+- **Release Summary — signed/unsigned icon**: New `sigIcon()` helper renders a Material Symbol icon (`encrypted` / `encrypted_off`) with green/red coloring and a tooltip on each package in the release summary, replacing the need to read badge text to determine signature status.
+
+- **`normalizeDeviceKey()` function**: New canonical device key normalizer that strips non-alphanumeric characters and uppercases the result (e.g., `P2_LITE_SE`, `P2-Lite-SE` → `P2LITESE`). Includes an alias table (`P2LITE → P2LITESE`). Used consistently across `DEVICE_MAP` lookups, grouping, and display normalization.
+
+- **`lookupDevice()` helper**: Wraps `DEVICE_MAP` lookup via `normalizeDeviceKey()` so all lookup sites (STA and A2A branches of `buildJfrogPath()`, release summary grouping) use the same normalization path.
+
+- **HTML Generation Settings — Reset to Default button**: New "Reset to Default" button in the HTML Generation Settings card restores title, subtitle, primary color (`#2e1773`), and secondary color (`#2f2256`) to their built-in defaults with a single click.
+
+### Fixed
+
+- **Finalize button stays disabled after re-scan**: `btnFinalizeRelease` and `btnFinalizeDeployOnly` now explicitly set `.disabled = false` when all uploads succeed, fixing the regression where the button would remain greyed out after fixing filenames and re-uploading.
+
+- **A2A Release Summary — device-centric grouping**: Device APKs and PaymentExample examples are now merged into a single section grouped by device, displayed using the same `sta-device-group` card layout as STA. Examples are matched to their device group using `pkg.device` (SPF field) first, falling back to URL filename parsing only when the field is empty. Two labeled sub-headers added: **"Integration"** (SDK/Doc) and **"A2A Packages"** (device groups + orphan examples).
+
+- **SPF import — signature fallback detection**: When an SPF line has an empty signature field, the parser now inspects the URL filename for `_sign.` or `_sign/` and auto-sets `"Signed"`, preventing unsigned display on signed packages imported from older SPF files.
+
+- **`renderPlatformTabs()` duplicate tabs**: Platform tab grouping now uses `normalizeDeviceKey()` instead of the raw device string, preventing duplicate tabs when the same device appears with different separator styles.
+
+- **`DEVICE_MAP` underscore keys**: Removed keys with underscores (`P2_LITE_SE`, `P2_MINI`, `L3_2024`, `X990_PRO`, `X990_UX`) — all lookups now go through `normalizeDeviceKey()` which strips underscores before matching, so both forms resolve correctly.
+
+- **`normalizeDeviceName()` / `normalizeA2ADisplayName()` expanded**: Both functions now use `normalizeDeviceKey()` for map lookups and cover additional devices: `EX4000`, `GPOS700`, `L300`, `L400`, `P2MINI`. `P2LITESE` display name corrected to `"P2 Lite SE"` (was `"P2 Lite"`).
+
+- **HTML Generation Settings not persisted**: `populateSettings()` now reads `htmlTitle`, `htmlSubtitle`, `primaryColor`, and `secondaryColor` from `portalSettings` and populates the form fields on load. `saveSettings()` now writes all four fields back to the settings object.
+
+### Changed
+
+- **HTML Generation default colors updated**: Default primary color changed from `#48297c` to `#2e1773` and secondary from `#9c2671` to `#2f2256` — deeper/darker purple palette that matches the app's current design direction.
+
+- **`PortalSettings` struct (Rust)**: Added four new serde-mapped fields — `htmlTitle`, `htmlSubtitle`, `primaryColor`, `secondaryColor` — all with `#[serde(default)]` for backward compatibility.
+
+- **`generate_html_content()` (Rust)**: Page title and subtitle now prefer the new `htmlTitle`/`htmlSubtitle` fields over the legacy `portalTitle`/`companyName`. The `--primary` and `--secondary` CSS variables in generated HTML are now injected from user settings (with `rgba()` dim variants computed from RGB decomposition) instead of being hardcoded.
+
+## [3.3.16] - 2026-05-28
+
+### Changed
+
+- **Release list icons — Material Icons**: Replaced custom SVG path icons with Google Material Symbols (`publish` for deploy-only, `storefront` for production, `science` for development, `encrypted`/`encrypted_off` for signed/unsigned).
+
+- **Unsigned detection — Android filename check**: `isReleaseUnsigned()` now checks all STA and A2A package filenames for the `_sign` suffix, regardless of file extension (`.apk`, `.zip`, or none). If any Android package in a release lacks `_sign` in its filename, the release is marked as unsigned.
+
+- **A2A release summary — client signing badges**: Device APK packages in A2A release summary now display signature (blue) and client (green) badges, matching the existing STA badge behavior.
+
+- **Release tabs — simplified**: Removed the "Unsigned Prod" tab. Tabs are now: All, Deploys, Development, Production. The Production tab shows all production releases; signed/unsigned status is communicated via the lock icon on each card.
+
+## [3.3.15] - 2026-05-27
+
+### Fixed
+
+- **HTML device-card separators — explicit divider element**: Replaced unreliable CSS border-based separators (`border-top`, `border-bottom`, `+` sibling selector) with an explicit `<div class="device-divider">` HTML element emitted after every device-card. This fixes inconsistent separator rendering caused by CSS specificity conflicts, flexbox `gap` interactions, and `:last-child`/`:first-child` edge cases in Tauri's WebKitGTK. Dividers now appear reliably in all sections (TEF, Smart POS, A2A, Embedded) including single-device manufacturers.
+
+- **HTML packages-col CSS cleanup**: Removed complex border override chain (`.device-stack{gap:0}`, `.device-card+.device-card{border-top}`, `.device-card:last-child{border-bottom:none}`, `.device-card-head{border-bottom}`) and replaced with a single `.packages-col .device-divider{height:1px;background:var(--border);margin:.4rem 0}` rule.
+
+- **HTML variant-row/pkg-row borders removed inside packages-col**: Stripped `border-bottom` from `.variant-row` and `.pkg-row` elements inside the packages column to prevent lines between individual packages within a device-card.
+
+- **HTML device-card hover refinement**: Made hover background more subtle (`rgba(160,100,255,0.06)` instead of `var(--primary-dim)`) and added `border-radius:6px` to the card for smooth highlight clipping.
+
+## [3.3.12] - 2026-05-26
+
+### Fixed
+
+- **Generate icon — box replaced with shuffle**: The Generate button in Client Mappings (Settings) and its corresponding help modal entry were using a 3D box/cube SVG that rendered as an unrecognizable square at small sizes. Replaced with the Feather shuffle (crossed arrows) icon, which clearly conveys "auto-generate/mix" and renders well at 14–16px.
+
+## [3.3.11] - 2026-05-25
+
+### Fixed
+
+- **Help content — Settings fully documented**: Expanded the Settings help from 3 incomplete sections to 8 comprehensive sections covering all 6 sidebar tabs:
+  - **Preferences**: Theme grid with 8 themes (4 dark + 4 light), instant apply, localStorage persistence
+  - **JFrog**: API Key (encrypted, eye toggle), Base URL, Default Repository
+  - **Client Mappings**: Built-in locked rows, custom rows, Add Mapping, Generate code (DJB2), delete
+  - **HTML Generation Settings**: Page Title, Subtitle, Primary/Secondary Color pickers with hex sync
+  - **Data Export/Import**: Export/Import buttons, 5 selectable categories, JSON format
+  - **Paths & Logs**: 4 directory paths with Open Folder buttons, View Logs modal
+  - **Save Settings**: Explains the action bar save button vs auto-saving operations
+
+- **Help content — emojis replaced with SVG icons**: All emoji characters (🟢, 🔴, ⏳, 🔒, 🎲) replaced with inline Feather-style SVG icons using semantic colors (`#22c55e`, `#ef4444`, `#f59e0b`) or `currentColor` for theme compatibility.
+
+## [3.3.10] - 2026-05-25
+
+### Fixed
+
+- **Help modal theme compatibility**: Ensured the contextual help modal renders correctly across all 8 themes (4 dark + 4 light):
+  - Replaced hardcoded purple hover glow on the `?` button with `var(--accent-glow)` so it matches each theme’s primary color
+  - Added `background: var(--bg-secondary)` to section body for clear contrast against the `--bg-tertiary` summary header
+  - Added `border-bottom` on open section summaries to visually separate header from content on light themes
+  - Added themed styling for inline `<code>` elements (`var(--bg-tertiary)` bg + `var(--primary)` color)
+  - Changed table row borders from `--border-color` to `--border-light` for subtler separation
+
+## [3.3.9] - 2026-05-25
+
+### Added
+
+- **Contextual Help Button**: Added a persistent `?` floating button (bottom-right corner) that opens a modal with rich, context-sensitive help for the current screen. Each page/sub-state has dedicated help content covering:
+  - **Purpose** — what the screen is for
+  - **Workflow** — numbered step-by-step flow
+  - **Icons & Indicators** — table explaining every icon and color meaning
+  - **Actions** — what each button/area does when clicked
+  - Covers all screens: Deploy (purpose selection, release form, upload-only form), Releases (card icons, kebab menu, expand), Settings (JFrog, client mappings, themes), Tools, Advanced, and Import/Edit Release
+  - Help content adapts to Deploy page sub-states (purpose selection vs release form vs upload-only)
+  - Sections are collapsible via `<details>` elements for easy scanning
+
+## [3.3.8] - 2026-05-25
+
+### Fixed
+
+- **Release card — meta date/time icons**: Replaced 📅 and 🕒 emoji with proper Material 3 SVG icons (`calendar_today` and `schedule`), rendered inline at 14×14 with `fill="currentColor"` for consistent theming.
+- **Release card — kebab button centering**: The three-dot (`⋮`) icon was rendered off-center due to dots positioned at `cx="2"` in a 24×24 viewBox at `width="4"`. Fixed to use `cx="12"` (centered) with `width="16" height="16"`.
+- **Release card — kebab menu clipping**: The `overflow: hidden` on `.release-card-expandable` clipped the absolutely-positioned dropdown, hiding the Delete item when the list extended below the card boundary. Removed `overflow: hidden` from the card container and added `border-bottom-left-radius` / `border-bottom-right-radius` to `.release-card-body` so expanded body content still clips to the card's rounded corners.
+
+## [3.3.7] - 2026-05-25
+
+### Changed
+
+- **Release Card Redesign (UI Spec v4)**: Overhauled the release list card layout following the Version Card UI Component Design Specifications v4:
+  - **Status icons**: Text badges ("Deploy Only", "Development", "Não assinados") replaced with two inline SVG icons per card — an environment icon (upload arrow / package box / code brackets) and a signature icon (closed lock / open lock). Each icon has a `title` tooltip and uses the existing semantic colors.
+  - **Overflow menu**: Export SPF, Purge, and Delete moved out of top-level buttons into a `⋮` kebab dropdown (`release-kebab-menu`). Purge is amber, Delete is red. Clicking outside the menu closes it via a single document-level listener.
+  - **Expand button**: Now icon-only (chevron SVG, no text label). Chevron rotates 180° on expand via CSS `rotated` class toggle.
+  - **Metadata row**: Added `•` bullet separators and `📅` / `🕒` emoji prefixes for Release date and Created time.
+  - **Primary actions**: Only "Generate HTML" and "Edit" remain as always-visible top-level buttons.
+
+## [3.3.6] - 2026-05-25
+
+### Added
+
+- **Description in Generated HTML**: The release description is now rendered in the exported HTML page, displayed as an italic line below the release date in the version header. Hidden entirely when the description is empty.
+
+## [3.3.5] - 2026-05-25
+
+### Added
+
+- **HTML Generation for Deploy-Only Releases**: Deploy-only releases can now have HTML generated. Removed the `releaseType !== 'deploy-only'` guard on the "Generate HTML" button in the releases list, and removed the deploy-only exclusion filter from the Tools → Generate HTML dropdown. The generated HTML displays the type label as "Deploy Only" (previously the raw value `"deploy-only"` would have been shown).
+
+## [3.3.4] - 2026-05-25
+
+### Added
+
+- **Description Field for Deploy-Only Creation**: The "Upload Information" card in the New Deploy → Deploy Only flow now includes a Description field (`#upload-description`). The value is saved to `releaseData.description` and cleared when the deploy screen resets after finalization.
+
+## [3.3.3] - 2026-05-18
+
+### Added
+
+- **Built-in Locked Client Mappings**: Six client mappings (Lyra:788, Unica:877, B1:6649, Valori:867, Bin:677, Basa:668) are now hardcoded into the app and always present from installation. They are injected at startup via `ensureBuiltinMappings()`, which removes any stale stored copies by name and prepends fresh built-in objects so the Rust backend always reads them from the settings file. In the Settings UI, built-in rows are rendered as read-only (disabled inputs, lock icon, no generate/remove buttons). On save, any custom mapping whose name duplicates a built-in is automatically removed with a warning toast.
+
+## [3.3.2] - 2026-05-18
+
+### Fixed
+
+- **Deploy-only SPF Import Type Detection**: Importing a `.spf` file with `type=deploy-only` in `<release_info>` was incorrectly mapped to `'Production'` because the parser only had a two-way check (`development` vs. else). Added an explicit `deploy-only` branch so the type is preserved correctly. As a result, the Import page now hides the Release Notes card and shows the "Save Deploy" button (instead of "Save Release") when importing a deploy-only SPF.
+
+## [3.3.1] - 2026-05-18
+
+### Fixed
+
+- **Deploy-only Edit Flow**: Editing a deploy-only release from the Releases list now hides the Release Notes card (irrelevant for deploy-only) and shows "Update Deploy" / "Save Deploy" instead of "Update Release" / "Save Release". The save logic already preserved the `deploy-only` type correctly and was not changed.
+
+## [3.3.0] - 2026-05-18
+
+### Added
+
+- **Retry All Failed Button**: New "Retry All Failed" button (amber, shown when any package has a failed upload) retries all failed packages in sequence using the same upload logic as Upload All. Shows a summary toast on completion. The button is hidden when there are no failures and automatically re-evaluates after each retry.
+
+- **Configurable JFrog Base URL**: The JFrog Base URL configured in Settings is now actually used by the Rust upload backend. Previously the backend hardcoded `https://artifactory.aditum.com.br/artifactory` in all three upload commands (`upload_to_jfrog`, `extract_and_upload_to_jfrog`, `extract_root_and_upload_to_jfrog`). Now each command accepts an optional `base_url` parameter passed from the frontend; falls back to the original default when not set.
+
+- **Client Mapping Auto-Generate Number**: Each client mapping row now has a **Generate (→) button** that deterministically derives a 3-digit decimal code from the client name using the DJB2 hash algorithm (uppercase input, `hash = hash × 33 + charCode`, mod 1000, zero-padded). The result is collision-safe — if the generated code already exists in another mapping it increments by 1 (mod 1000) until a free slot is found. The number field remains manually editable.
+
+### Fixed
+
+- **Finalize Release Button Disabled After Re-Scan**: After uploading packages where some failed, fixing filenames, and re-scanning the folder, the Finalize Release button would remain disabled even after successfully re-uploading all packages. Root cause: `scanSelectedFolder()` replaced the `packages` array with fresh objects from the scan result, losing all `uploaded`/`url` state. Fixed by restoring upload state from the persistent `uploadedUrls` map immediately after the new array is assigned.
+
+### Changed
+
+- **Client Mapping Row Layout**: Reordered the mapping row from `[Number][Name][✕]` to `[Name][→][Number][✕]` to match the natural data-entry flow (type the name, generate the code, optionally edit it).
+
+## [3.2.8] - 2026-04-10
+
+### Fixed
+
+- **SPF Drag & Drop on Import Page**: Fixed drag-and-drop of `.spf` files not working on Linux. HTML5 `e.dataTransfer.files` is always empty on WebKitGTK (Tauri's Linux webview) for OS file drops. Replaced HTML5 drag-drop handlers with Tauri v2's native drag-drop event API (`tauri://drag-enter`, `tauri://drag-drop`, `tauri://drag-leave`), which provides file paths directly. The dropped file is read via the existing `read_file_content` Rust command. Also removed the full-screen global drop overlay in favor of the import-page card drop zone.
+
+## [3.2.7] - 2026-04-10
+
+### Fixed
+
+- **SPF Drag & Drop on Import Page** (incomplete): Initial attempt using `dragDropEnabled: false` — only works on Windows, not Linux.
+
+## [3.2.6] - 2026-04-10
+
+### Added
+
+- **Global SPF Drag & Drop**: Drop an `.spf` file anywhere in the app to import a release. A full-screen overlay with glassmorphism backdrop appears when dragging a file over the window, guiding the user to drop. Automatically navigates to the import page and triggers the existing SPF import pipeline.
+
+## [3.2.5] - 2026-04-10
+
+### Fixed
+
+- **Unsigned Production File Naming**: SPF and HTML filenames for unsigned production releases now use `-unsigned` prefix instead of `-prod`. The `-prod` prefix is reserved for signed production releases only. Added `getTypeShort()` (JS) and `get_type_short()` (Rust) helpers that check package URLs for `/unsigned/` path to determine the correct prefix.
+
+## [3.2.4] - 2026-04-10
+
+### Added
+
+- **Segregated Export/Import**: Export and import are now selective — a modal with toggle switches lets users choose which data categories to include: Releases (+ SPF files), Default Theme, JFrog Settings (encrypted API key), Client Mappings, and HTML Settings. Export format bumped to v3 with an `"included"` map; v2 backups remain importable. On import, unavailable categories are shown as disabled. Settings use a partial-merge strategy so unselected fields are preserved.
+
+### Fixed
+
+- **Export/Import Modal Scroll**: Fixed the category selector modal cutting off footer buttons on smaller screens by adding scrollable body with `max-height: 90vh`.
+
+## [3.2.2] - 2026-04-09
+
+### Added
+
+- **Purge Button**: New "Purge" button on release cards that deletes all packages from JFrog one-by-one, then removes the release locally. Uses a flame icon and amber warning color to distinguish from the local-only Delete button.
+- **Release Description Field**: New optional text field for release descriptions (subtitle), available in the deploy form, import/edit form, and persisted in SPF files as `description=` in the `<release_info>` section. Displayed as a subtitle on release cards and included in search.
+
+### Fixed
+
+- **Search Icon Hidden**: Fixed the search icon in the Releases toolbar not being visible due to the input background painting over the absolutely-positioned SVG. Added `z-index: 1` to the icon.
+- **A2A Client Extraction Bug**: Fixed "Multiple different versions detected" error when scanning A2A folders. A2A device patterns now call `extract_client_from_version()` to strip embedded client codes from the version string.
+
+### Changed
+
+- **Delete Button Tooltip**: Updated the Delete button tooltip from "Delete" to "Delete release from local storage only" for clarity alongside the new Purge button.
+
+## [3.2.1] - 2026-04-09
+
+### Added
+
+- **v2 Package Naming Support**: Full support for the new v2 filename convention using `+hexhash` separator (e.g., `2.5.4+0d05ce0`) across all package types (Windows, Linux 32/64, Embedded S920, STA LP/AP/LD/AD, A2A).
+- **A2A v2 Naming**: Support for restructured A2A filenames where `A2A` appears after the package name (e.g., `AditumSdkIntegration-A2A-D-2.4.4+8e450cfb1-release.aar`).
+- **Linux Library `.tar` Extension**: v2 Linux library packages now support `.tar` in addition to `.zip`.
+- **23 New Regex Patterns**: Added v2 patterns for all platforms in the Rust backend, placed before legacy patterns for priority matching.
+
+### Changed
+
+- **Version Parsing**: `extract_base_version()` (Rust + JS) now handles `+` separator as first-priority split.
+- **Signature Extraction**: `extract_signature()` now recognizes v2 signed filenames with hex hashes.
+- **SPF Version Format**: `getFullVersionForSpf()` detects hex hashes and uses `ver+hash` format for v2 packages.
+- **Frontend Version Detection**: `detectPackageFromFileName()` and SPF import now use cascading regex (v2 → A2A v1 → STA v1).
+
+## [3.2.0] - 2026-04-09
+
+### Added
+
+- **8-Theme System**: Four dark themes (Purple Night, Ocean Storm, Rose Gold, Emerald Shadow) and four light themes (Teal Glow Light, Lavender Breeze, Sunrise Warm, Arctic Blue) with colorful accents, gradient backgrounds, and frosted glass panels.
+- **Preferences Tab**: New Preferences tab in Settings with a visual theme grid selector showing live previews for each theme.
+- **Vertical Settings Navigation**: Settings page now uses a vertical sidebar layout with icon-labeled tabs.
+- **Colorful Accents**: Nav icons, headings, labels, badges, page descriptions, and settings tabs now follow each theme's accent palette.
+
+### Changed
+
+- **Header Logo**: Replaced static white logo with theme-aware SVG that inherits the primary accent color.
+- **Preferences Icon**: Changed Preferences tab icon from gear to sliders.
+- **Settings Location**: Moved Settings from the main navigation bar to the sidebar footer.
+
+### Removed
+
+- **HTML Generation Page**: Removed the HTML Generation page and its navigation entry.
+- **Deploy Purpose Card Wrapper**: Removed the redundant card wrapper and heading from the Deploy purpose section.
+- **Theme Toggle**: Replaced the old light/dark toggle with the new 8-theme grid in Preferences.
+
 ## [3.1.23] - 2026-04-07
 
 ### Changed

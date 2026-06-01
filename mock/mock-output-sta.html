@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartPosTef Release 3.3.12 — STA Mock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <style>
+        /* ── CSS custom properties — injected from portalSettings at render time ── */
+        :root {
+            --primary: #a064ff;
+            --primary-light: #b482ff;
+            --secondary: #e040a0;
+            --accent-glow: rgba(160, 100, 255, 0.25);
+            --card-bg: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(160, 100, 255, 0.18);
+            --card-highlight: rgba(255, 255, 255, 0.10);
+        }
+
+        /* ── Base ── */
+        body {
+            background: linear-gradient(135deg, #0f0520 0%, #0d1b35 55%, #0a0a1a 100%);
+            min-height: 100vh;
+            transition: background 300ms ease, color 300ms ease;
+        }
+
+        body.light {
+            background: linear-gradient(135deg, #f0eaf8 0%, #e8f0fc 55%, #f5f0ff 100%);
+        }
+
+        /* ── Glassmorphism card ── */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-top-color: var(--card-highlight);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border-radius: 14px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--card-highlight);
+            transition: box-shadow 200ms ease, border-color 200ms ease;
+        }
+
+        body.light .glass-card {
+            background: rgba(255, 255, 255, 0.72);
+            border-color: rgba(160, 100, 255, 0.20);
+            border-top-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 24px rgba(160, 100, 255, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--card-border), inset 0 1px 0 var(--card-highlight);
+        }
+
+        /* ── Device card ── */
+        .device-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            transition: background 200ms ease, border-color 200ms ease;
+        }
+
+        body.light .device-card {
+            background: rgba(160, 100, 255, 0.04);
+            border-color: rgba(160, 100, 255, 0.12);
+        }
+
+        .device-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(160, 100, 255, 0.25);
+        }
+
+        body.light .device-card:hover {
+            background: rgba(160, 100, 255, 0.08);
+        }
+
+        /* ── Section heading gradient underline ── */
+        .section-title {
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ── Manufacturer group header ── */
+        .mfr-header {
+            border-left: 3px solid var(--primary);
+            padding-left: 10px;
+        }
+
+        /* ── Badge / pill ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            padding: 2px 8px;
+            border-radius: 999px;
+            text-transform: uppercase;
+        }
+
+        .badge-launcher {
+            background: rgba(96, 165, 250, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.25);
+        }
+
+        .badge-app {
+            background: rgba(52, 211, 153, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.25);
+        }
+
+        .badge-sig {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.25);
+        }
+
+        .badge-client {
+            background: rgba(167, 139, 250, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(167, 139, 250, 0.25);
+        }
+
+        body.light .badge-launcher {
+            background: rgba(37, 99, 235, 0.10);
+            color: #2563eb;
+            border-color: rgba(37, 99, 235, 0.25);
+        }
+
+        body.light .badge-app {
+            background: rgba(5, 150, 105, 0.10);
+            color: #059669;
+            border-color: rgba(5, 150, 105, 0.25);
+        }
+
+        body.light .badge-sig {
+            background: rgba(217, 119, 6, 0.10);
+            color: #d97706;
+            border-color: rgba(217, 119, 6, 0.25);
+        }
+
+        body.light .badge-client {
+            background: rgba(109, 40, 217, 0.10);
+            color: #6d28d9;
+            border-color: rgba(109, 40, 217, 0.25);
+        }
+
+        /* ── Copy URL button ── */
+        .btn-copy {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(160, 100, 255, 0.30);
+            color: var(--primary-light);
+            background: rgba(160, 100, 255, 0.08);
+            cursor: pointer;
+            transition: background 150ms ease, border-color 150ms ease;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .btn-copy:hover {
+            background: rgba(160, 100, 255, 0.18);
+            border-color: rgba(160, 100, 255, 0.50);
+        }
+
+        .btn-copy.copied {
+            color: #34d399;
+            border-color: rgba(52, 211, 153, 0.40);
+            background: rgba(52, 211, 153, 0.10);
+        }
+
+        body.light .btn-copy {
+            color: #6d28d9;
+            border-color: rgba(109, 40, 217, 0.30);
+            background: rgba(109, 40, 217, 0.07);
+        }
+
+        body.light .btn-copy:hover {
+            background: rgba(109, 40, 217, 0.14);
+            border-color: rgba(109, 40, 217, 0.50);
+        }
+
+        /* ── Theme toggle ── */
+        .theme-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: background 150ms, border-color 150ms, color 150ms;
+        }
+
+        .theme-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        body.light .theme-btn {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(0, 0, 0, 0.04);
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        body.light .theme-btn:hover {
+            background: rgba(0, 0, 0, 0.10);
+            color: #000;
+        }
+
+        /* ── Release type pill ── */
+        .type-prod {
+            background: rgba(52, 211, 153, 0.12);
+            color: #34d399;
+            border: 1px solid rgba(52, 211, 153, 0.28);
+        }
+
+        .type-dev {
+            background: rgba(251, 146, 60, 0.12);
+            color: #fb923c;
+            border: 1px solid rgba(251, 146, 60, 0.28);
+        }
+
+        .type-deploy {
+            background: rgba(96, 165, 250, 0.12);
+            color: #60a5fa;
+            border: 1px solid rgba(96, 165, 250, 0.28);
+        }
+
+        /* ── Divider ── */
+        .section-divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(160, 100, 255, 0.25), transparent);
+            margin: 32px 0;
+        }
+
+        /* ── Scroll to top ── */
+        #back-to-top {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 200ms ease, transform 200ms ease;
+            box-shadow: 0 4px 16px rgba(160, 100, 255, 0.4);
+        }
+
+        #back-to-top.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #back-to-top:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body class="font-sans text-white">
+
+    <!-- ── HEADER ── -->
+    <header class="sticky top-0 z-50 border-b border-white/8 backdrop-blur-xl" style="background: rgba(10,5,24,0.80);">
+        <div class="max-w-5xl mx-auto px-6 py-3 flex items-center gap-4">
+            <div class="flex-1">
+                <h1 class="text-base font-bold tracking-tight" style="color: var(--primary-light);">SmartPosTef Release
+                    Portal</h1>
+                <p class="text-xs text-white/40 mt-0.5">Aditum Serviços Digitais LTDA</p>
+            </div>
+            <button id="theme-toggle" class="theme-btn" title="Toggle dark / light mode">
+                <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+                <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="max-w-5xl mx-auto px-6 py-8">
+
+        <!-- ── RELEASE META ── -->
+        <div class="glass-card p-6 mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <h2 class="text-3xl font-extrabold tracking-tight section-title">3.3.12</h2>
+                        <span class="badge type-prod">Production</span>
+                    </div>
+                    <p class="text-sm text-white/50 mt-1">Release Date: <span
+                            class="text-white/70 font-medium">2026-05-26</span></p>
+                    <p class="text-sm text-white/50 mt-0.5">28 packages across 2 platforms</p>
+                </div>
+                <!-- Platform navigation pills -->
+                <div class="flex flex-wrap gap-2">
+                    <a href="#sta-section" class="btn-copy text-xs">Smart POS (STA)</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════
+         SMART POS (STA) SECTION
+    ════════════════════════════════════════ -->
+        <section id="sta-section" class="mb-10">
+
+            <!-- Section heading -->
+            <div class="flex items-center gap-3 mb-6">
+                <!-- Android icon -->
+                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style="background: rgba(160,100,255,0.15); border: 1px solid rgba(160,100,255,0.25);">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--primary)"
+                        stroke-width="1.8">
+                        <path d="M6 18V12a6 6 0 0 1 12 0v6" />
+                        <path d="M2 18h20" />
+                        <path d="M6 7.5 4 5.5M18 7.5l2-2" />
+                        <circle cx="9" cy="10" r="0.5" fill="var(--primary)" />
+                        <circle cx="15" cy="10" r="0.5" fill="var(--primary)" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Smart POS</h2>
+                    <p class="text-xs text-white/40">STA — Standalone Android App</p>
+                </div>
+            </div>
+
+            <!-- ── MANUFACTURER: PAX ── -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">PAX
+                        Technology</h3>
+                </div>
+
+                <!-- Device grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    <!-- A910 -->
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">A910</span>
+                            <span class="text-xs text-white/30">pax</span>
+                        </div>
+                        <!-- Package row: Launcher -->
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy"
+                                onclick="copyUrl(this, 'https://artifactory.aditum.com.br/artifactory/smartpostef-releases/3.3.12/STA/pax/a910/SmartPosTef-LP-A910-3.3.12.289844-release.apk')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <!-- Package row: App -->
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="badge badge-app">App</span>
+                            </div>
+                            <button class="btn-copy"
+                                onclick="copyUrl(this, 'https://artifactory.aditum.com.br/artifactory/smartpostef-releases/3.3.12/STA/pax/a910/SmartPosTef-AP-A910-3.3.12.289844-release.apk')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- A910 — Client variant (Lyra) -->
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">A910</span>
+                            <span class="badge badge-client">Lyra</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="badge badge-app">App</span>
+                                <span class="badge badge-sig">Signed</span>
+                            </div>
+                            <button class="btn-copy"
+                                onclick="copyUrl(this, 'https://artifactory.aditum.com.br/artifactory/smartpostef-releases/3.3.12/STA/pax/a910/SmartPosTef-AP-A910-3.3.12.877289844-Lyra-release_sign.apk')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- S920 -->
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">S920</span>
+                            <span class="text-xs text-white/30">pax</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ── MANUFACTURER: SUNMI ── -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Sunmi</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    <!-- P2 -->
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">P2</span>
+                            <span class="text-xs text-white/30">sunmi</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- P2 Lite SE -->
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">P2 Lite SE</span>
+                            <span class="text-xs text-white/30">sunmi</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ── MANUFACTURER: GERTEC ── -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Gertec</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">GPOS700</span>
+                            <span class="text-xs text-white/30">gertec</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">GPOS720</span>
+                            <span class="text-xs text-white/30">gertec</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ── MANUFACTURER: INGENICO ── -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Ingenico</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">DX8000</span>
+                            <span class="text-xs text-white/30">ingenico</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ── MANUFACTURER: VERIFONE ── -->
+            <div class="glass-card p-5 mb-4">
+                <div class="mfr-header mb-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-widest" style="color: var(--primary-light);">
+                        Verifone</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    <div class="device-card p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-semibold text-white text-sm">X990 Pro</span>
+                            <span class="text-xs text-white/30">verifone</span>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-launcher">Launcher</span>
+                            </div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between py-2 border-t border-white/6">
+                            <div class="flex items-center gap-2"><span class="badge badge-app">App</span></div>
+                            <button class="btn-copy" onclick="copyUrl(this, '#')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                                    height="13">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                Copy URL
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ── FOOTER ── -->
+        <footer class="mt-12 pt-6 border-t border-white/8 text-center">
+            <p class="text-xs text-white/30">SmartPosTef Release Portal · Aditum Serviços Digitais LTDA</p>
+        </footer>
+
+    </div><!-- /container -->
+
+    <!-- Back to top -->
+    <button id="back-to-top" title="Back to top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+            <polyline points="18 15 12 9 6 15" />
+        </svg>
+    </button>
+
+    <script>
+        // ── Theme toggle ──
+        const body = document.body;
+        const moon = document.getElementById('icon-moon');
+        const sun = document.getElementById('icon-sun');
+
+        function applyTheme(dark) {
+            if (dark) {
+                body.classList.remove('light');
+                moon.style.display = 'block';
+                sun.style.display = 'none';
+            } else {
+                body.classList.add('light');
+                moon.style.display = 'none';
+                sun.style.display = 'block';
+                // Light text override
+                body.style.color = '#1a1033';
+            }
+            if (!dark) body.style.color = '#1a1033'; else body.style.color = '';
+        }
+
+        const stored = localStorage.getItem('spt-html-theme');
+        applyTheme(stored !== 'light');
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const isDark = !body.classList.contains('light');
+            localStorage.setItem('spt-html-theme', isDark ? 'light' : 'dark');
+            applyTheme(isDark ? false : true);
+        });
+
+        // ── Copy URL ──
+        function copyUrl(btn, url) {
+            navigator.clipboard.writeText(url).then(() => {
+                const orig = btn.innerHTML;
+                btn.classList.add('copied');
+                btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+                setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
+            }).catch(() => {
+                prompt('Copy this URL:', url);
+            });
+        }
+
+        // ── Back to top ──
+        const btt = document.getElementById('back-to-top');
+        window.addEventListener('scroll', () => {
+            btt.classList.toggle('visible', window.scrollY > 300);
+        });
+    </script>
+
+</body>
+
+</html>

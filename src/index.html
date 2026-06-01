@@ -5,15 +5,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartPosTEF Package Manager</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
   <link rel="stylesheet" href="styles/main.css">
+  <script>
+    (function () {
+      var t = localStorage.getItem('spm-theme') || 'purple-night';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </head>
 
-<body>
+<body data-theme="purple-night">
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <img src="assets/icon-192.png" alt="Logo" class="logo">
+        <div class="logo" aria-label="Logo"></div>
         <div class="app-title">
           <h1>SmartPosTEF</h1>
           <span class="subtitle">Package Manager</span>
@@ -38,13 +46,6 @@
           </svg>
           <span>Releases</span>
         </a>
-        <a href="#" class="nav-item" data-page="html">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-          <span>HTML Generation</span>
-        </a>
         <a href="#" class="nav-item" data-page="tools">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path
@@ -60,6 +61,10 @@
           </svg>
           <span>Advanced Options</span>
         </a>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
         <a href="#" class="nav-item" data-page="settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3" />
@@ -68,27 +73,6 @@
           </svg>
           <span>Settings</span>
         </a>
-      </nav>
-
-      <!-- Sidebar Footer -->
-      <div class="sidebar-footer">
-        <button id="btn-toggle-theme" class="theme-toggle-btn" title="Toggle dark/light mode">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <line x1="12" y1="1" x2="12" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="23" />
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-            <line x1="1" y1="12" x2="3" y2="12" />
-            <line x1="21" y1="12" x2="23" y2="12" />
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-          </svg>
-          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
-          <span class="theme-label">Light Mode</span>
-        </button>
         <div class="footer-info">
           <span class="version" id="app-version">v...</span>
           <span class="company">Aditum Pagamentos</span>
@@ -98,6 +82,14 @@
 
     <!-- Main Content -->
     <main class="main-content">
+      <!-- Contextual Help Button -->
+      <button id="btn-help" class="btn-help-floating" title="Help">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+          <path
+            d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z" />
+        </svg>
+      </button>
+
       <!-- Deploy Page -->
       <div id="page-deploy" class="page active">
         <div class="page-header">
@@ -113,8 +105,7 @@
         </div>
 
         <!-- Deploy Purpose Selection -->
-        <div id="deploy-purpose-selection" class="card deploy-purpose-card">
-          <h3>What would you like to do?</h3>
+        <div id="deploy-purpose-selection">
           <div class="deploy-purpose-options">
             <button class="deploy-purpose-btn" data-purpose="release">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -188,6 +179,11 @@
               </div>
             </div>
 
+            <div class="form-group">
+              <label for="deploy-description">Description</label>
+              <input type="text" id="deploy-description" placeholder="Brief description of this release...">
+            </div>
+
             <div id="release-notes-section" class="form-group">
               <label>Release Notes</label>
               <div class="notes-tabs">
@@ -211,6 +207,10 @@
                 <input type="text" id="upload-version" placeholder="e.g., 2.5.1">
                 <p id="upload-version-error" class="error-text">Please enter a version to continue</p>
               </div>
+            </div>
+            <div class="form-group">
+              <label for="upload-description">Description</label>
+              <input type="text" id="upload-description" placeholder="Brief description of this deploy...">
             </div>
           </div>
 
@@ -307,6 +307,13 @@
               </svg>
               Upload All Packages
             </button>
+            <button id="btn-retry-all" class="btn btn-warning" style="display: none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Retry All Failed
+            </button>
             <button id="btn-generate-spf" class="btn btn-secondary" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -350,7 +357,6 @@
           <button class="releases-filter-tab active" data-filter="all">All</button>
           <button class="releases-filter-tab" data-filter="deploy-only">Deploys</button>
           <button class="releases-filter-tab" data-filter="development">Development</button>
-          <button class="releases-filter-tab" data-filter="unsigned-prod">Unsigned Prod</button>
           <button class="releases-filter-tab" data-filter="production">Production</button>
         </div>
 
@@ -436,268 +442,306 @@
         </div>
       </div>
 
-      <!-- HTML Generation Page -->
-      <div id="page-html" class="page">
-        <div class="page-header">
-          <h2>HTML Generation</h2>
-          <p>Generate HTML landing pages from releases</p>
-        </div>
-
-        <div class="card">
-          <h3>Select Release</h3>
-          <div class="form-group">
-            <select id="html-release-select">
-              <option value="">-- Select a release --</option>
-            </select>
-          </div>
-
-          <div id="html-preview" class="html-preview" style="display: none;">
-            <h4>Preview</h4>
-            <div id="html-preview-content"></div>
-          </div>
-
-          <div class="action-bar">
-            <button id="btn-generate-html" class="btn btn-primary" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
-              Generate HTML
-            </button>
-            <button id="btn-open-html-folder" class="btn btn-secondary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              </svg>
-              Open Output Folder
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Settings Page -->
       <div id="page-settings" class="page">
         <div class="page-header">
           <h2>Settings</h2>
-          <p>Configure JFrog credentials and client mappings</p>
+          <p>Configure application preferences and credentials</p>
         </div>
 
-        <div class="settings-tabs">
-          <button class="settings-tab active" data-tab="jfrog">JFrog</button>
-          <button class="settings-tab" data-tab="clients">Client Mappings</button>
-          <button class="settings-tab" data-tab="html">HTML Settings</button>
-          <button class="settings-tab" data-tab="data">Data Export/Import</button>
-          <button class="settings-tab" data-tab="paths">Paths & Logs</button>
-        </div>
-
-        <!-- JFrog Settings -->
-        <div id="settings-jfrog" class="settings-content active">
-          <div class="card">
-            <h3>JFrog Artifactory</h3>
-            <div class="form-group">
-              <label for="settings-api-key">API Key</label>
-              <div class="input-with-toggle">
-                <input type="password" id="jfrog-api-key" placeholder="Enter your JFrog API Key">
-                <button type="button" class="toggle-visibility" id="btn-toggle-api-key" data-target="jfrog-api-key"
-                  title="Toggle visibility">
-                  <svg class="icon-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  <svg class="icon-eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    style="display:none">
-                    <path
-                      d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                </button>
-              </div>
-              <p class="help-text">Your JFrog API key is used to authenticate uploads. Keep it secure.</p>
-            </div>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="jfrog-base-url">Base URL</label>
-                <input type="text" id="jfrog-base-url" placeholder="https://artifactory.example.com/artifactory">
-                <p class="help-text">The base URL of your JFrog Artifactory instance.</p>
-              </div>
-              <div class="form-group">
-                <label for="jfrog-default-repo">Default Repository</label>
-                <input type="text" id="jfrog-default-repo" placeholder="packages">
-                <p class="help-text">The default repository path for package uploads.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Client Mappings -->
-        <div id="settings-clients" class="settings-content">
-          <div class="card">
-            <h3>Client Mappings</h3>
-            <p class="card-description">Map client numbers to names for automatic path generation. Map Number field
-              accepts only digits.</p>
-
-            <div id="client-mappings-list" class="mappings-list">
-              <p class="empty-text">No client mappings configured</p>
-            </div>
-
-            <button id="btn-add-mapping" class="btn btn-secondary btn-sm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
+        <div class="settings-layout">
+          <div class="settings-sidebar">
+            <button class="settings-tab active" data-tab="preferences">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
               </svg>
-              Add Mapping
+              Preferences
+            </button>
+            <button class="settings-tab" data-tab="jfrog">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+                <line x1="6" y1="6" x2="6.01" y2="6" />
+                <line x1="6" y1="18" x2="6.01" y2="18" />
+              </svg>
+              JFrog
+            </button>
+            <button class="settings-tab" data-tab="clients">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Client Mappings
+            </button>
+            <button class="settings-tab" data-tab="html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              HTML Settings
+            </button>
+            <button class="settings-tab" data-tab="data">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Data Export/Import
+            </button>
+            <button class="settings-tab" data-tab="paths">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+              Paths &amp; Logs
             </button>
           </div>
-        </div>
+          <div class="settings-panel">
 
-        <!-- HTML Settings -->
-        <div id="settings-html" class="settings-content">
-          <div class="card">
-            <h3>HTML Generation Settings</h3>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="settings-html-title">Page Title</label>
-                <input type="text" id="settings-html-title" placeholder="SmartPosTef Release">
-              </div>
-              <div class="form-group">
-                <label for="settings-html-subtitle">Subtitle</label>
-                <input type="text" id="settings-html-subtitle" placeholder="Aditum Pagamentos LTDA">
+            <!-- Preferences -->
+            <div id="settings-preferences" class="settings-content active">
+              <div class="card">
+                <h3>Theme</h3>
+                <p class="card-description">Choose a theme for the application. Changes apply instantly.</p>
+                <div class="theme-grid" id="themeGrid"></div>
               </div>
             </div>
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="settings-html-primary">Primary Color</label>
-                <div class="color-input">
-                  <div class="color-swatch" style="background-color: #48297c">
-                    <input type="color" id="settings-html-primary" value="#48297c">
+
+            <!-- JFrog Settings -->
+            <div id="settings-jfrog" class="settings-content">
+              <div class="card">
+                <h3>JFrog Artifactory</h3>
+                <div class="form-group">
+                  <label for="settings-api-key">API Key</label>
+                  <div class="input-with-toggle">
+                    <input type="password" id="jfrog-api-key" placeholder="Enter your JFrog API Key">
+                    <button type="button" class="toggle-visibility" id="btn-toggle-api-key" data-target="jfrog-api-key"
+                      title="Toggle visibility">
+                      <svg class="icon-eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      <svg class="icon-eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" style="display:none">
+                        <path
+                          d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    </button>
                   </div>
-                  <input type="text" id="settings-html-primary-text" value="#48297c">
+                  <p class="help-text">Your JFrog API key is used to authenticate uploads. Keep it secure.</p>
                 </div>
-              </div>
-              <div class="form-group">
-                <label for="settings-html-secondary">Secondary Color</label>
-                <div class="color-input">
-                  <div class="color-swatch" style="background-color: #9c2671">
-                    <input type="color" id="settings-html-secondary" value="#9c2671">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="jfrog-base-url">Base URL</label>
+                    <input type="text" id="jfrog-base-url" placeholder="https://artifactory.example.com/artifactory">
+                    <p class="help-text">The base URL of your JFrog Artifactory instance.</p>
                   </div>
-                  <input type="text" id="settings-html-secondary-text" value="#9c2671">
+                  <div class="form-group">
+                    <label for="jfrog-default-repo">Default Repository</label>
+                    <input type="text" id="jfrog-default-repo" placeholder="packages">
+                    <p class="help-text">The default repository path for package uploads.</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- Data Export/Import -->
-        <div id="settings-data" class="settings-content">
-          <div class="card">
-            <h3>Export / Import Data</h3>
-            <p class="card-description">Export your settings and releases to a file so you can transfer them to another
-              computer. Import a previously exported file to restore your data.</p>
+            <!-- Client Mappings -->
+            <div id="settings-clients" class="settings-content">
+              <div class="card">
+                <h3>Client Mappings</h3>
+                <p class="card-description">Map client numbers to names for automatic path generation. Map Number field
+                  accepts only digits.</p>
 
-            <div class="export-import-section">
-              <div class="export-import-item">
-                <div class="export-import-info">
-                  <h4>Export Data</h4>
-                  <p>Save all your settings (JFrog API Key, client mappings, HTML settings) and releases to a JSON file.
-                  </p>
+                <div id="client-mappings-list" class="mappings-list">
+                  <p class="empty-text">No client mappings configured</p>
                 </div>
-                <button id="btn-export-data" class="btn btn-secondary">
+
+                <button id="btn-add-mapping" class="btn btn-secondary btn-sm">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  Export to File
+                  Add Mapping
                 </button>
               </div>
+            </div>
 
-              <div class="export-import-item">
-                <div class="export-import-info">
-                  <h4>Import Data</h4>
-                  <p>Load settings and releases from a previously exported JSON file. This will overwrite your current
-                    data.</p>
+            <!-- HTML Settings -->
+            <div id="settings-html" class="settings-content">
+              <div class="card">
+                <h3>HTML Generation Settings</h3>
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="settings-html-title">Page Title</label>
+                    <input type="text" id="settings-html-title" placeholder="SmartPosTef Release">
+                  </div>
+                  <div class="form-group">
+                    <label for="settings-html-subtitle">Subtitle</label>
+                    <input type="text" id="settings-html-subtitle" placeholder="Aditum Pagamentos LTDA">
+                  </div>
                 </div>
-                <button id="btn-import-data" class="btn btn-secondary">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="settings-html-primary">Primary Color</label>
+                    <div class="color-input">
+                      <div class="color-swatch" style="background-color: #2e1773">
+                        <input type="color" id="settings-html-primary" value="#2e1773">
+                      </div>
+                      <input type="text" id="settings-html-primary-text" value="#2e1773">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="settings-html-secondary">Secondary Color</label>
+                    <div class="color-input">
+                      <div class="color-swatch" style="background-color: #2f2256">
+                        <input type="color" id="settings-html-secondary" value="#2f2256">
+                      </div>
+                      <input type="text" id="settings-html-secondary-text" value="#2f2256">
+                    </div>
+                  </div>
+                </div>
+                <div class="form-actions" style="margin-top: 12px;">
+                  <button id="btn-reset-html-defaults" class="btn btn-secondary btn-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                    </svg>
+                    Reset to Default
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Data Export/Import -->
+            <div id="settings-data" class="settings-content">
+              <div class="card">
+                <h3>Export / Import Data</h3>
+                <p class="card-description">Selectively export or import your data. Choose which categories to include:
+                  releases, theme, JFrog settings, client mappings, and HTML settings.</p>
+
+                <div class="export-import-section">
+                  <div class="export-import-item">
+                    <div class="export-import-info">
+                      <h4>Export Data</h4>
+                      <p>Choose which data categories to save to a JSON file. You can select releases, theme, JFrog API
+                        key, client mappings, and HTML settings.</p>
+                    </div>
+                    <button id="btn-export-data" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Export to File
+                    </button>
+                  </div>
+
+                  <div class="export-import-item">
+                    <div class="export-import-info">
+                      <h4>Import Data</h4>
+                      <p>Selectively restore data from a backup file. Only the categories you choose will be imported;
+                        unselected data remains unchanged.</p>
+                    </div>
+                    <button id="btn-import-data" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                      Import from File
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paths & Logs -->
+            <div id="settings-paths" class="settings-content">
+              <div class="card">
+                <h3>Application Paths</h3>
+                <div class="paths-list">
+                  <div class="path-item">
+                    <span class="path-label">User Data:</span>
+                    <code id="path-user-data"></code>
+                    <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-user-data"
+                      title="Open folder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                        height="14">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Open
+                    </button>
+                  </div>
+                  <div class="path-item">
+                    <span class="path-label">Releases:</span>
+                    <code id="path-releases"></code>
+                    <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-releases"
+                      title="Open folder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                        height="14">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Open
+                    </button>
+                  </div>
+                  <div class="path-item">
+                    <span class="path-label">HTML Output:</span>
+                    <code id="path-html"></code>
+                    <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-html" title="Open folder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                        height="14">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Open
+                    </button>
+                  </div>
+                  <div class="path-item">
+                    <span class="path-label">Logs:</span>
+                    <code id="path-logs"></code>
+                    <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-logs" title="Open folder">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14"
+                        height="14">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Open
+                    </button>
+                  </div>
+                </div>
+
+                <button id="btn-view-logs" class="btn btn-secondary">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
                   </svg>
-                  Import from File
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Paths & Logs -->
-        <div id="settings-paths" class="settings-content">
-          <div class="card">
-            <h3>Application Paths</h3>
-            <div class="paths-list">
-              <div class="path-item">
-                <span class="path-label">User Data:</span>
-                <code id="path-user-data"></code>
-                <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-user-data" title="Open folder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  Open
-                </button>
-              </div>
-              <div class="path-item">
-                <span class="path-label">Releases:</span>
-                <code id="path-releases"></code>
-                <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-releases" title="Open folder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  Open
-                </button>
-              </div>
-              <div class="path-item">
-                <span class="path-label">HTML Output:</span>
-                <code id="path-html"></code>
-                <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-html" title="Open folder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  Open
-                </button>
-              </div>
-              <div class="path-item">
-                <span class="path-label">Logs:</span>
-                <code id="path-logs"></code>
-                <button class="btn btn-sm btn-outline btn-open-path" data-path-id="path-logs" title="Open folder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  Open
+                  View Logs
                 </button>
               </div>
             </div>
 
-            <button id="btn-view-logs" class="btn btn-secondary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-              View Logs
-            </button>
-          </div>
-        </div>
-
-        <div class="action-bar">
-          <button id="btn-save-settings" class="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-            Save Settings
-          </button>
-        </div>
+            <div class="action-bar">
+              <button id="btn-save-settings" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save Settings
+              </button>
+            </div>
+          </div><!-- /.settings-panel -->
+        </div><!-- /.settings-layout -->
       </div>
       <!-- Tools Page -->
       <div id="page-tools" class="page">

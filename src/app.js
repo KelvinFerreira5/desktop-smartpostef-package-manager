@@ -1,6 +1,17 @@
 // SmartPosTEF Package Manager - Tauri Edition v2.0.6
 // Comprehensive package detection and Electron-style UI
 
+// SmartPosTEF Package Manager v3.3.4
+// Built-in client mappings — always present, always locked, cannot be edited or removed
+const BUILTIN_CLIENT_MAPPINGS = [
+  { number: '788', name: 'Lyra', builtin: true },
+  { number: '877', name: 'Unica', builtin: true },
+  { number: '6649', name: 'B1', builtin: true },
+  { number: '867', name: 'Valori', builtin: true },
+  { number: '677', name: 'Bin', builtin: true },
+  { number: '668', name: 'Basa', builtin: true },
+];
+
 // State
 let packages = [];
 let releases = [];
@@ -10,6 +21,277 @@ let currentDeployMode = 'folder';
 let currentDeployPurpose = null;
 let currentReleaseFilter = 'all';
 let currentReleaseSort = 'created-desc';
+let kebabCloseListenerAdded = false;
+
+// Contextual Help Content — keyed by page/sub-state
+const HELP_CONTENT = {
+  'deploy-purpose': {
+    title: 'New Deploy — Choose Your Flow',
+    sections: [
+      { heading: 'Purpose', body: 'This is the starting screen for all deployment operations. Choose how you want to proceed based on your goal.' },
+      {
+        heading: 'Options', body: `
+        <table class="help-table">
+          <tr><td><strong>Release from Scratch</strong></td><td>Upload packages to JFrog and create a full release with version, date, release notes, and an SPF manifest file.</td></tr>
+          <tr><td><strong>Upload Only</strong></td><td>Just upload packages to JFrog without creating a formal release. Useful for quick deploys or hotfixes.</td></tr>
+          <tr><td><strong>Import Release</strong></td><td>Import an existing <code>.spf</code> file to edit, manage, or update a previously created release.</td></tr>
+        </table>
+      ` },
+      { heading: 'Workflow', body: '<ol><li>Click one of the three option cards</li><li>You\'ll be taken to the corresponding form</li><li>Use the ← back arrow (top-left) to return here</li></ol>' },
+    ]
+  },
+  'deploy-release': {
+    title: 'New Deploy — Release from Scratch',
+    sections: [
+      { heading: 'Purpose', body: 'Create a full release: define version info, upload packages, write release notes, and generate an SPF manifest.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>Fill in <strong>Main Version</strong> (e.g., 2.5.1) and <strong>Release Date</strong></li>
+          <li>Select <strong>Type</strong> (Production or Development)</li>
+          <li>Add packages via <strong>Drag & Drop</strong> or <strong>Select Folder</strong></li>
+          <li>Packages are auto-detected with platform, device, and signature</li>
+          <li>Write optional <strong>Release Notes</strong> (Markdown supported)</li>
+          <li>Click <strong>Generate SPF</strong> to finalize and save the release</li>
+        </ol>
+      ` },
+      {
+        heading: 'Icons & Indicators', body: `
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Green checkmark</td><td>Package uploaded successfully</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Red X</td><td>Upload failed</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Spinner</td><td>Upload in progress</td></tr>
+          <tr><td><strong>Platform badges</strong></td><td>Windows, Linux, Embedded, STA, A2A — auto-detected from filename/URL</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Select Folder</strong></td><td>Pick a folder; all supported files inside are added as packages</td></tr>
+          <tr><td><strong>Upload All</strong></td><td>Starts uploading all pending packages to JFrog</td></tr>
+          <tr><td><strong>Retry All</strong></td><td>Re-attempts all failed uploads</td></tr>
+          <tr><td><strong>Generate SPF</strong></td><td>Creates the release, saves it locally, and generates the SPF file</td></tr>
+          <tr><td><strong>← Back</strong></td><td>Return to purpose selection (packages are preserved)</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'deploy-upload': {
+    title: 'New Deploy — Upload Only (Deploy Only)',
+    sections: [
+      { heading: 'Purpose', body: 'Upload packages directly to JFrog without creating a formal release. The result is a lightweight "deploy-only" record.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>Enter a <strong>Version</strong> identifier</li>
+          <li>Optionally add a <strong>Description</strong></li>
+          <li>Add packages via Drag & Drop or Select Folder</li>
+          <li>Upload packages to JFrog</li>
+          <li>Click <strong>Save Deploy</strong> to finalize</li>
+        </ol>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Upload All</strong></td><td>Upload all pending packages</td></tr>
+          <tr><td><strong>Save Deploy</strong></td><td>Saves the deploy-only record locally</td></tr>
+          <tr><td><strong>← Back</strong></td><td>Return to purpose selection</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'releases': {
+    title: 'Releases — Manage Your Releases',
+    sections: [
+      { heading: 'Purpose', body: 'View, search, filter, and manage all saved releases (both full releases and deploy-only records).' },
+      {
+        heading: 'Icons & Indicators', body: `
+        <table class="help-table">
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#3b82f6">publish</span> Publish</td><td>Deploy Only — upload-only release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#06b6d4">storefront</span> Storefront</td><td>Production release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#f59e0b">science</span> Science</td><td>Development release</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#22c55e">encrypted</span> Encrypted</td><td>All packages are signed</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:#ef4444">encrypted_off</span> Encrypted Off</td><td>Contains unsigned packages</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:currentColor">calendar_today</span> Calendar</td><td>Release date</td></tr>
+          <tr><td><span class="material-symbols-outlined" style="font-size:18px;color:currentColor">schedule</span> Clock</td><td>Creation timestamp</td></tr>
+        </table>
+        <p style="margin-top:8px;font-size:0.85em;color:#94a3b8;"><strong>Signature-exempt packages</strong> (do not affect signed/unsigned badge): TefSdk, Doc, AAR, SDK Integration, orphan PaymentExample, and TefSdk PaymentExample — same as Windows/Linux.</p>
+      ` },
+      {
+        heading: 'Card Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Generate HTML</strong></td><td>Export a formatted HTML report of the release</td></tr>
+          <tr><td><strong>Edit</strong></td><td>Open the release in the import/edit form to modify it</td></tr>
+          <tr><td><strong>⋮ (More)</strong></td><td>Opens overflow menu with: Export SPF, Purge, Delete</td></tr>
+          <tr><td><strong>▾ Chevron</strong></td><td>Expand/collapse the release summary with package details</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Overflow Menu', body: `
+        <table class="help-table">
+          <tr><td><strong>Export SPF</strong></td><td>Save the release as an <code>.spf</code> file for sharing</td></tr>
+          <tr><td><strong>Purge</strong> (amber)</td><td>Delete packages from JFrog, then delete the release locally</td></tr>
+          <tr><td><strong>Delete</strong> (red)</td><td>Delete the release locally only (packages remain on JFrog)</td></tr>
+        </table>
+      ` },
+      { heading: 'Search & Filters', body: 'Use the search bar to filter by version. Use filter dropdowns to narrow by signature status, client, platform, device, or STA/A2A presence.' },
+    ]
+  },
+  'settings': {
+    title: 'Settings — Application Configuration',
+    sections: [
+      { heading: 'Purpose', body: 'Configure all application preferences. Use the <strong>sidebar tabs</strong> on the left to switch between sections: Preferences, JFrog, Client Mappings, HTML Settings, Data Export/Import, and Paths & Logs.' },
+      {
+        heading: 'Preferences (Theme)', body: `
+        <p>Choose a visual theme for the application. 8 themes are available (4 dark, 4 light). Click any theme card to apply it instantly.</p>
+        <table class="help-table">
+          <tr><td><strong>Dark themes</strong></td><td>Purple Night, Ocean Storm, Rose Gold, Emerald Shadow</td></tr>
+          <tr><td><strong>Light themes</strong></td><td>Teal Glow, Lavender Breeze, Sunrise Warm, Arctic Blue</td></tr>
+        </table>
+        <p>The selected theme is saved to localStorage and persists across sessions.</p>
+      ` },
+      {
+        heading: 'JFrog Configuration', body: `
+        <table class="help-table">
+          <tr><td><strong>API Key</strong></td><td>Authentication key for JFrog API access. Stored encrypted locally (AES-256-GCM). Use the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> eye button to toggle visibility.</td></tr>
+          <tr><td><strong>Base URL</strong></td><td>The base URL of your JFrog Artifactory instance (e.g., <code>https://artifactory.example.com/artifactory</code>)</td></tr>
+          <tr><td><strong>Default Repository</strong></td><td>The default repository path used when building upload destinations</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Client Mappings', body: `
+        <p>Map client names to numeric codes used in version strings and SPF file paths.</p>
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <strong>Locked rows</strong></td><td>Built-in mappings (Lyra, Unica, B1, Valori, Bin, Basa) — cannot be edited or removed</td></tr>
+          <tr><td><strong>Custom rows</strong></td><td>Your own mappings — editable and removable via the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> delete button</td></tr>
+          <tr><td><strong>+ Add Mapping</strong></td><td>Add a new custom client name → code mapping</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> <strong>Generate</strong></td><td>Auto-generate a unique 3-digit code from the client name using DJB2 hash</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'HTML Generation Settings', body: `
+        <p>Customize the appearance of generated HTML release reports.</p>
+        <table class="help-table">
+          <tr><td><strong>Page Title</strong></td><td>Title displayed at the top of the generated HTML page</td></tr>
+          <tr><td><strong>Subtitle</strong></td><td>Secondary text below the title (e.g., company name)</td></tr>
+          <tr><td><strong>Primary Color</strong></td><td>Main accent color for headers and links. Use the color picker or type a hex value.</td></tr>
+          <tr><td><strong>Secondary Color</strong></td><td>Secondary accent color for gradients and highlights. Use the color picker or type a hex value.</td></tr>
+        </table>
+      ` },
+      {
+        heading: 'Data Export / Import', body: `
+        <p>Backup or restore your application data selectively by category.</p>
+        <table class="help-table">
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <strong>Export</strong></td><td>Choose which categories to save to a JSON file</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <strong>Import</strong></td><td>Restore data from a backup file; only selected categories are overwritten</td></tr>
+        </table>
+        <p><strong>Available categories:</strong> Releases, Theme, JFrog Settings (API key encrypted), Client Mappings, HTML Settings.</p>
+      ` },
+      {
+        heading: 'Paths & Logs', body: `
+        <p>View and open the application\'s data directories, and inspect runtime logs.</p>
+        <table class="help-table">
+          <tr><td><strong>User Data</strong></td><td>Root directory for all app settings and data files</td></tr>
+          <tr><td><strong>Releases</strong></td><td>Where release JSON records are stored</td></tr>
+          <tr><td><strong>HTML Output</strong></td><td>Where generated HTML reports are saved</td></tr>
+          <tr><td><strong>Logs</strong></td><td>Application log files location</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <strong>Open</strong></td><td>Opens the directory in your system file manager</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> <strong>View Logs</strong></td><td>Opens a modal with recent application log entries</td></tr>
+        </table>
+      ` },
+      { heading: 'Save Settings', body: 'Click the <strong>Save Settings</strong> button in the action bar at the bottom to persist all changes across all tabs (JFrog, Client Mappings, HTML Settings). Theme and Data operations save immediately without this button.' },
+    ]
+  },
+  'tools': {
+    title: 'Tools — Utilities',
+    sections: [
+      { heading: 'Purpose', body: 'Access utility tools for day-to-day operations.' },
+      {
+        heading: 'Daily Password Generator', body: `
+        <p>Generates a time-based daily password using the v3.1 algorithm (hash-based mixing).</p>
+        <table class="help-table">
+          <tr><td><strong>Date selector</strong></td><td>Pick any date to generate its corresponding password</td></tr>
+          <tr><td><strong>Copy button</strong></td><td>Copy the generated password to clipboard</td></tr>
+        </table>
+      ` },
+    ]
+  },
+  'advanced': {
+    title: 'Advanced Options — Custom Devices & Platforms',
+    sections: [
+      { heading: 'Purpose', body: 'Define custom device models and platform configurations that extend the built-in detection rules.' },
+      {
+        heading: 'Custom Devices', body: `
+        <table class="help-table">
+          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name, type, and URL identifier pattern</td></tr>
+          <tr><td><strong>Delete</strong></td><td>Remove a custom device from the list</td></tr>
+        </table>
+        <p>Custom devices extend the built-in detection rules. They are used during package filename/URL detection to identify hardware targets not covered by the default device map.</p>
+      ` },
+    ]
+  },
+  'import-release': {
+    title: 'Import / Edit Release',
+    sections: [
+      { heading: 'Purpose', body: 'Import an SPF file to view, edit, or update an existing release. Also used when clicking "Edit" on a release card.' },
+      {
+        heading: 'Workflow', body: `
+        <ol>
+          <li>The release data is loaded (from file or existing record)</li>
+          <li>Review and modify version, date, type, packages, and release notes</li>
+          <li>Add or remove packages as needed</li>
+          <li>Click <strong>Update Release</strong> (or <strong>Save Deploy</strong> for deploy-only) to save changes</li>
+        </ol>
+      ` },
+      {
+        heading: 'Actions', body: `
+        <table class="help-table">
+          <tr><td><strong>Update/Save Release</strong></td><td>Save all modifications to the release</td></tr>
+          <tr><td><strong>Upload All</strong></td><td>Upload new packages that haven\'t been deployed yet</td></tr>
+          <tr><td><strong>Release Notes</strong></td><td>Edit Markdown release notes (hidden for deploy-only releases)</td></tr>
+        </table>
+      ` },
+    ]
+  },
+};
+
+// Show contextual help for the current screen
+function showHelp() {
+  const activePage = document.querySelector('.page.active');
+  if (!activePage) return;
+  const pageId = activePage.id.replace('page-', '');
+  let helpKey = pageId;
+
+  // Deploy page sub-state detection
+  if (pageId === 'deploy') {
+    const purposeSelection = document.getElementById('deploy-purpose-selection');
+    const uploadOnlyCard = document.getElementById('upload-only-info-card');
+    if (purposeSelection && purposeSelection.style.display !== 'none') {
+      helpKey = 'deploy-purpose';
+    } else if (uploadOnlyCard && uploadOnlyCard.style.display !== 'none') {
+      helpKey = 'deploy-upload';
+    } else {
+      helpKey = 'deploy-release';
+    }
+  }
+
+  const content = HELP_CONTENT[helpKey];
+  if (!content) {
+    showModal('Help', '<p>No help content available for this screen.</p>');
+    return;
+  }
+
+  const sectionsHtml = content.sections.map(s => `
+    <details class="help-section" open>
+      <summary>${s.heading}</summary>
+      <div class="help-section-body">${s.body}</div>
+    </details>
+  `).join('');
+
+  showModal(content.title, `<div class="help-content-wrapper">${sectionsHtml}</div>`);
+  frontendLog('INFO', 'HELP: Contextual help shown', `Key: ${helpKey}`);
+}
+
 let currentReleaseSearch = '';
 let currentReleaseFilters = { signature: 'all', client: 'all', platform: 'all', device: 'all', hasSta: false, hasA2a: false };
 let releaseSearchDebounceTimer = null;
@@ -40,9 +322,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavigation();
   initDeployPage();
   initReleasesPage();
-  initHtmlGenPage();
   initSettingsPage();
   initThemeToggle();
+
+  // Contextual help button
+  const helpBtn = document.getElementById('btn-help');
+  if (helpBtn) helpBtn.addEventListener('click', showHelp);
 
   console.log('Event handlers set up, waiting for Tauri...');
 
@@ -86,6 +371,47 @@ async function initTauriApis() {
     console.log('Tauri APIs initialized');
     frontendLog('INFO', 'APPLICATION: Tauri APIs initialized successfully');
 
+    // Tauri native drag & drop for SPF import
+    if (window.__TAURI__.event) {
+      const listen = window.__TAURI__.event.listen;
+
+      listen('tauri://drag-enter', () => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.add('drag-over');
+      });
+
+      listen('tauri://drag-leave', () => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.remove('drag-over');
+      });
+
+      listen('tauri://drag-drop', async (event) => {
+        const dropZone = document.getElementById('spf-drop-zone');
+        if (dropZone) dropZone.classList.remove('drag-over');
+
+        const paths = event.payload?.paths;
+        if (!paths || paths.length === 0 || !dropZone) return;
+
+        const spfPath = paths.find(p => p.endsWith('.spf'));
+        if (!spfPath) {
+          showToast('error', 'Please drop a valid .spf file');
+          return;
+        }
+
+        const fileName = spfPath.split(/[\/\\]/).pop();
+        frontendLog('INFO', 'IMPORT: SPF file dropped via Tauri drag-drop', `File: ${fileName}`);
+        try {
+          const content = await invoke('read_file_content', { filePath: spfPath });
+          handleSpfImport(content, fileName);
+        } catch (err) {
+          frontendLog('ERROR', 'IMPORT: Failed to read dropped SPF file', err.toString());
+          showToast('error', 'Failed to read file: ' + err);
+        }
+      });
+
+      frontendLog('INFO', 'APPLICATION: Tauri drag-drop listeners registered');
+    }
+
     // Set footer version from backend
     try {
       const version = await invoke('get_app_version');
@@ -104,11 +430,22 @@ async function initTauriApis() {
   }
 }
 
+// Ensure built-in mappings are always present and authoritative at the top of the list
+function ensureBuiltinMappings() {
+  if (!settings.clientMappings) settings.clientMappings = [];
+  // Remove any stale built-in copies (matched by name, case-insensitive) stored from previous runs
+  const builtinNames = BUILTIN_CLIENT_MAPPINGS.map(m => m.name.toLowerCase());
+  settings.clientMappings = settings.clientMappings.filter(m => !builtinNames.includes((m.name || '').toLowerCase()));
+  // Prepend fresh built-in objects
+  settings.clientMappings.unshift(...BUILTIN_CLIENT_MAPPINGS.map(m => ({ ...m })));
+}
+
 // Load initial data from backend
 async function loadInitialData() {
   try {
     frontendLog('INFO', 'APPLICATION: Loading initial data');
     settings = await invoke('get_settings');
+    ensureBuiltinMappings();
     frontendLog('INFO', 'APPLICATION: Settings loaded', `API key: ${settings.jfrogApiKey ? 'configured' : 'not set'}, Mappings: ${(settings.clientMappings || []).length}`);
     populateSettings();
 
@@ -138,27 +475,51 @@ async function loadInitialData() {
   }
 }
 
-// Theme Toggle
+// Theme System
 function initThemeToggle() {
-  const themeBtn = document.getElementById('btn-toggle-theme');
-  if (!themeBtn) return;
+  var THEMES = [
+    { id: 'purple-night', name: 'Purple Night', type: 'Dark', preview: 'linear-gradient(135deg, #180e38, #a064ff, #e040a0)' },
+    { id: 'ocean-storm', name: 'Ocean Storm', type: 'Dark', preview: 'linear-gradient(135deg, #0c1a30, #38bdf8, #2dd4bf)' },
+    { id: 'rose-gold', name: 'Rose Gold', type: 'Dark', preview: 'linear-gradient(135deg, #30181f, #f47a8a, #f5c542)' },
+    { id: 'emerald-shadow', name: 'Emerald Shadow', type: 'Dark', preview: 'linear-gradient(135deg, #0c1f14, #34d399, #a3e635)' },
+    { id: 'teal-glow-light', name: 'Teal Glow', type: 'Light', preview: 'linear-gradient(135deg, #b8dde8, #00a896, #00695c)' },
+    { id: 'lavender-breeze', name: 'Lavender Breeze', type: 'Light', preview: 'linear-gradient(135deg, #d8cef0, #7c3aed, #c026d3)' },
+    { id: 'sunrise-warm', name: 'Sunrise Warm', type: 'Light', preview: 'linear-gradient(135deg, #f8d8c0, #ea580c, #dc2626)' },
+    { id: 'arctic-blue', name: 'Arctic Blue', type: 'Light', preview: 'linear-gradient(135deg, #c0dce8, #0284c7, #7c3aed)' }
+  ];
 
-  const themeLabel = themeBtn.querySelector('.theme-label');
-
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  if (savedTheme === 'light') {
-    document.body.classList.add('light-mode');
-    if (themeLabel) themeLabel.textContent = 'Dark Mode';
+  function setTheme(id) {
+    document.body.setAttribute('data-theme', id);
+    document.documentElement.setAttribute('data-theme', id);
+    localStorage.setItem('spm-theme', id);
+    renderThemeGrid();
+    frontendLog('INFO', 'UI: Theme changed', 'Theme: ' + id);
   }
 
-  themeBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    if (themeLabel) themeLabel.textContent = isLight ? 'Dark Mode' : 'Light Mode';
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    frontendLog('INFO', 'UI: Theme toggled', `Theme: ${isLight ? 'light' : 'dark'}`);
-  });
+  function renderThemeGrid() {
+    var grid = document.getElementById('themeGrid');
+    if (!grid) return;
+    var current = document.body.getAttribute('data-theme') || 'purple-night';
+    grid.innerHTML = THEMES.map(function (t) {
+      return '<div class="theme-card' + (t.id === current ? ' active' : '') + '" data-theme-id="' + t.id + '">'
+        + '<div class="theme-preview" style="background: ' + t.preview + ';"></div>'
+        + '<div class="theme-name">' + t.name + '</div>'
+        + '<div class="theme-type">' + t.type + '</div>'
+        + '</div>';
+    }).join('');
+    grid.querySelectorAll('.theme-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        setTheme(this.getAttribute('data-theme-id'));
+      });
+    });
+  }
+
+  // Apply saved theme
+  var savedTheme = localStorage.getItem('spm-theme') || 'purple-night';
+  setTheme(savedTheme);
+
+  // Expose renderThemeGrid for when settings page opens
+  window._renderThemeGrid = renderThemeGrid;
 }
 
 // Format helpers
@@ -185,6 +546,13 @@ function getFullVersionForSpf(pkgs, fallbackVersion) {
     const ver = pkg.version;
     const hash = pkg.hash;
     if (ver && hash) {
+      // Check if this is a v2 hex hash (contains a-f characters)
+      const isHexHash = /[a-fA-F]/.test(hash);
+      if (isHexHash) {
+        // v2 format for both A2A and STA/TEF: X.X.X+HEXHASH
+        return `${ver}+${hash}`;
+      }
+
       // Check if this is an A2A package
       const platform = pkg.platform || '';
       const category = pkg.category || '';
@@ -249,6 +617,7 @@ function switchPage(pageName) {
   // Initialize page-specific logic
   if (pageName === 'tools') initToolsPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
+  if (pageName === 'settings' && window._renderThemeGrid) window._renderThemeGrid();
 }
 
 // Deploy Page
@@ -385,6 +754,16 @@ function initDeployPage() {
       e.preventDefault();
       frontendLog('INFO', 'DEPLOY: Upload all button clicked');
       await handleUploadAll();
+    });
+  }
+
+  // Retry all failed button
+  const btnRetryAll = document.getElementById('btn-retry-all');
+  if (btnRetryAll) {
+    btnRetryAll.addEventListener('click', async (e) => {
+      e.preventDefault();
+      frontendLog('INFO', 'DEPLOY: Retry all failed button clicked');
+      await handleRetryAll();
     });
   }
 
@@ -526,6 +905,15 @@ async function scanSelectedFolder() {
     // Set packages from scan result
     packages = scanResult.packages || [];
 
+    // Restore upload state from previous uploads
+    for (const pkg of packages) {
+      const fileName = pkg.fileName || pkg.file_name;
+      if (fileName && uploadedUrls[fileName]) {
+        pkg.uploaded = true;
+        pkg.url = uploadedUrls[fileName];
+      }
+    }
+
     // Show companion file warnings
     if (scanResult.companionWarnings && scanResult.companionWarnings.length > 0) {
       for (const warning of scanResult.companionWarnings) {
@@ -640,6 +1028,11 @@ async function handleAddManual() {
 // Extract base version from full version string
 function extractBaseVersion(version) {
   if (!version) return null;
+
+  // Handle v2 versions with hex hash: X.X.X+HEXHASH -> X.X.X
+  if (version.includes('+')) {
+    return version.split('+')[0];
+  }
 
   // Handle A2A versions: X.X.X.A2A.HASH -> X.X.X
   if (version.includes('.A2A.')) {
@@ -1164,6 +1557,7 @@ function updateActionButtons() {
   const allUploaded = hasPackages && packages.every(p => p.uploaded);
 
   const btnUploadAll = document.getElementById('btn-upload-all');
+  const btnRetryAll = document.getElementById('btn-retry-all');
   const btnGenerateSpf = document.getElementById('btn-generate-spf');
   const btnFinalizeRelease = document.getElementById('btn-finalize-release');
   const btnFinalizeDeployOnly = document.getElementById('btn-finalize-deploy-only');
@@ -1172,12 +1566,19 @@ function updateActionButtons() {
   if (btnUploadAll) btnUploadAll.disabled = !hasPackages || allUploaded;
   if (btnClearAll) btnClearAll.style.display = hasPackages ? 'inline-flex' : 'none';
 
+  // Show "Retry All Failed" when there are failed packages
+  const hasFailed = hasPackages && packages.some(p => p.error);
+  if (btnRetryAll) btnRetryAll.style.display = hasFailed ? 'inline-flex' : 'none';
+
   // In "New Release" mode: Generate SPF is always hidden; show "Finalize Release" after all uploads
   if (currentDeployPurpose === 'release') {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
     if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
     if (allUploaded) {
-      if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'inline-flex';
+      if (btnFinalizeRelease) {
+        btnFinalizeRelease.style.display = 'inline-flex';
+        btnFinalizeRelease.disabled = false;
+      }
     } else {
       if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
     }
@@ -1186,7 +1587,10 @@ function updateActionButtons() {
     if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
     if (btnFinalizeRelease) btnFinalizeRelease.style.display = 'none';
     if (allUploaded) {
-      if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'inline-flex';
+      if (btnFinalizeDeployOnly) {
+        btnFinalizeDeployOnly.style.display = 'inline-flex';
+        btnFinalizeDeployOnly.disabled = false;
+      }
     } else {
       if (btnFinalizeDeployOnly) btnFinalizeDeployOnly.style.display = 'none';
     }
@@ -1197,6 +1601,7 @@ function updateActionButtons() {
 async function handleFinalizeDeployOnly() {
   frontendLog('INFO', 'DEPLOY_ONLY: Starting deploy-only finalization');
   const versionInput = document.getElementById('upload-version');
+  const descriptionInput = document.getElementById('upload-description');
   const version = versionInput ? versionInput.value.trim() : '';
 
   if (!version) {
@@ -1234,6 +1639,7 @@ async function handleFinalizeDeployOnly() {
     date,
     type: 'deploy-only',
     releaseType: 'deploy-only',
+    description: descriptionInput ? descriptionInput.value.trim() : '',
     releaseNotes: '',
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1277,6 +1683,7 @@ async function handleFinalizeDeployOnly() {
     frontendLog('INFO', 'DEPLOY_ONLY: Step 4 - Clearing deploy screen');
     clearPackages();
     if (versionInput) versionInput.value = '';
+    if (descriptionInput) descriptionInput.value = '';
 
     // Reset purpose selection
     currentDeployPurpose = null;
@@ -1373,7 +1780,8 @@ async function handleUploadAll() {
           zipPath: filePath,
           folderName: extractFolder,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       } else if (specialHandling && extractFolder) {
         // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
@@ -1381,7 +1789,8 @@ async function handleUploadAll() {
           zipPath: filePath,
           extractFolder: extractFolder,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       } else {
         // Regular file upload — check APK zip rule first
@@ -1403,7 +1812,8 @@ async function handleUploadAll() {
         result = await invoke('upload_to_jfrog', {
           filePath: uploadPath,
           jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
         });
       }
 
@@ -1439,6 +1849,113 @@ async function handleUploadAll() {
   }
 }
 
+// Retry all failed uploads sequentially
+async function handleRetryAll() {
+  const failedIndexes = packages.reduce((acc, pkg, i) => {
+    if (pkg.error) acc.push(i);
+    return acc;
+  }, []);
+
+  if (failedIndexes.length === 0) {
+    showToast('info', 'No failed packages to retry');
+    return;
+  }
+
+  frontendLog('INFO', 'UPLOAD: Retrying all failed uploads', `Count: ${failedIndexes.length}`);
+
+  const btnRetryAll = document.getElementById('btn-retry-all');
+  if (btnRetryAll) btnRetryAll.disabled = true;
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const index of failedIndexes) {
+    const pkg = packages[index];
+    if (!pkg || !invoke) continue;
+
+    pkg.uploading = true;
+    pkg.error = null;
+    renderPackages();
+
+    try {
+      const filePath = pkg.filePath || pkg.file_path;
+      const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
+      const specialHandling = pkg.specialHandling || pkg.special_handling;
+      const extractFolder = pkg.extractFolder || pkg.extract_folder;
+
+      let result;
+
+      if (specialHandling === 'extract-s920-root' && extractFolder) {
+        result = await invoke('extract_root_and_upload_to_jfrog', {
+          zipPath: filePath,
+          folderName: extractFolder,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      } else if (specialHandling && extractFolder) {
+        result = await invoke('extract_and_upload_to_jfrog', {
+          zipPath: filePath,
+          extractFolder: extractFolder,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      } else {
+        let uploadPath = filePath;
+        let uploadName = pkg.fileName || pkg.file_name;
+        const deployType = document.getElementById('deploy-type');
+        const currentReleaseType = deployType ? deployType.value : 'Production';
+        if (shouldZipApk(pkg, currentReleaseType) && filePath) {
+          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
+          if (zipResult.success) {
+            uploadPath = zipResult.zipPath;
+            uploadName = zipResult.zipFileName;
+          } else {
+            throw new Error(`Failed to zip APK: ${zipResult.message}`);
+          }
+        }
+        result = await invoke('upload_to_jfrog', {
+          filePath: uploadPath,
+          jfrogPath: jfrogPath,
+          apiKey: settings.jfrogApiKey,
+          baseUrl: settings.jfrogBaseUrl || null
+        });
+      }
+
+      if (result.success) {
+        pkg.uploaded = true;
+        pkg.url = result.url;
+        uploadedUrls[pkg.fileName || pkg.file_name] = result.url;
+        successCount++;
+        showToast('success', `Uploaded: ${pkg.fileName || pkg.file_name}`);
+      } else {
+        pkg.error = result.message;
+        failCount++;
+        showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${result.message}`);
+      }
+    } catch (error) {
+      pkg.error = error.toString();
+      failCount++;
+      showToast('error', `Failed: ${pkg.fileName || pkg.file_name} - ${error}`);
+    }
+
+    pkg.uploading = false;
+    renderPackages();
+  }
+
+  if (btnRetryAll) btnRetryAll.disabled = false;
+  updateActionButtons();
+
+  if (failCount === 0) {
+    frontendLog('INFO', 'UPLOAD: All retries succeeded', `Count: ${successCount}`);
+    showToast('success', `All ${successCount} failed packages uploaded successfully!`);
+  } else {
+    frontendLog('WARNING', 'UPLOAD: Retry completed with failures', `Success: ${successCount}, Failed: ${failCount}`);
+    showToast('warning', `Retried: ${successCount} succeeded, ${failCount} still failed`);
+  }
+}
+
 // Retry upload for a single package
 async function retryUpload(index) {
   const pkg = packages[index];
@@ -1464,7 +1981,8 @@ async function retryUpload(index) {
         zipPath: filePath,
         folderName: extractFolder,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     } else if (specialHandling && extractFolder) {
       // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
@@ -1472,7 +1990,8 @@ async function retryUpload(index) {
         zipPath: filePath,
         extractFolder: extractFolder,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     } else {
       // Regular file upload — check APK zip rule first
@@ -1494,7 +2013,8 @@ async function retryUpload(index) {
       result = await invoke('upload_to_jfrog', {
         filePath: uploadPath,
         jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
       });
     }
 
@@ -1524,11 +2044,13 @@ async function handleGenerateSpf() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
+  const descInput = document.getElementById('deploy-description');
 
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
+  const description = descInput ? descInput.value.trim() : '';
 
   if (!version || !date) {
     frontendLog('WARNING', 'SPF: Missing version or date');
@@ -1579,6 +2101,7 @@ async function handleGenerateSpf() {
     version: spfVersion,
     date,
     type: type,
+    description,
     releaseNotes,
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1595,8 +2118,8 @@ async function handleGenerateSpf() {
     // Generate SPF content
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
 
-    // Generate filename: release_<fullversion>-YYYY-MM-DD-<prod/dev>.spf
-    const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
+    // Generate filename: release_<fullversion>-YYYY-MM-DD-<type>.spf
+    const typeShort = getTypeShort(releaseData);
     const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
 
     // Ask user where to save
@@ -1639,11 +2162,13 @@ async function handleFinalizeRelease() {
   const dateInput = document.getElementById('deploy-date');
   const typeSelect = document.getElementById('deploy-type');
   const notesInput = document.getElementById('deploy-notes');
+  const descInput = document.getElementById('deploy-description');
 
   const version = versionInput ? versionInput.value.trim() : '';
   const date = dateInput ? dateInput.value : '';
   const type = typeSelect ? typeSelect.value : 'Production';
   const releaseNotes = notesInput ? notesInput.value : '';
+  const description = descInput ? descInput.value.trim() : '';
 
   if (!version || !date) {
     frontendLog('WARNING', 'FINALIZE: Missing version or date');
@@ -1696,6 +2221,7 @@ async function handleFinalizeRelease() {
     date,
     type: type,
     releaseType: type,
+    description,
     releaseNotes,
     packages: spfPackages.map(pkg => ({
       platform: pkg.platform || 'Unknown',
@@ -1718,7 +2244,7 @@ async function handleFinalizeRelease() {
     frontendLog('INFO', 'FINALIZE: Step 2 - Generating SPF file');
     try {
       const spfContent = await invoke('generate_spf_content', { release: releaseData });
-      const typeShort = type.toLowerCase() === 'production' ? 'prod' : 'dev';
+      const typeShort = getTypeShort(releaseData);
       const spfFileName = `release_${spfVersion}-${date}-${typeShort}.spf`;
 
       // Auto-save to app's data folder
@@ -1784,7 +2310,46 @@ async function handleFinalizeRelease() {
 
 // Releases Page
 function isReleaseUnsigned(release) {
-  return (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+  const pkgs = release.packages || [];
+
+  // Legacy check: any package URL contains /unsigned/
+  if (pkgs.some(p => (p.url || '').includes('/unsigned/'))) {
+    return true;
+  }
+
+  // Android check: for STA/A2A packages, check if ANY lacks _sign in filename
+  // (applies to .apk, .zip, or extensionless files)
+  // TefSdk, Doc, AAR, SDK, orphan PaymentExample, and TefSdk PaymentExample packages are exempt (like Windows/Linux)
+  const sigExemptGenericNames = ['', 'generic', 'example', 'unknown'];
+  const sigExemptDevices = ['tefsdk', 'doc', 'aar', 'sdk integration', 'documentation', 'sdk'];
+  const androidPkgs = pkgs.filter(p => {
+    const platform = (p.platform || '').toUpperCase();
+    if (platform !== 'STA' && platform !== 'A2A') return false;
+    // TefSdk, Doc, AAR, SDK packages don't require signature
+    const device = (p.device || '').toLowerCase();
+    if (sigExemptDevices.includes(device)) return false;
+    // Orphan PaymentExample packages (no/generic device + example category/device) don't require signature
+    const isExample = (p.category || '').toLowerCase().includes('example') ||
+      device.includes('example');
+    if (isExample && sigExemptGenericNames.includes(device)) return false;
+    return true;
+  });
+
+  if (androidPkgs.length > 0) {
+    return androidPkgs.some(p => {
+      const fileName = (p.url || '').split('/').filter(s => s.length > 0).pop() || '';
+      return !fileName.toLowerCase().includes('_sign');
+    });
+  }
+
+  return false;
+}
+
+function getTypeShort(release) {
+  const type = (release.releaseType || release.type || 'development').toLowerCase();
+  if (type === 'production') return isReleaseUnsigned(release) ? 'unsigned' : 'prod';
+  if (type === 'deploy-only') return 'deploy';
+  return 'dev';
 }
 
 function getFilteredAndSortedReleases() {
@@ -1795,10 +2360,8 @@ function getFilteredAndSortedReleases() {
     result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'deploy-only');
   } else if (currentReleaseFilter === 'development') {
     result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'development');
-  } else if (currentReleaseFilter === 'unsigned-prod') {
-    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && isReleaseUnsigned(r));
   } else if (currentReleaseFilter === 'production') {
-    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production' && !isReleaseUnsigned(r));
+    result = result.filter(r => (r.releaseType || r.type || '').toLowerCase() === 'production');
   }
 
   // Search filter
@@ -1807,6 +2370,7 @@ function getFilteredAndSortedReleases() {
     result = result.filter(r => {
       if ((r.version || '').toLowerCase().includes(q)) return true;
       if ((r.releaseNotes || '').toLowerCase().includes(q)) return true;
+      if ((r.description || '').toLowerCase().includes(q)) return true;
       return (r.packages || []).some(p => {
         const fileName = (p.url || '').split('/').pop() || '';
         return fileName.toLowerCase().includes(q);
@@ -2006,12 +2570,21 @@ function renderReleases() {
     const pkgCount = (release.packages || []).length;
     const createdAt = release.createdAt ? new Date(release.createdAt).toLocaleString() : '';
 
-    // Check if release contains unsigned packages (URL contains /unsigned/)
-    const hasUnsigned = (release.packages || []).some(p => (p.url || '').includes('/unsigned/'));
+    // Check if release contains unsigned packages
+    const hasUnsigned = isReleaseUnsigned(release);
 
     // Count unique platforms
     const platforms = new Set((release.packages || []).map(p => p.platform));
     const platformCount = platforms.size;
+
+    // Status icons — environment type (Material Icons)
+    const typeIcon = releaseType === 'deploy-only' ? 'publish' : releaseType === 'production' ? 'storefront' : 'science';
+    const typeColor = releaseType === 'deploy-only' ? '#3b82f6' : releaseType === 'production' ? '#06b6d4' : '#f59e0b';
+    const typeTooltip = releaseType === 'deploy-only' ? 'Deploy Only' : releaseType === 'production' ? 'Production' : 'Development';
+    // Status icons — signature (Material Icons)
+    const sigIcon = hasUnsigned ? 'encrypted_off' : 'encrypted';
+    const sigColor = hasUnsigned ? '#ef4444' : '#22c55e';
+    const sigTooltip = hasUnsigned ? 'Unsigned' : 'Signed';
 
     return `
     <div class="release-card-expandable" data-id="${release.id}">
@@ -2019,38 +2592,26 @@ function renderReleases() {
         <div class="release-card-info">
           <div class="release-card-title">
             <span class="release-version-text">Version ${release.version}</span>
-            <span class="release-type-badge ${releaseType}">${releaseTypeDisplay}</span>
-            ${hasUnsigned ? '<span class="release-type-badge unsigned">Não assinados</span>' : ''}
-          </div>
-          <div class="release-card-meta">
-            <span class="meta-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              Release: ${release.date}
+            <span class="release-status-icons">
+              <span class="material-symbols-outlined release-category-icon" style="color:${typeColor}" title="${typeTooltip}">${typeIcon}</span>
+              <span class="material-symbols-outlined release-category-icon" style="color:${sigColor}" title="${sigTooltip}">${sigIcon}</span>
             </span>
-            ${createdAt ? `<span class="meta-item">Created: ${createdAt}</span>` : ''}
+          </div>
+          ${release.description ? `<div class="release-card-description">${release.description}</div>` : ''}
+          <div class="release-card-meta">
+            <span class="meta-item"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="14" height="14"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/></svg> Release: ${release.date}</span>
+            ${createdAt ? `<span class="meta-sep">•</span><span class="meta-item"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none" width="16" height="16"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg> Created: ${createdAt}</span>` : ''}
+            <span class="meta-sep">•</span>
             <span class="meta-item platforms-badge">${platformCount} platform${platformCount !== 1 ? 's' : ''}</span>
           </div>
         </div>
         <div class="release-card-actions">
-          ${releaseType !== 'deploy-only' ? `<button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
+          <button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Generate HTML
-          </button>` : ''}
-          <button class="btn btn-sm btn-outline btn-export-spf" data-id="${release.id}" title="Export SPF">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Export SPF
           </button>
           <button class="btn btn-sm btn-outline btn-edit-release" data-id="${release.id}" title="Edit Release">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -2059,18 +2620,29 @@ function renderReleases() {
             </svg>
             Edit
           </button>
+          <div class="release-kebab-wrapper">
+            <button class="btn btn-sm btn-outline btn-kebab" data-id="${release.id}" title="More actions">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+            </button>
+            <div class="release-kebab-menu">
+              <button class="kebab-item btn-overflow-spf" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export SPF
+              </button>
+              <button class="kebab-item btn-overflow-purge" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/><path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/></svg>
+                Purge
+              </button>
+              <button class="kebab-item btn-overflow-delete" data-id="${release.id}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>
           <button class="btn btn-sm btn-outline btn-toggle-expand" data-id="${release.id}" title="Expand/Collapse">
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
-            Expand
-          </button>
-          <button class="btn btn-sm btn-outline btn-delete-release" data-id="${release.id}" title="Delete">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-            Delete
           </button>
         </div>
       </div>
@@ -2152,6 +2724,17 @@ function renderReleaseSummary(release) {
   const makeTag = (text, color) => {
     if (!text) return '';
     return `<span class="summary-tag summary-tag-${color}">${text}</span>`;
+  };
+
+  // Helper to create signed/unsigned icon
+  const sigIcon = (pkg) => {
+    const lowerSig = (pkg.signature || '').toLowerCase();
+    const fileName = (pkg.url || '').split('/').filter(s => s.length > 0).pop() || '';
+    const isSigned = lowerSig === 'signed' || fileName.toLowerCase().includes('_sign.');
+    const icon = isSigned ? 'encrypted' : 'encrypted_off';
+    const cls = isSigned ? 'sig-icon-signed' : 'sig-icon-unsigned';
+    const title = isSigned ? 'Signed' : 'Unsigned';
+    return `<span class="material-symbols-outlined sig-icon ${cls}" title="${title}">${icon}</span>`;
   };
 
   // Helper to create copy URL button
@@ -2277,7 +2860,7 @@ function renderReleaseSummary(release) {
       });
     }
 
-    // A2A packages - Group into SDK/Doc, Device APKs, and Examples
+    // A2A packages - Integration (SDK/Doc) + Device APKs (with examples merged)
     if (platformGroups['A2A']) {
       const a2aPkgs = platformGroups['A2A'];
 
@@ -2289,8 +2872,9 @@ function renderReleaseSummary(release) {
         p.device?.toLowerCase()?.includes('example'));
       const deviceApks = a2aPkgs.filter(p => !sdkDocs.includes(p) && !examples.includes(p) && p.device);
 
-      // SDK/Documentation
+      // Integration (SDK/Documentation)
       if (sdkDocs.length > 0) {
+        html += '<h6 class="platform-packages-subtitle">Integration</h6>';
         sdkDocs.forEach(pkg => {
           const icon = getPlatformIcon('A2A', pkg);
           let name = '';
@@ -2310,39 +2894,120 @@ function renderReleaseSummary(release) {
         });
       }
 
-      // Examples - extract device name from URL
-      if (examples.length > 0) {
-        examples.forEach(pkg => {
-          const icon = getPlatformIcon('A2A', pkg);
-          // Extract device from URL (e.g., PaymentExample-A910-D-2.3.9...)
-          let deviceName = '';
+      // Device APKs + Examples merged - grouped by device (normalized keys)
+      const a2aDevices = {};       // key: normalizedKey, value: { displayName, pkgs[] }
+      deviceApks.forEach(pkg => {
+        const device = pkg.device || 'Unknown';
+        const key = normalizeDeviceKey(device);
+        if (!a2aDevices[key]) a2aDevices[key] = { displayName: device, pkgs: [] };
+        a2aDevices[key].pkgs.push(pkg);
+      });
+
+      // Merge examples into their respective device groups
+      const orphanExamples = [];
+      const genericNames = ['', 'generic', 'example', 'unknown'];
+      examples.forEach(pkg => {
+        pkg._isExample = true;
+        // Use pkg.device directly (from SPF) — much more reliable than URL parsing
+        let deviceName = pkg.device || '';
+        // If device is empty or too generic, try extracting from URL filename
+        if (!deviceName || genericNames.includes(deviceName.toLowerCase())) {
+          deviceName = ''; // Reset before URL attempt
           if (pkg.url) {
             const urlFileName = pkg.url.split('/').filter(s => s.length > 0).pop() || '';
-            const deviceMatch = urlFileName.match(/PaymentExample-([A-Za-z0-9_]+)-/i);
+            const deviceMatch = urlFileName.match(/PaymentExample-(?:[A-Za-z0-9]+-){2}([A-Za-z0-9_]+)-/i);
             if (deviceMatch) deviceName = deviceMatch[1];
           }
-          const name = deviceName ? `PaymentExample (${normalizeA2ADisplayName(deviceName)})` : 'PaymentExample';
-          html += `
-          <div class="platform-package-item">
-            <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="package-name">${name}</span>
-            ${copyUrlBtn(pkg.url)}
-          </div>`;
-        });
-      }
+        }
+        if (deviceName && !genericNames.includes(deviceName.toLowerCase())) {
+          const key = normalizeDeviceKey(deviceName);
+          if (a2aDevices[key]) {
+            a2aDevices[key].pkgs.push(pkg);
+          } else {
+            a2aDevices[key] = { displayName: deviceName, pkgs: [pkg] };
+          }
+        } else {
+          orphanExamples.push(pkg);
+        }
+      });
 
-      // Device APKs - list each device individually
-      if (deviceApks.length > 0) {
-        deviceApks.forEach(pkg => {
-          const icon = getPlatformIcon('A2A', pkg);
-          const deviceName = pkg.device || 'Device';
+      // Render device groups
+      if (Object.keys(a2aDevices).length > 0 || orphanExamples.length > 0) {
+        html += '<h6 class="platform-packages-subtitle">A2A Packages</h6>';
+
+        for (const [key, group] of Object.entries(a2aDevices)) {
+          const devPkgs = group.pkgs;
+          const firstNonExample = devPkgs.find(p => !p._isExample) || devPkgs[0];
+          const icon = getPlatformIcon('A2A', firstNonExample);
+          // TefSdk packages (and TefSdk PaymentExamples) don't need signature
+          const isTefSdkGroup = key === 'TEFSDK';
           html += `
-          <div class="platform-package-item">
-            <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="package-name">${normalizeA2ADisplayName(deviceName)}</span>
-            ${copyUrlBtn(pkg.url)}
+          <div class="sta-device-group">
+            <div class="sta-device-header">
+              <img src="${icon}" alt="A2A" class="platform-icon" onerror="this.style.display='none'" />
+              <span class="sta-device-name">${normalizeA2ADisplayName(group.displayName)}</span>
+            </div>
+            <div class="sta-device-variants">`;
+
+          devPkgs.forEach(pkg => {
+            if (pkg._isExample) {
+              const exampleTag = makeTag('Example', 'gray');
+              const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+              const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+              html += `
+              <div class="sta-variant-row">
+                ${exampleTag}
+                ${sigTag}
+                ${clientTag}
+                ${isTefSdkGroup ? '' : sigIcon(pkg)}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+            } else {
+              const categoryTag = pkg.category ? makeTag(pkg.category, 'gray') : makeTag('Device APK', 'gray');
+              const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+              const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+              html += `
+              <div class="sta-variant-row">
+                ${categoryTag}
+                ${sigTag}
+                ${clientTag}
+                ${isTefSdkGroup ? '' : sigIcon(pkg)}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+            }
+          });
+
+          html += `
+            </div>
           </div>`;
-        });
+        }
+
+        // Orphan examples (no device detected from URL)
+        if (orphanExamples.length > 0) {
+          html += `
+          <div class="sta-device-group">
+            <div class="sta-device-header">
+              <img src="assets/images/payexample.svg" alt="Example" class="platform-icon" onerror="this.style.display='none'" />
+              <span class="sta-device-name">Android Payment Example</span>
+            </div>
+            <div class="sta-device-variants">`;
+
+          orphanExamples.forEach(pkg => {
+            const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+            const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
+            html += `
+              <div class="sta-variant-row">
+                ${makeTag('Example', 'gray')}
+                ${sigTag}
+                ${clientTag}
+                ${copyUrlBtn(pkg.url)}
+              </div>`;
+          });
+
+          html += `
+            </div>
+          </div>`;
+        }
       }
     }
   }
@@ -2351,21 +3016,23 @@ function renderReleaseSummary(release) {
   if (platformGroups['STA'] && platformGroups['STA'].length > 0) {
     html += '<h5 class="platform-packages-title sta-title">STA DEVICES</h5>';
 
-    // Group STA packages by device
+    // Group STA packages by device (normalized keys)
     const staDevices = {};
     platformGroups['STA'].forEach(pkg => {
       const device = pkg.device || 'Unknown';
-      if (!staDevices[device]) staDevices[device] = [];
-      staDevices[device].push(pkg);
+      const key = normalizeDeviceKey(device);
+      if (!staDevices[key]) staDevices[key] = { displayName: device, pkgs: [] };
+      staDevices[key].pkgs.push(pkg);
     });
 
-    for (const [device, devicePkgs] of Object.entries(staDevices)) {
+    for (const [key, group] of Object.entries(staDevices)) {
+      const devicePkgs = group.pkgs;
       const icon = getPlatformIcon('STA', devicePkgs[0]);
       html += `
         <div class="sta-device-group">
           <div class="sta-device-header">
             <img src="${icon}" alt="STA" class="platform-icon" onerror="this.style.display='none'" />
-            <span class="sta-device-name">${displayDeviceName(device)}</span>
+            <span class="sta-device-name">${displayDeviceName(group.displayName)}</span>
           </div>
           <div class="sta-device-variants">`;
 
@@ -2373,7 +3040,7 @@ function renderReleaseSummary(release) {
       devicePkgs.forEach(pkg => {
         const category = pkg.category || 'Package';
         const categoryTag = makeTag(category, 'gray');
-        const sigTag = pkg.signature ? makeTag(pkg.signature, 'blue') : '';
+        const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
         const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
 
         html += `
@@ -2381,6 +3048,7 @@ function renderReleaseSummary(release) {
               ${categoryTag}
               ${sigTag}
               ${clientTag}
+              ${sigIcon(pkg)}
               ${copyUrlBtn(pkg.url)}
             </div>`;
       });
@@ -2411,27 +3079,40 @@ function renderReleaseSummary(release) {
 }
 
 function attachReleaseEventListeners(container) {
-  // Toggle expand/collapse
+  // Global document listener to close open kebab menus (added once per session)
+  if (!kebabCloseListenerAdded) {
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.release-kebab-wrapper')) {
+        document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      }
+    });
+    kebabCloseListenerAdded = true;
+  }
+
+  // Toggle expand/collapse (chevron-only button)
   container.querySelectorAll('.btn-toggle-expand').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const card = btn.closest('.release-card-expandable');
       const body = card.querySelector('.release-card-body');
       const isExpanded = body.style.display !== 'none';
-
       body.style.display = isExpanded ? 'none' : 'block';
+      const chevron = btn.querySelector('.chevron-icon');
+      if (chevron) chevron.classList.toggle('rotated', !isExpanded);
       frontendLog('INFO', 'RELEASES: Release card toggled', `ID: ${btn.dataset.id}, Action: ${isExpanded ? 'collapsed' : 'expanded'}`);
-      btn.innerHTML = isExpanded ? `
-        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        Expand
-      ` : `
-        <svg class="chevron-icon rotated" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        Collapse
-      `;
+    });
+  });
+
+  // Kebab menu toggle
+  container.querySelectorAll('.btn-kebab').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = btn.closest('.release-kebab-wrapper');
+      const menu = wrapper.querySelector('.release-kebab-menu');
+      const isOpen = menu.classList.contains('open');
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      if (!isOpen) menu.classList.add('open');
     });
   });
 
@@ -2445,12 +3126,13 @@ function attachReleaseEventListeners(container) {
     });
   });
 
-  // Export SPF
-  container.querySelectorAll('.btn-export-spf').forEach(btn => {
+  // Export SPF (overflow menu)
+  container.querySelectorAll('.btn-overflow-spf').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.dataset.id;
-      frontendLog('INFO', 'RELEASES: Export SPF button clicked', `Release ID: ${id}`);
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Export SPF clicked', `Release ID: ${id}`);
       await exportSpfForRelease(id);
     });
   });
@@ -2479,12 +3161,24 @@ function attachReleaseEventListeners(container) {
     });
   });
 
-  // Delete release
-  container.querySelectorAll('.btn-delete-release').forEach(btn => {
+  // Purge release (overflow menu)
+  container.querySelectorAll('.btn-overflow-purge').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.dataset.id;
-      frontendLog('INFO', 'RELEASES: Delete release button clicked', `Release ID: ${id}`);
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Purge release clicked', `Release ID: ${id}`);
+      await purgeRelease(id);
+    });
+  });
+
+  // Delete release (overflow menu)
+  container.querySelectorAll('.btn-overflow-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const id = btn.dataset.id;
+      document.querySelectorAll('.release-kebab-menu.open').forEach(m => m.classList.remove('open'));
+      frontendLog('INFO', 'RELEASES: Delete release clicked', `Release ID: ${id}`);
       await deleteRelease(id);
     });
   });
@@ -2528,9 +3222,8 @@ async function exportSpfForRelease(id) {
 
     const spfContent = await invoke('generate_spf_content', { release: spfRelease });
 
-    // Generate filename: release_<version>-YYYY-MM-DD-<prod/dev>.spf
-    const releaseType = (release.releaseType || release.type || 'development').toLowerCase();
-    const typeShort = releaseType === 'production' ? 'prod' : releaseType === 'deploy-only' ? 'deploy' : 'dev';
+    // Generate filename: release_<version>-YYYY-MM-DD-<type>.spf
+    const typeShort = getTypeShort(release);
     const spfFileName = `release_${release.version}-${release.date}-${typeShort}.spf`;
 
     if (dialogSave) {
@@ -2639,6 +3332,91 @@ async function deleteRelease(id) {
   }
 }
 
+async function purgeRelease(id) {
+  if (!invoke) return;
+  const release = releases.find(r => r.id === id);
+  if (!release) return;
+
+  frontendLog('INFO', 'RELEASES: Purge release requested', `Release ID: ${id}, Version: ${release.version}`);
+
+  const pkgCount = (release.packages || []).filter(p => p.url).length;
+  const confirmed = await showConfirmDialog(
+    'Confirm Purge',
+    `Are you sure you want to PURGE this release?\n\nThis will delete ${pkgCount} package(s) from JFrog and remove the release.\n\nVersion: ${release.version}\n\nThis action cannot be undone.`,
+    { okLabel: 'Purge All', kind: 'error' }
+  );
+
+  if (!confirmed) {
+    frontendLog('INFO', 'RELEASES: Purge cancelled by user', `Release ID: ${id}`);
+    return;
+  }
+
+  if (!settings.jfrogApiKey) {
+    showToast('error', 'JFrog API key not configured. Go to Settings.');
+    return;
+  }
+
+  const packagesWithUrl = (release.packages || []).filter(p => p.url);
+  let successCount = 0;
+  let failCount = 0;
+  let notFoundCount = 0;
+
+  showLoadingModal(`Purging release ${release.version}... (0/${packagesWithUrl.length})`);
+
+  for (let i = 0; i < packagesWithUrl.length; i++) {
+    const pkg = packagesWithUrl[i];
+    const fileName = pkg.url.split('/').filter(s => s.length > 0).pop() || 'Unknown';
+
+    const loadingMsg = document.getElementById('loading-modal-message');
+    if (loadingMsg) loadingMsg.textContent = `Deleting from JFrog... (${i + 1}/${packagesWithUrl.length})\n${fileName}`;
+
+    try {
+      const result = await invoke('delete_from_jfrog', {
+        url: pkg.url,
+        apiKey: settings.jfrogApiKey
+      });
+
+      if (result.success) {
+        successCount++;
+        frontendLog('INFO', 'RELEASES: Purge - package deleted', `URL: ${pkg.url}`);
+      } else if (result.not_found) {
+        notFoundCount++;
+        frontendLog('WARNING', 'RELEASES: Purge - package not found', `URL: ${pkg.url}`);
+      } else {
+        failCount++;
+        frontendLog('ERROR', 'RELEASES: Purge - delete failed', `URL: ${pkg.url}, Error: ${result.message}`);
+      }
+    } catch (err) {
+      failCount++;
+      frontendLog('ERROR', 'RELEASES: Purge - delete error', `URL: ${pkg.url}, Error: ${err}`);
+    }
+  }
+
+  try {
+    const loadingMsg = document.getElementById('loading-modal-message');
+    if (loadingMsg) loadingMsg.textContent = 'Removing release...';
+
+    await invoke('delete_release', { id });
+    releases = await invoke('get_releases');
+    renderReleases();
+    populateHtmlReleaseSelect();
+    populateReleaseFilterOptions();
+
+    hideLoadingModal();
+
+    let summary = `Purge complete: ${successCount} deleted`;
+    if (notFoundCount > 0) summary += `, ${notFoundCount} not found`;
+    if (failCount > 0) summary += `, ${failCount} failed`;
+
+    showToast(failCount > 0 ? 'warning' : 'success', summary);
+    frontendLog('INFO', 'RELEASES: Purge complete', summary);
+  } catch (error) {
+    hideLoadingModal();
+    frontendLog('ERROR', 'RELEASES: Purge - failed to delete release', error.toString());
+    showToast('error', 'Failed to delete release after purging packages: ' + error);
+  }
+}
+
 // HTML Generation Page
 function initHtmlGenPage() {
   const selectEl = document.getElementById('html-release-select');
@@ -2673,8 +3451,7 @@ function populateHtmlReleaseSelect() {
   if (!selectEl) return;
 
   selectEl.innerHTML = '<option value="">-- Select a release --</option>' +
-    releases.filter(r => (r.releaseType || r.type || '').toLowerCase() !== 'deploy-only')
-      .map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
+    releases.map(r => `<option value="${r.id}">${r.version} (${r.releaseType || r.type})</option>`).join('');
 }
 
 async function generateHtml() {
@@ -2745,6 +3522,36 @@ function initSettingsPage() {
       e.preventDefault();
       frontendLog('INFO', 'SETTINGS: Save settings button clicked');
       await saveSettings();
+    });
+  }
+
+  // Reset HTML defaults button
+  const btnResetHtmlDefaults = document.getElementById('btn-reset-html-defaults');
+  if (btnResetHtmlDefaults) {
+    btnResetHtmlDefaults.addEventListener('click', (e) => {
+      e.preventDefault();
+      const HTML_DEFAULTS = {
+        title: 'SmartPosTef Release',
+        subtitle: 'Aditum Pagamentos LTDA',
+        primaryColor: '#2e1773',
+        secondaryColor: '#2f2256'
+      };
+      const titleInput = document.getElementById('settings-html-title');
+      const subtitleInput = document.getElementById('settings-html-subtitle');
+      const primaryPicker = document.getElementById('settings-html-primary');
+      const primaryText = document.getElementById('settings-html-primary-text');
+      const secondaryPicker = document.getElementById('settings-html-secondary');
+      const secondaryText = document.getElementById('settings-html-secondary-text');
+      if (titleInput) titleInput.value = HTML_DEFAULTS.title;
+      if (subtitleInput) subtitleInput.value = HTML_DEFAULTS.subtitle;
+      if (primaryPicker) primaryPicker.value = HTML_DEFAULTS.primaryColor;
+      if (primaryText) primaryText.value = HTML_DEFAULTS.primaryColor;
+      if (primaryPicker) primaryPicker.closest('.color-swatch').style.backgroundColor = HTML_DEFAULTS.primaryColor;
+      if (secondaryPicker) secondaryPicker.value = HTML_DEFAULTS.secondaryColor;
+      if (secondaryText) secondaryText.value = HTML_DEFAULTS.secondaryColor;
+      if (secondaryPicker) secondaryPicker.closest('.color-swatch').style.backgroundColor = HTML_DEFAULTS.secondaryColor;
+      frontendLog('INFO', 'SETTINGS: HTML settings reset to defaults');
+      showToast('info', 'HTML settings reset to defaults. Click Save to apply.');
     });
   }
 
@@ -2879,8 +3686,50 @@ function populateSettings() {
     companyNameInput.value = settings.portalSettings.companyName;
   }
 
+  // HTML Generation Settings
+  const htmlTitleInput = document.getElementById('settings-html-title');
+  const htmlSubtitleInput = document.getElementById('settings-html-subtitle');
+  const htmlPrimaryPicker = document.getElementById('settings-html-primary');
+  const htmlPrimaryText = document.getElementById('settings-html-primary-text');
+  const htmlSecondaryPicker = document.getElementById('settings-html-secondary');
+  const htmlSecondaryText = document.getElementById('settings-html-secondary-text');
+
+  if (htmlTitleInput) htmlTitleInput.value = settings.portalSettings?.htmlTitle || '';
+  if (htmlSubtitleInput) htmlSubtitleInput.value = settings.portalSettings?.htmlSubtitle || '';
+  if (settings.portalSettings?.primaryColor) {
+    if (htmlPrimaryPicker) htmlPrimaryPicker.value = settings.portalSettings.primaryColor;
+    if (htmlPrimaryText) htmlPrimaryText.value = settings.portalSettings.primaryColor;
+  }
+  if (settings.portalSettings?.secondaryColor) {
+    if (htmlSecondaryPicker) htmlSecondaryPicker.value = settings.portalSettings.secondaryColor;
+    if (htmlSecondaryText) htmlSecondaryText.value = settings.portalSettings.secondaryColor;
+  }
+
   // Client mappings
   renderClientMappings();
+}
+
+// Generate a deterministic 3-digit decimal code from a client name using DJB2 hash.
+// The name is uppercased before hashing to ensure case-insensitivity.
+// If the result collides with an existing mapping (excluding the one at excludeIndex),
+// it increments until a free slot is found.
+function generateClientNumber(name, excludeIndex) {
+  const upper = name.toUpperCase();
+  let hash = 5381;
+  for (let i = 0; i < upper.length; i++) {
+    hash = (Math.imul(hash, 33) + upper.charCodeAt(i)) >>> 0;
+  }
+  const base = hash % 1000;
+  const usedNumbers = (settings.clientMappings || [])
+    .filter((_, i) => i !== excludeIndex)
+    .map(m => m.number);
+  let candidate = base;
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const padded = String((base + attempt) % 1000).padStart(3, '0');
+    if (!usedNumbers.includes(padded)) return padded;
+    candidate = (base + attempt + 1) % 1000;
+  }
+  return String(candidate).padStart(3, '0');
 }
 
 function renderClientMappings() {
@@ -2894,10 +3743,30 @@ function renderClientMappings() {
     return;
   }
 
-  container.innerHTML = mappings.map((mapping, index) => `
+  container.innerHTML = mappings.map((mapping, index) => {
+    if (mapping.builtin) {
+      return `
+        <div class="mapping-item mapping-item--builtin">
+          <input type="text" class="mapping-name" value="${mapping.name}" disabled>
+          <span class="mapping-lock-icon" title="Built-in mapping — cannot be changed">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </span>
+          <input type="text" class="mapping-number" value="${mapping.number}" disabled>
+        </div>
+      `;
+    }
+    return `
     <div class="mapping-item">
-      <input type="text" class="mapping-number" value="${mapping.number}" placeholder="Number" data-index="${index}" data-field="number">
       <input type="text" class="mapping-name" value="${mapping.name}" placeholder="Client Name" data-index="${index}" data-field="name">
+      <button class="btn-generate-mapping" data-index="${index}" title="Generate code from name">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>
+        </svg>
+      </button>
+      <input type="text" class="mapping-number" value="${mapping.number}" placeholder="000" data-index="${index}" data-field="number">
       <button class="btn-remove-mapping" data-index="${index}" title="Remove mapping">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
           <line x1="18" y1="6" x2="6" y2="18"/>
@@ -2905,9 +3774,10 @@ function renderClientMappings() {
         </svg>
       </button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
-  // Attach event listeners
+  // Attach change listeners
   container.querySelectorAll('.mapping-number, .mapping-name').forEach(input => {
     input.addEventListener('change', (e) => {
       const index = parseInt(e.target.dataset.index);
@@ -2915,6 +3785,26 @@ function renderClientMappings() {
       if (settings.clientMappings[index]) {
         settings.clientMappings[index][field] = e.target.value;
       }
+    });
+  });
+
+  // Generate button
+  container.querySelectorAll('.btn-generate-mapping').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const index = parseInt(btn.dataset.index);
+      const nameInput = container.querySelector(`.mapping-name[data-index="${index}"]`);
+      const numberInput = container.querySelector(`.mapping-number[data-index="${index}"]`);
+      if (!nameInput || !nameInput.value.trim()) {
+        showToast('warning', 'Enter a client name first');
+        return;
+      }
+      const generated = generateClientNumber(nameInput.value.trim(), index);
+      numberInput.value = generated;
+      if (settings.clientMappings[index]) {
+        settings.clientMappings[index].number = generated;
+      }
+      frontendLog('INFO', 'SETTINGS: Client number generated', `Name: ${nameInput.value.trim()}, Code: ${generated}`);
     });
   });
 
@@ -2959,11 +3849,28 @@ async function saveSettings() {
   settings.jfrogDefaultRepo = defaultRepoInput ? defaultRepoInput.value : '';
   settings.portalSettings = {
     portalTitle: portalTitleInput ? portalTitleInput.value : '',
-    companyName: companyNameInput ? companyNameInput.value : ''
+    companyName: companyNameInput ? companyNameInput.value : '',
+    htmlTitle: document.getElementById('settings-html-title')?.value || '',
+    htmlSubtitle: document.getElementById('settings-html-subtitle')?.value || '',
+    primaryColor: document.getElementById('settings-html-primary-text')?.value || '',
+    secondaryColor: document.getElementById('settings-html-secondary-text')?.value || ''
   };
 
   // Filter out empty mappings
   settings.clientMappings = (settings.clientMappings || []).filter(m => m.number && m.name);
+
+  // Remove any custom mappings whose name duplicates a built-in (case-insensitive)
+  const builtinNames = BUILTIN_CLIENT_MAPPINGS.map(m => m.name.toLowerCase());
+  const dupNames = settings.clientMappings
+    .filter(m => !m.builtin && builtinNames.includes((m.name || '').toLowerCase()))
+    .map(m => m.name);
+  if (dupNames.length > 0) {
+    settings.clientMappings = settings.clientMappings.filter(m => m.builtin || !builtinNames.includes((m.name || '').toLowerCase()));
+    showToast('warning', `Duplicate built-in mapping(s) removed: ${dupNames.join(', ')}`);
+  }
+
+  // Re-inject built-ins so Rust backend always sees them in the saved file
+  ensureBuiltinMappings();
 
   try {
     await invoke('save_settings', { settings });
@@ -3022,12 +3929,124 @@ async function viewLogs() {
   }
 }
 
+function showExportImportDialog(mode, availableCategories = null) {
+  const isExport = mode === 'export';
+  const title = isExport ? 'Export Data' : 'Import Data';
+  const subtitle = isExport
+    ? 'Select which data categories to include in the export file.'
+    : 'Select which data categories to restore from the backup file.';
+  const confirmLabel = isExport ? 'Export' : 'Import';
+
+  const categories = [
+    { key: 'releases', label: 'Releases', desc: 'All releases and their SPF files', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
+    { key: 'defaultTheme', label: 'Default Theme', desc: 'Your selected color theme', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' },
+    { key: 'jfrogSettings', label: 'JFrog Settings', desc: 'Encrypted API key', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
+    { key: 'clientMappings', label: 'Client Mappings', desc: 'Client number-to-name mappings', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
+    { key: 'htmlSettings', label: 'HTML Settings', desc: 'Portal title and company name', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' },
+  ];
+
+  frontendLog('INFO', `UI: ${title} dialog shown`);
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal active';
+    overlay.style.zIndex = '2000';
+
+    const categoryRows = categories.map(cat => {
+      const available = !availableCategories || availableCategories[cat.key];
+      const disabledClass = available ? '' : ' category-item-disabled';
+      const disabledAttr = available ? '' : ' disabled';
+      const checked = available ? ' checked' : '';
+      return `
+        <label class="category-item${disabledClass}">
+          <div class="category-item-info">
+            <span class="category-item-icon">${cat.icon}</span>
+            <div>
+              <span class="category-item-label">${cat.label}</span>
+              <span class="category-item-desc">${cat.desc}${!available ? ' (not in file)' : ''}</span>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" data-category="${cat.key}"${checked}${disabledAttr}>
+            <span class="toggle-slider"></span>
+          </label>
+        </label>`;
+    }).join('');
+
+    overlay.innerHTML = `
+      <div class="modal-content confirm-dialog export-import-dialog" style="max-width: 480px; padding: 0;">
+        <div class="confirm-header confirm-header-info">
+          <div class="confirm-icon">
+            ${isExport
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+      }
+          </div>
+          <h3 class="confirm-title">${title}</h3>
+        </div>
+        <div class="export-import-dialog-body">
+          <p class="export-import-dialog-subtitle">${subtitle}</p>
+          <div class="export-import-select-all">
+            <button class="btn btn-sm btn-outline" id="eid-toggle-all">Select All</button>
+          </div>
+          <div class="category-checkbox-list">
+            ${categoryRows}
+          </div>
+        </div>
+        <div class="confirm-footer">
+          <button class="btn btn-secondary" id="eid-cancel">Cancel</button>
+          <button class="btn btn-primary" id="eid-confirm">${confirmLabel}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const toggleAllBtn = overlay.querySelector('#eid-toggle-all');
+    const checkboxes = overlay.querySelectorAll('.category-checkbox-list input[type="checkbox"]:not(:disabled)');
+
+    const updateToggleAllLabel = () => {
+      const allChecked = [...checkboxes].every(cb => cb.checked);
+      toggleAllBtn.textContent = allChecked ? 'Deselect All' : 'Select All';
+    };
+
+    toggleAllBtn.addEventListener('click', () => {
+      const allChecked = [...checkboxes].every(cb => cb.checked);
+      checkboxes.forEach(cb => { cb.checked = !allChecked; });
+      updateToggleAllLabel();
+    });
+
+    checkboxes.forEach(cb => cb.addEventListener('change', updateToggleAllLabel));
+
+    const cleanup = (result) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    overlay.querySelector('#eid-cancel').addEventListener('click', () => cleanup(null));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+    overlay.querySelector('#eid-confirm').addEventListener('click', () => {
+      const opts = {};
+      categories.forEach(cat => {
+        const cb = overlay.querySelector(`input[data-category="${cat.key}"]`);
+        opts[cat.key] = cb ? cb.checked : false;
+      });
+      frontendLog('INFO', `UI: ${title} dialog confirmed`, JSON.stringify(opts));
+      cleanup(opts);
+    });
+  });
+}
+
 async function exportData() {
   if (!invoke) return;
   frontendLog('INFO', 'SETTINGS: Starting data export');
 
   try {
-    const data = await invoke('export_data');
+    const options = await showExportImportDialog('export');
+    if (!options) return; // cancelled
+
+    const theme = localStorage.getItem('spm-theme') || 'purple-night';
+    const data = await invoke('export_data', { options, theme });
 
     if (dialogSave) {
       const savePath = await dialogSave({
@@ -3058,21 +4077,54 @@ async function importData() {
       title: 'Select Backup File'
     });
 
-    if (selected) {
-      const content = await invoke('read_file_content', { filePath: selected });
-      await invoke('import_data', { data: content });
+    if (!selected) return;
 
-      // Reload data
+    const content = await invoke('read_file_content', { filePath: selected });
+
+    // Detect available categories in the file
+    let parsed;
+    try { parsed = JSON.parse(content); } catch { showToast('error', 'Invalid JSON file'); return; }
+
+    const isV3 = parsed.version === 3;
+    const settingsObj = parsed.settings || {};
+    const availableCategories = {
+      releases: !!parsed.releases,
+      defaultTheme: isV3 ? !!parsed.theme : false,
+      jfrogSettings: !!settingsObj.jfrogApiKey,
+      clientMappings: !!settingsObj.clientMappings,
+      htmlSettings: !!settingsObj.portalSettings,
+    };
+
+    const options = await showExportImportDialog('import', availableCategories);
+    if (!options) return; // cancelled
+
+    const summary = await invoke('import_data', { data: content, options });
+
+    // Apply theme if imported
+    if (summary.theme) {
+      document.body.setAttribute('data-theme', summary.theme);
+      document.documentElement.setAttribute('data-theme', summary.theme);
+      localStorage.setItem('spm-theme', summary.theme);
+      if (window._renderThemeGrid) window._renderThemeGrid();
+    }
+
+    // Selectively reload affected data
+    if (options.jfrogSettings || options.clientMappings || options.htmlSettings) {
       settings = await invoke('get_settings');
-      releases = await invoke('get_releases');
-
       populateSettings();
+    }
+    if (options.releases) {
+      releases = await invoke('get_releases');
       renderReleases();
       populateHtmlReleaseSelect();
-
-      frontendLog('INFO', 'SETTINGS: Data imported successfully');
-      showToast('success', 'Data imported successfully');
     }
+
+    const importedList = summary.imported.join(', ') || 'none';
+    const msg = summary.releaseCount > 0
+      ? `Imported: ${importedList} (${summary.releaseCount} releases)`
+      : `Imported: ${importedList}`;
+    frontendLog('INFO', 'SETTINGS: Data imported successfully', msg);
+    showToast('success', msg);
   } catch (error) {
     frontendLog('ERROR', 'SETTINGS: Failed to import data', error.toString());
     showToast('error', 'Failed to import data: ' + error);
@@ -3317,32 +4369,6 @@ function renderSpfDropZone(container) {
     </div>
   `;
 
-  // Drag & drop handlers
-  const dropZone = document.getElementById('spf-drop-zone');
-  if (dropZone) {
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        const file = files[0];
-        if (file.name.endsWith('.spf')) {
-          const text = await file.text();
-          handleSpfImport(text, file.name);
-        } else {
-          showToast('error', 'Please drop a valid .spf file');
-        }
-      }
-    });
-  }
-
   // Browse button
   const btnBrowse = document.getElementById('btn-browse-spf');
   if (btnBrowse) {
@@ -3384,11 +4410,19 @@ function handleSpfImport(spfContent, fileName) {
   importReleaseState.packages = parsed.packages;
   importReleaseState.isEditing = true;
 
-  // Check if this release already exists locally
-  const existingRelease = releases.find(r => r.version === parsed.release.version);
+  // Check if this release already exists locally (match version + type + signed/unsigned)
+  const parsedType = (parsed.release.releaseType || parsed.release.type || '').toLowerCase();
+  const parsedUnsigned = isReleaseUnsigned({ packages: parsed.packages });
+  const existingRelease = releases.find(r => {
+    if (r.version !== parsed.release.version) return false;
+    const rType = (r.releaseType || r.type || '').toLowerCase();
+    if (rType !== parsedType) return false;
+    if (rType === 'production') return isReleaseUnsigned(r) === parsedUnsigned;
+    return true;
+  });
   if (existingRelease) {
     importReleaseState.originalRelease = existingRelease;
-    frontendLog('INFO', 'IMPORT: Found existing local release', `Version: ${existingRelease.version}`);
+    frontendLog('INFO', 'IMPORT: Found existing local release', `Version: ${existingRelease.version}, Type: ${existingRelease.releaseType || existingRelease.type}, Unsigned: ${isReleaseUnsigned(existingRelease)}`);
   }
 
   renderImportReleasePage();
@@ -3401,7 +4435,7 @@ function parseSpfContent(content) {
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     if (lines.length === 0) return null;
 
-    let release = { version: '', date: '', releaseType: 'Production', releaseNotes: '' };
+    let release = { version: '', date: '', releaseType: 'Production', description: '', releaseNotes: '' };
     let packages = [];
 
     // Check for sectioned format
@@ -3430,7 +4464,11 @@ function parseSpfContent(content) {
           const value = valueParts.join('=').trim();
           if (key.trim() === 'version') release.version = value;
           else if (key.trim() === 'date') release.date = value;
-          else if (key.trim() === 'type') release.releaseType = value.toLowerCase() === 'development' ? 'Development' : 'Production';
+          else if (key.trim() === 'type') {
+            const t = value.toLowerCase();
+            release.releaseType = t === 'deploy-only' ? 'deploy-only' : t === 'development' ? 'Development' : 'Production';
+          }
+          else if (key.trim() === 'description') release.description = value;
         } else if (currentSection === 'release_notes') {
           releaseNotesLines.push(line);
         } else if (currentSection === 'release_pkgs') {
@@ -3460,9 +4498,11 @@ function parseSpfContent(content) {
           packages.push(pkg);
         }
       }
-      // Try to extract version from first package URL
+      // Try to extract version from first package URL (v2 hex hash, A2A v1, STA v1)
       if (packages.length > 0) {
-        const versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.\d+)/);
+        let versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\+[0-9a-fA-F]+)/);
+        if (!versionMatch) versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.A2A\.\d+)/);
+        if (!versionMatch) versionMatch = packages[0].url.match(/(\d+\.\d+\.\d+\.\d+)/);
         if (versionMatch) release.version = versionMatch[1];
       }
       release.date = new Date().toLocaleDateString('en-CA');
@@ -3473,6 +4513,25 @@ function parseSpfContent(content) {
     frontendLog('ERROR', 'IMPORT: SPF parse error', err.toString());
     return null;
   }
+}
+
+// Detect client by checking if the version's patch segment ends with a client mapping number.
+// Mirrors Rust extract_client_from_version logic.
+// Version patterns: X.Y.PATCH.HASH (e.g., 2.5.6687.873895) or X.Y.PATCH+HEX (v2 format)
+function detectClientFromVersion(fileName) {
+  if (!settings.clientMappings || settings.clientMappings.length === 0) return '';
+  // Match version pattern in filename: digits.digits.digits.digits or digits.digits.digits+hex
+  const versionMatch = fileName.match(/(\d+\.\d+\.\d+)[\.\+]/);
+  if (!versionMatch) return '';
+  const versionParts = versionMatch[1].split('.');
+  const patchSegment = versionParts[2];
+  if (!patchSegment || patchSegment.length <= 1) return '';
+  for (const mapping of settings.clientMappings) {
+    if (patchSegment.endsWith(mapping.number) && patchSegment.length > mapping.number.length) {
+      return mapping.name;
+    }
+  }
+  return '';
 }
 
 function detectPackageFromUrl(url) {
@@ -3539,10 +4598,11 @@ function detectPackageFromUrl(url) {
     }
   }
 
-  // Detect client from client mappings
-  if (settings.clientMappings && settings.clientMappings.length > 0) {
+  // Detect client from version patch segment (primary) or URL path segments (fallback)
+  client = detectClientFromVersion(fileName);
+  if (!client && settings.clientMappings && settings.clientMappings.length > 0) {
     for (const mapping of settings.clientMappings) {
-      if (lowerName.includes(mapping.number) || lowerUrl.includes(`/${mapping.number}/`) || lowerUrl.includes(`-${mapping.number}-`) || lowerUrl.includes(`-${mapping.number}/`)) {
+      if (lowerUrl.includes(`/${mapping.number}/`) || lowerUrl.includes(`-${mapping.number}-`) || lowerUrl.includes(`-${mapping.number}/`)) {
         client = mapping.name;
         break;
       }
@@ -3574,17 +4634,22 @@ function renderImportReleasePage() {
             <input type="date" id="import-date" value="${rel.date || ''}">
           </div>
         </div>
-        <div class="form-group">
+        ${rel.releaseType === 'deploy-only' ? '' : `<div class="form-group">
           <label>Release Type *</label>
           <select id="import-type">
             <option value="Production" ${rel.releaseType === 'Production' ? 'selected' : ''}>Production</option>
             <option value="Development" ${rel.releaseType === 'Development' ? 'selected' : ''}>Development</option>
           </select>
-        </div>
+        </div>`}
+      </div>
+      <div class="form-group" style="margin-top: 12px;">
+        <label>Description</label>
+        <input type="text" id="import-description" value="${rel.description || ''}" placeholder="Brief description of this release...">
       </div>
     </div>
     
-    <!-- Release Notes -->
+    <!-- Release Notes (hidden for deploy-only) -->
+    ${rel.releaseType === 'deploy-only' ? '' : `
     <div class="card">
       <h3>Release Notes</h3>
       <div class="release-notes-tabs">
@@ -3600,6 +4665,7 @@ function renderImportReleasePage() {
         </div>
       </div>
     </div>
+    `}
     
     <!-- Release Summary -->
     <div class="card">
@@ -3639,7 +4705,9 @@ function renderImportReleasePage() {
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        ${importReleaseState.originalRelease ? 'Update Release' : 'Save Release'}
+        ${rel.releaseType === 'deploy-only'
+      ? (importReleaseState.originalRelease ? 'Update Deploy' : 'Save Deploy')
+      : (importReleaseState.originalRelease ? 'Update Release' : 'Save Release')}
       </button>
     </div>
   `;
@@ -3856,11 +4924,36 @@ async function handleImportAddPackages() {
   const releaseVersion = importReleaseState.release ? importReleaseState.release.version : '';
   const releaseBaseVersion = extractBaseVersion(releaseVersion);
 
-  for (const filePath of files) {
-    const fileName = filePath.split(/[/\\]/).pop() || '';
+  // Use Rust scan_files for accurate package detection (single source of truth)
+  let scannedPackages;
+  try {
+    scannedPackages = await invoke('scan_files', { filePaths: files });
+  } catch (err) {
+    frontendLog('ERROR', 'IMPORT: scan_files failed, falling back to JS detection', err.toString());
+    // Fallback to JS detection if Rust invocation fails
+    scannedPackages = files.map(filePath => {
+      const fileName = filePath.split(/[/\\]/).pop() || '';
+      const pkg = detectPackageFromFileName(fileName, filePath);
+      return { ...pkg, file_name: fileName, file_path: filePath };
+    });
+  }
 
-    // Detect package info from filename
-    const pkg = detectPackageFromFileName(fileName, filePath);
+  let addedCount = 0;
+  for (const scanned of scannedPackages) {
+    const filePath = scanned.filePath || scanned.file_path;
+    const fileName = scanned.fileName || scanned.file_name || filePath.split(/[/\\]/).pop() || '';
+
+    // Map PackageInfo from Rust to the import page format
+    const pkg = {
+      platform: scanned.platform || 'Unknown',
+      device: scanned.device || '',
+      category: scanned.category || '',
+      signature: scanned.signature || '',
+      client: scanned.client || '',
+      url: '',
+      version: scanned.version || '',
+      isDev: scanned.isDev || scanned.is_dev || false,
+    };
 
     // Version validation: compare package version with release version
     if (releaseBaseVersion && pkg.version) {
@@ -3886,11 +4979,12 @@ async function handleImportAddPackages() {
 
     importReleaseState.newPackages.push(pkg);
     importReleaseState.packages.push(pkg);
-    frontendLog('INFO', 'IMPORT: Package added', `File: ${fileName}, Platform: ${pkg.platform}, Device: ${pkg.device}`);
+    addedCount++;
+    frontendLog('INFO', 'IMPORT: Package added', `File: ${fileName}, Platform: ${pkg.platform}, Device: ${pkg.device}, Signature: ${pkg.signature}`);
   }
 
   renderImportReleasePage();
-  showToast('success', `Added ${files.length} package(s)`);
+  showToast('success', `Added ${addedCount} package(s)`);
 }
 
 // Device map matching Rust DEVICE_MAP (src-tauri/src/lib.rs)
@@ -3898,11 +4992,10 @@ const DEVICE_MAP = {
   'A910': { manufacturer: 'pax', path: 'a910' },
   'S920': { manufacturer: 'pax', path: 's920' },
   'P2': { manufacturer: 'sunmi', path: 'p2' },
-  'P2_LITE_SE': { manufacturer: 'sunmi', path: 'p2litese' },
   'P2LITESE': { manufacturer: 'sunmi', path: 'p2litese' },
-  'P2_MINI': { manufacturer: 'sunmi', path: 'p2_mini' },
+  'P2MINI': { manufacturer: 'sunmi', path: 'p2_mini' },
   'L3': { manufacturer: 'positivo', path: 'l3' },
-  'L3_2024': { manufacturer: 'positivo', path: 'l3_2024' },
+  'L32024': { manufacturer: 'positivo', path: 'l3_2024' },
   'L300': { manufacturer: 'positivo', path: 'l300' },
   'L400': { manufacturer: 'positivo', path: 'l400' },
   'GPOS700': { manufacturer: 'gertec', path: 'gpos700' },
@@ -3911,9 +5004,14 @@ const DEVICE_MAP = {
   'DX8000': { manufacturer: 'ingenico', path: 'dx8000' },
   'DX4000': { manufacturer: 'ingenico', path: 'dx4000' },
   'EX4000': { manufacturer: 'ingenico', path: 'ex4000' },
-  'X990_PRO': { manufacturer: 'verifone', path: 'x990_pro' },
-  'X990_UX': { manufacturer: 'verifone', path: 'x990_ux' },
+  'X990PRO': { manufacturer: 'verifone', path: 'x990_pro' },
+  'X990UX': { manufacturer: 'verifone', path: 'x990_ux' },
 };
+
+// Lookup device info from DEVICE_MAP using normalized key
+function lookupDevice(deviceName) {
+  return DEVICE_MAP[normalizeDeviceKey(deviceName)];
+}
 
 // Display-only device name normalization (just replace _ with space, keep casing)
 function displayDeviceName(name) {
@@ -3923,41 +5021,66 @@ function displayDeviceName(name) {
 // Normalize device names for display (used by A2A and STA packages)
 function normalizeDeviceName(deviceRaw) {
   if (!deviceRaw) return '';
-  const upper = deviceRaw.toUpperCase();
+  const key = normalizeDeviceKey(deviceRaw);
 
-  // Known device name mappings
+  // Known device name mappings (keys are already normalized)
   const mappings = {
-    'P2LITESE': 'P2 Lite',
+    'P2LITESE': 'P2 Lite SE',
     'P2LITE': 'P2 Lite',
-    'P2_LITE': 'P2 Lite',
-    'L3_2024': 'L3 2024',
+    'P2MINI': 'P2 Mini',
+    'L32024': 'L3 2024',
     'DX4000': 'DX4000',
     'DX8000': 'DX8000',
+    'EX4000': 'EX4000',
+    'GPOS700': 'GPOS700',
     'GPOS720': 'GPOS720',
     'GPOS760': 'GPOS760',
+    'X990PRO': 'X990 Pro',
+    'X990UX': 'X990 UX',
     'A910': 'A910',
     'A920': 'A920',
     'P2': 'P2',
     'L3': 'L3',
+    'L300': 'L300',
+    'L400': 'L400',
     'S920': 'S920'
   };
 
-  if (mappings[upper]) return mappings[upper];
+  if (mappings[key]) return mappings[key];
 
-  // Default: replace underscores with spaces
-  return deviceRaw.replace(/_/g, ' ');
+  // Default: replace underscores/hyphens with spaces
+  return deviceRaw.replace(/[_-]/g, ' ');
+}
+
+// Normalize device name to a canonical key for comparison/grouping (strips non-alphanumeric, uppercases)
+// e.g. "P2_Lite_SE", "P2-Lite-SE", "P2LiteSE", "P2 Lite SE", "P2_Lite" → "P2LITESE"
+function normalizeDeviceKey(name) {
+  if (!name) return '';
+  const key = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  // Known aliases — abbreviated names that refer to the same device
+  const aliases = {
+    'P2LITE': 'P2LITESE',
+  };
+  return aliases[key] || key;
 }
 
 // Normalize A2A device names for display (preserves SE suffix etc.)
 function normalizeA2ADisplayName(name) {
   if (!name) return '';
   const map = {
-    'P2_LITE_SE': 'P2 Lite SE', 'P2LITESE': 'P2 Lite SE',
-    'X990_PRO': 'X990 Pro', 'X990_UX': 'X990 UX',
-    'L3_2024': 'L3 2024', 'DX4000': 'DX4000', 'DX8000': 'DX8000',
-    'GPOS720': 'GPOS720', 'GPOS760': 'GPOS760',
+    'P2LITESE': 'P2 Lite SE',
+    'P2MINI': 'P2 Mini',
+    'X990PRO': 'X990 Pro',
+    'X990UX': 'X990 UX',
+    'L32024': 'L3 2024',
+    'DX4000': 'DX4000',
+    'DX8000': 'DX8000',
+    'EX4000': 'EX4000',
+    'GPOS700': 'GPOS700',
+    'GPOS720': 'GPOS720',
+    'GPOS760': 'GPOS760',
   };
-  return map[name.toUpperCase()] || name.replace(/_/g, ' ');
+  return map[normalizeDeviceKey(name)] || name.replace(/[_-]/g, ' ');
 }
 
 // Detect package info from filename (for locally added files)
@@ -3966,13 +5089,28 @@ function detectPackageFromFileName(fileName, filePath) {
 
   let platform = 'Unknown', device = '', category = '', signature = '', client = '', version = '', isDev = false;
 
-  // Detect signature
+  // Detect signature — extract actual signer name from filename (mirrors Rust extract_signature)
   if (lowerName.includes('_sign.')) {
-    signature = 'Signed';
+    const excluded = ['release', 'debug', 'sign', 'signed', 'unsigned', 'offline', 'online'];
+    // Try v2 format: version+hexhash-SIGNATURE-release_sign.ext
+    const v2Match = fileName.match(/\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+    if (v2Match && !excluded.includes(v2Match[1].toLowerCase())) {
+      signature = v2Match[1];
+    } else {
+      // Try v1 format: version.hash-SIGNATURE-release_sign.ext or version.A2A.hash-SIGNATURE-release_sign.ext
+      const v1Match = fileName.match(/\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+      if (v1Match && !excluded.includes(v1Match[1].toLowerCase())) {
+        signature = v1Match[1];
+      } else {
+        signature = 'Signed';
+      }
+    }
   }
 
-  // Extract version from filename
-  const versionMatch = fileName.match(/(\d+\.\d+\.\d+\.\d+)/);
+  // Extract version from filename (try v2 hex hash first, then A2A v1, then STA v1)
+  let versionMatch = fileName.match(/(\d+\.\d+\.\d+\+[0-9a-fA-F]+)/);
+  if (!versionMatch) versionMatch = fileName.match(/(\d+\.\d+\.\d+\.A2A\.\d+)/);
+  if (!versionMatch) versionMatch = fileName.match(/(\d+\.\d+\.\d+\.\d+)/);
   if (versionMatch) version = versionMatch[1];
 
   // Platform detection
@@ -4043,6 +5181,17 @@ function detectPackageFromFileName(fileName, filePath) {
     platform = 'Embedded';
     device = 'S920';
     category = 'Package';
+    // A2A PaymentExample: new format PaymentExample-A2A-{envType}-{device}-{version}-release.apk
+  } else if (lowerName.includes('paymentexample') && lowerName.includes('-a2a')) {
+    platform = 'A2A';
+    category = 'Example';
+    // Extract device: PaymentExample-A2A-[PD]-{Device}-...
+    const exampleA2AMatch = fileName.match(/PaymentExample-A2A-[PD]-([A-Za-z0-9_]+)-/i);
+    if (exampleA2AMatch) {
+      device = exampleA2AMatch[1];
+    } else {
+      device = 'Generic';
+    }
     // A2A: packages with .A2A. pattern in filename
   } else if (lowerName.includes('.a2a.')) {
     platform = 'A2A';
@@ -4117,15 +5266,8 @@ function detectPackageFromFileName(fileName, filePath) {
     }
   }
 
-  // Detect client from client mappings
-  if (settings.clientMappings && settings.clientMappings.length > 0) {
-    for (const mapping of settings.clientMappings) {
-      if (lowerName.includes(mapping.number)) {
-        client = mapping.name;
-        break;
-      }
-    }
-  }
+  // Detect client from version patch segment
+  client = detectClientFromVersion(fileName);
 
   return { platform, device, category, signature, client, url: '', version, filePath, isDev };
 }
@@ -4148,6 +5290,8 @@ async function handleUpdateRelease() {
   if (dateInput) rel.date = dateInput.value;
   if (typeInput) rel.releaseType = typeInput.value;
   if (notesInput) rel.releaseNotes = notesInput.value;
+  const descInput = document.getElementById('import-description');
+  if (descInput) rel.description = descInput.value.trim();
 
   // Check if there are new packages to upload
   const newPkgs = importReleaseState.newPackages.filter(p => !p.uploaded);
@@ -4221,6 +5365,7 @@ async function handleUpdateRelease() {
     version: rel.version,
     date: rel.date,
     type: rel.releaseType || 'Production',
+    description: rel.description || '',
     releaseNotes: rel.releaseNotes || '',
     packages: importReleaseState.packages.map(p => ({
       platform: p.platform || 'Unknown',
@@ -4241,7 +5386,7 @@ async function handleUpdateRelease() {
     const spfContent = await invoke('generate_spf_content', { release: releaseData });
 
     // Save SPF to internal releases folder
-    const typeShort = (rel.releaseType || 'Production').toLowerCase() === 'production' ? 'prod' : 'dev';
+    const typeShort = getTypeShort(rel);
     const spfFileName = `release_${rel.version}-${rel.date}-${typeShort}.spf`;
     await invoke('save_internal_spf', { content: spfContent, fileName: spfFileName });
 
@@ -4314,8 +5459,7 @@ function buildJfrogPath(pkg, fileName) {
   } else if (pkg.platform === 'Embedded') {
     return `${repo}/${devPrefix}pax/s920/`;
   } else if (pkg.platform === 'STA') {
-    const deviceKey = (pkg.device || '').toUpperCase();
-    const info = DEVICE_MAP[deviceKey];
+    const info = lookupDevice(pkg.device);
     if (info) {
       let prefix;
       if (isDev) {
@@ -4337,22 +5481,21 @@ function buildJfrogPath(pkg, fileName) {
       return `${repo}/${devPrefix}app-to-app/sdk_integration/`;
     } else if (pkg.device === 'Doc' || (lowerFile.startsWith('doc-') && lowerFile.endsWith('.zip'))) {
       return `${repo}/${devPrefix}app-to-app/sdk_integration/doc/`;
-    } else if (pkg.device === 'TefSdk' || lowerFile.includes('tefsdk')) {
-      const arch = (pkg.category === 'v7a' || lowerFile.includes('v7a')) ? 'v7a' : 'v8a';
-      return `${repo}/${devPrefix}app-to-app/tef-android/${arch}/`;
     } else if (pkg.category === 'Example' || lowerFile.includes('paymentexample')) {
-      if (pkg.device && pkg.device !== 'Generic') {
-        const deviceKey = pkg.device.toUpperCase();
-        const info = DEVICE_MAP[deviceKey];
+      // TefSdk/orphan payment examples go to payment_example/ root (no manufacturer subfolder)
+      if (pkg.device && pkg.device !== 'Generic' && pkg.device !== 'TefSdk') {
+        const info = lookupDevice(pkg.device);
         if (info) {
           const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
           return `${repo}/${signPrefix}app-to-app/payment_example/${info.manufacturer}/${info.path}/`;
         }
       }
       return `${repo}/${devPrefix}app-to-app/payment_example/`;
+    } else if (pkg.device === 'TefSdk' || lowerFile.includes('tefsdk')) {
+      const arch = (pkg.category === 'v7a' || lowerFile.includes('v7a')) ? 'v7a' : 'v8a';
+      return `${repo}/${devPrefix}app-to-app/tef-android/${arch}/`;
     } else {
-      const deviceKey = (pkg.device || '').toUpperCase();
-      const info = DEVICE_MAP[deviceKey];
+      const info = lookupDevice(pkg.device);
       if (info) {
         const signPrefix = (!isDev && !lowerFile.includes('_sign.')) ? 'unsigned/' : (isDev ? 'dev/' : '');
         return `${repo}/${signPrefix}app-to-app/apk/${info.manufacturer}/${info.path}/`;
@@ -4811,12 +5954,13 @@ function renderAccordionContent(platform, pkgs) {
  * Render TEF platform packages with tabs (Library, Installer, etc.).
  */
 function renderPlatformTabs(platform, pkgs) {
-  // Group by device (TEF Library, Installer, etc.)
+  // Group by device (normalized keys)
   const deviceGroups = {};
   pkgs.forEach(pkg => {
     const device = pkg.device || 'Other';
-    if (!deviceGroups[device]) deviceGroups[device] = [];
-    deviceGroups[device].push(pkg);
+    const key = normalizeDeviceKey(device);
+    if (!deviceGroups[key]) deviceGroups[key] = { displayName: device, pkgs: [] };
+    deviceGroups[key].pkgs.push(pkg);
   });
 
   const devices = Object.keys(deviceGroups);
@@ -4824,18 +5968,19 @@ function renderPlatformTabs(platform, pkgs) {
 
   // If only one device, no tabs needed
   if (devices.length === 1) {
-    return renderPackageTable(deviceGroups[devices[0]]);
+    return renderPackageTable(deviceGroups[devices[0]].pkgs);
   }
 
   const tabId = `tabs-${platform.toLowerCase()}-${Date.now()}`;
   let tabsHtml = `<div class="platform-tabs" id="${tabId}">`;
   let contentHtml = '';
 
-  devices.forEach((device, i) => {
+  devices.forEach((key, i) => {
+    const group = deviceGroups[key];
     const isActive = i === 0 ? ' active' : '';
     const tabContentId = `${tabId}-${i}`;
-    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(displayDeviceName(device))} (${deviceGroups[device].length})</button>`;
-    contentHtml += `<div class="platform-tab-content${isActive}" data-tab-index="${i}">${renderPackageTable(deviceGroups[device])}</div>`;
+    tabsHtml += `<button class="platform-tab${isActive}" onclick="switchPlatformTab('${tabId}', ${i})">${escapeHtml(displayDeviceName(group.displayName))} (${group.pkgs.length})</button>`;
+    contentHtml += `<div class="platform-tab-content${isActive}" data-tab-index="${i}">${renderPackageTable(group.pkgs)}</div>`;
   });
 
   tabsHtml += '</div>';
@@ -4942,16 +6087,17 @@ function renderSTADeviceList(pkgs) {
   const deviceGroups = {};
   pkgs.forEach(pkg => {
     const device = pkg.device || 'Unknown';
-    if (!deviceGroups[device]) deviceGroups[device] = [];
-    deviceGroups[device].push(pkg);
+    const key = normalizeDeviceKey(device);
+    if (!deviceGroups[key]) deviceGroups[key] = { displayName: device, pkgs: [] };
+    deviceGroups[key].pkgs.push(pkg);
   });
 
   let html = '';
-  Object.keys(deviceGroups).sort().forEach(device => {
-    const devicePkgs = deviceGroups[device];
+  Object.keys(deviceGroups).sort().forEach(key => {
+    const group = deviceGroups[key];
     html += `<div class="sta-device-group">`;
-    html += `<div class="sta-device-name">${escapeHtml(displayDeviceName(device))} (${devicePkgs.length})</div>`;
-    html += renderPackageTable(devicePkgs);
+    html += `<div class="sta-device-name">${escapeHtml(displayDeviceName(group.displayName))} (${group.pkgs.length})</div>`;
+    html += renderPackageTable(group.pkgs);
     html += `</div>`;
   });
 
