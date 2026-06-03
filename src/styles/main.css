@@ -5080,7 +5080,7 @@ select::-webkit-scrollbar-thumb {
 .build-branch-card .branch-autocomplete {
   display: flex;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: stretch;
   position: relative;
 }
 
@@ -5182,6 +5182,20 @@ select::-webkit-scrollbar-thumb {
 
 .platform-chip span:hover {
   border-color: var(--primary);
+}
+
+/* Chip Group Labels (inline manufacturer separators) */
+.chip-group-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  opacity: 0.7;
+  padding: 0.3rem 0.25rem;
+  white-space: nowrap;
 }
 
 /* Build Options Grid */
@@ -5382,7 +5396,7 @@ select[data-customized] {
 
 .build-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
   justify-content: flex-start;
 }
@@ -5391,8 +5405,8 @@ select[data-customized] {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.75rem;
-  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  padding: 0.75rem 1.25rem;
 }
 
 .btn-lg {
@@ -5572,8 +5586,10 @@ select[data-customized] {
 }
 
 .build-param-badge.param-on {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(34, 197, 94, 0.2);
   color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.25);
 }
 
 .build-param-badge.param-off {
@@ -5582,7 +5598,10 @@ select[data-customized] {
 }
 
 [data-theme="dark"] .build-param-badge.param-on {
-  color: #22c55e;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.4);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.3);
 }
 
 [data-theme="dark"] .build-param-badge.param-off {

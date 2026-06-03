@@ -5,6 +5,26 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2026-06-03
+
+### Changed
+
+- **A2A Build: Modern platform chips**: Converted A2A platforms section from standard checkboxes to selectable pill-shaped chips (matching STA build page style).
+
+- **A2A Build: Device selection by manufacturer**: Replaced flat device checkbox list with column-based groups by manufacturer (Pax, Gertec, Sunmi, Verifone, Positivo, Ingenico), matching the STA device layout.
+
+- **A2A Build: TefSdk Startup Type**: Added "Manual" option alongside "Auto"; applied custom themed dropdown styling; dropdown now shows/hides based on platform selection.
+
+- **A2A Build: Defaults**: "Build all android devices" unchecked by default.
+
+- **Build pages: Button alignment**: Branch refresh button and Restore Defaults button now stretch to match the height of adjacent elements.
+
+- **Build Parameters Modal**: Improved "activated" badge for Android Devices with subtle green border, glow effect, and SVG checkmark icon for better visibility.
+
+### Added
+
+- **A2A platform/device toggle logic**: Added `setupA2aPlatformsRules()` and `setupA2aDevicesRules()` JS functions with mutual exclusion (All ↔ individual) and TefSdk visibility control.
+
 ## [3.5.0] - 2026-06-03
 
 ### Added

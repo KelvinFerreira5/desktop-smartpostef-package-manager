@@ -6566,6 +6566,16 @@ function initBuildA2aPage() {
   // Variables: "Add variable" button
   setupVariablesUI('a2a');
 
+  // Platforms: chip toggle rules
+  setupA2aPlatformsRules();
+
+  // Devices: chip toggle rules
+  setupA2aDevicesRules();
+
+  // Custom themed dropdowns
+  const a2aPage = document.getElementById('page-build-a2a');
+  if (a2aPage) initCustomSelects(a2aPage);
+
   // Run Build
   const runBtn = document.getElementById('a2a-run-build');
   if (runBtn) {
@@ -6700,7 +6710,7 @@ function restoreBuildDefaults(type) {
 
   // A2A defaults
   if (type === 'a2a') {
-    const defaults = ['a2a-use-authorizer', 'a2a-linux-ci-03', 'a2a-linux-ci-04', 'a2a-platforms-all', 'a2a-androids-all', 'a2a-stages-all'];
+    const defaults = ['a2a-use-authorizer', 'a2a-linux-ci-03', 'a2a-linux-ci-04', 'a2a-platforms-all', 'a2a-stages-all'];
     defaults.forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
     // Stages: Linux_Builds and Post_Builds checked
     const stagesOpts = document.getElementById('a2a-stages-options');
@@ -6749,6 +6759,64 @@ function setupPlatformsRules(type) {
   });
 
   // When any individual platform is checked, uncheck "All"
+  individuals.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        allCheckbox.checked = false;
+      }
+    });
+  });
+}
+
+function setupA2aPlatformsRules() {
+  const allCheckbox = document.getElementById('a2a-platforms-all');
+  const individuals = [
+    document.getElementById('a2a-platforms-android'),
+    document.getElementById('a2a-platforms-tefsdk')
+  ].filter(Boolean);
+  const tefsdkOptions = document.getElementById('a2a-tefsdk-options');
+
+  if (!allCheckbox || !individuals.length) return;
+
+  function updateTefSdkVisibility() {
+    if (!tefsdkOptions) return;
+    const tefsdkChecked = document.getElementById('a2a-platforms-tefsdk')?.checked;
+    tefsdkOptions.style.display = (allCheckbox.checked || tefsdkChecked) ? '' : 'none';
+  }
+
+  allCheckbox.addEventListener('change', () => {
+    if (allCheckbox.checked) {
+      individuals.forEach(cb => { cb.checked = false; });
+    }
+    updateTefSdkVisibility();
+  });
+
+  individuals.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        allCheckbox.checked = false;
+      }
+      updateTefSdkVisibility();
+    });
+  });
+
+  updateTefSdkVisibility();
+}
+
+function setupA2aDevicesRules() {
+  const allCheckbox = document.getElementById('a2a-androids-all');
+  const grid = document.getElementById('a2a-devices-grid');
+  if (!allCheckbox || !grid) return;
+
+  const individuals = Array.from(grid.querySelectorAll('input[type="checkbox"]'))
+    .filter(cb => cb.id !== 'a2a-androids-all');
+
+  allCheckbox.addEventListener('change', () => {
+    if (allCheckbox.checked) {
+      individuals.forEach(cb => { cb.checked = false; });
+    }
+  });
+
   individuals.forEach(cb => {
     cb.addEventListener('change', () => {
       if (cb.checked) {
@@ -7181,7 +7249,7 @@ function openBuildParamsModal(params, title) {
             const intentKey = deviceToIntent[key];
             const intentVal = intentKey && params[intentKey] ? String(params[intentKey]) : '';
             const label = intentVal ? `${deviceName} — ${intentVal}` : deviceName;
-            return `<div class="build-param-item"><span class="build-param-name">${label}</span><span class="build-param-badge param-on">✓</span></div>`;
+            return `<div class="build-param-item"><span class="build-param-name">${label}</span><span class="build-param-badge param-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg></span></div>`;
           }).join('');
         } else {
           // Platforms, Build Options, Features — show only enabled as tags

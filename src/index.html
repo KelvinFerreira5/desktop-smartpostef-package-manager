@@ -44,24 +44,22 @@
           </a>
           <div class="nav-group-children">
             <a href="#" class="nav-item nav-child" data-page="build-sta">
-              <svg class="nav-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              <svg class="nav-icon-sm" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5"
                 stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                <rect x="5" y="2" width="14" height="15" rx="2" />
-                <rect x="7" y="4" width="10" height="5" rx="1" />
-                <circle cx="9" cy="12" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="12" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="9" cy="15" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="12" cy="15" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="15" r="0.7" fill="currentColor" stroke="none" />
-                <rect x="9" y="19" width="6" height="5" rx="1" />
-                <line x1="12" y1="22" x2="12" y2="24" stroke-width="1" />
+                <rect x="5" y="1" width="17" height="19" rx="2" />
+                <rect x="7" y="3" width="13" height="5" rx="1" />
+                <circle cx="9" cy="13" r="0.7" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="13" r="0.7" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="13" r="0.7" fill="currentColor" stroke="none" />
+                <circle cx="18" cy="13" r="0.7" fill="currentColor" stroke="none" />
+                <rect x="8.5" y="23" width="10" height="10" rx="1" />
+                <line x1="12" y1="22" x2="12" y2="29" stroke-width="1" />
               </svg>
               <span>STA</span>
             </a>
             <a href="#" class="nav-item nav-child" data-page="build-a2a">
               <svg class="nav-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="10" height="10">
+                stroke-linecap="round" stroke-linejoin="round" width="7" height="7">
                 <rect x="2" y="2" width="8" height="8" rx="2" />
                 <rect x="14" y="14" width="8" height="8" rx="2" />
                 <rect x="2" y="14" width="8" height="8" rx="2" />
@@ -1540,15 +1538,19 @@
             <!-- Platforms -->
             <div class="build-section">
               <h4>Platforms</h4>
-              <div class="build-checkboxes">
-                <label class="toggle-label"><input type="checkbox" id="a2a-platforms-all" checked> All</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-platforms-android"> Android</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-platforms-tefsdk"> TefSdk</label>
+              <div class="platform-chips">
+                <label class="platform-chip"><input type="checkbox" id="a2a-platforms-all"
+                    checked><span>All</span></label>
+                <label class="platform-chip"><input type="checkbox"
+                    id="a2a-platforms-android"><span>Android</span></label>
+                <label class="platform-chip"><input type="checkbox"
+                    id="a2a-platforms-tefsdk"><span>TefSdk</span></label>
               </div>
               <div class="form-group" id="a2a-tefsdk-options" style="margin-top: 8px;">
                 <label for="a2a-tefsdk-startup">TefSdk Startup Type</label>
                 <select id="a2a-tefsdk-startup" style="max-width: 200px;">
                   <option value="Auto" selected>Auto</option>
+                  <option value="Manual">Manual</option>
                 </select>
               </div>
             </div>
@@ -1556,22 +1558,41 @@
             <!-- Android Devices -->
             <div class="build-section build-android-section" id="a2a-android-section">
               <h4>Android Devices</h4>
-              <label class="toggle-label"><input type="checkbox" id="a2a-androids-all" checked> All</label>
-              <div class="build-checkboxes" id="a2a-devices-grid">
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-a910"> A910</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-dx8000"> DX8000</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-dx4000"> DX4000</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos700"> GPOS700</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos720"> GPOS720</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos760"> GPOS760</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-l3"> L3</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-l3-2024"> L3_2024</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-l400"> L400</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-p2"> P2</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-p2mini"> P2MINI</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-p2-lite-se"> P2_LITE_SE</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-pro"> X990_PRO</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-ux"> X990_UX</label>
+              <label class="toggle-label"><input type="checkbox" id="a2a-androids-all" checked> Build all android
+                devices</label>
+              <div class="build-options-grid" id="a2a-devices-grid">
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Pax</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-a910"> A910</label>
+                </div>
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Gertec</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos700"> GPOS700</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos720"> GPOS720</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos760"> GPOS760</label>
+                </div>
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Sunmi</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2"> P2</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2-lite-se"> P2_LITE_SE</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2mini"> P2MINI</label>
+                </div>
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Verifone</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-pro"> X990_PRO</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-ux"> X990_UX</label>
+                </div>
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Positivo</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l3"> L3</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l3-2024"> L3_2024</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l400"> L400</label>
+                </div>
+                <div class="build-options-group">
+                  <span class="build-options-group-label">Ingenico</span>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-dx8000"> DX8000</label>
+                  <label class="toggle-label"><input type="checkbox" id="a2a-android-dx4000"> DX4000</label>
+                </div>
               </div>
             </div>
           </div>
