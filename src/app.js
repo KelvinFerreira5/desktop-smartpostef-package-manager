@@ -1,7 +1,7 @@
 // SmartPosTEF Package Manager - Tauri Edition v2.0.6
 // Comprehensive package detection and Electron-style UI
 
-// SmartPosTEF Package Manager v3.3.4
+// SmartPosTEF Package Manager v3.5.0
 // Built-in client mappings — always present, always locked, cannot be edited or removed
 const BUILTIN_CLIENT_MAPPINGS = [
   { number: '788', name: 'Lyra', builtin: true },
@@ -656,6 +656,16 @@ function initNavigation() {
       if (pageName) switchPage(pageName);
     });
   });
+
+  // Build nav group expand/collapse
+  const buildToggle = document.getElementById('nav-build-toggle');
+  if (buildToggle) {
+    buildToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const group = document.getElementById('nav-group-build');
+      if (group) group.classList.toggle('expanded');
+    });
+  }
 }
 
 function switchPage(pageName) {
@@ -664,10 +674,20 @@ function switchPage(pageName) {
   navItems.forEach(item => item.classList.toggle('active', item.dataset.page === pageName));
   pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageName}`));
 
+  // Auto-expand build nav group when navigating to a build page
+  const buildGroup = document.getElementById('nav-group-build');
+  if (buildGroup) {
+    if (pageName === 'build-sta' || pageName === 'build-a2a') {
+      buildGroup.classList.add('expanded');
+    }
+  }
+
   // Initialize page-specific logic
   if (pageName === 'tools') initToolsPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
   if (pageName === 'settings' && window._renderThemeGrid) window._renderThemeGrid();
+  if (pageName === 'build-sta') initBuildStaPage();
+  if (pageName === 'build-a2a') initBuildA2aPage();
 }
 
 // Deploy Page
@@ -3721,6 +3741,24 @@ function initSettingsPage() {
       }
     });
   }
+
+  // Azure PAT toggle visibility
+  const btnTogglePat = document.getElementById('btn-toggle-azure-pat');
+  if (btnTogglePat) {
+    btnTogglePat.addEventListener('click', (e) => {
+      e.preventDefault();
+      const input = document.getElementById(btnTogglePat.dataset.target);
+      if (input) {
+        if (input.type === 'password') {
+          input.type = 'text';
+          btnTogglePat.classList.add('visible');
+        } else {
+          input.type = 'password';
+          btnTogglePat.classList.remove('visible');
+        }
+      }
+    });
+  }
 }
 
 function populateSettings() {
@@ -3769,6 +3807,22 @@ function populateSettings() {
     if (htmlSecondaryPicker) htmlSecondaryPicker.value = settings.portalSettings.secondaryColor;
     if (htmlSecondaryText) htmlSecondaryText.value = settings.portalSettings.secondaryColor;
   }
+
+  // Azure DevOps settings
+  const azureOrgInput = document.getElementById('azure-org-url');
+  const azureProjectInput = document.getElementById('azure-project');
+  const azurePatInput = document.getElementById('azure-pat');
+  const azureStaPipelineInput = document.getElementById('azure-sta-pipeline-id');
+  const azureStaRepoInput = document.getElementById('azure-sta-repository');
+  const azureA2aPipelineInput = document.getElementById('azure-a2a-pipeline-id');
+  const azureA2aRepoInput = document.getElementById('azure-a2a-repository');
+  if (azureOrgInput) azureOrgInput.value = settings.azureDevops?.orgUrl || 'https://dev.azure.com/aditum-products';
+  if (azureProjectInput) azureProjectInput.value = settings.azureDevops?.project || 'aditum-postef';
+  if (azurePatInput) azurePatInput.value = settings.azureDevops?.pat || '';
+  if (azureStaPipelineInput) azureStaPipelineInput.value = settings.azureDevops?.staPipelineId || 5;
+  if (azureStaRepoInput) azureStaRepoInput.value = settings.azureDevops?.staRepository || 'aditum-postef';
+  if (azureA2aPipelineInput) azureA2aPipelineInput.value = settings.azureDevops?.a2aPipelineId || 0;
+  if (azureA2aRepoInput) azureA2aRepoInput.value = settings.azureDevops?.a2aRepository || 'aditum-postef';
 
   // Client mappings
   renderClientMappings();
@@ -3919,6 +3973,17 @@ async function saveSettings() {
     htmlSubtitle: document.getElementById('settings-html-subtitle')?.value || '',
     primaryColor: document.getElementById('settings-html-primary-text')?.value || '',
     secondaryColor: document.getElementById('settings-html-secondary-text')?.value || ''
+  };
+
+  // Azure DevOps settings
+  settings.azureDevops = {
+    orgUrl: document.getElementById('azure-org-url')?.value || 'https://dev.azure.com/aditum-products',
+    project: document.getElementById('azure-project')?.value || 'aditum-postef',
+    staPipelineId: parseInt(document.getElementById('azure-sta-pipeline-id')?.value) || 5,
+    staRepository: document.getElementById('azure-sta-repository')?.value || 'aditum-postef',
+    a2aPipelineId: parseInt(document.getElementById('azure-a2a-pipeline-id')?.value) || 0,
+    a2aRepository: document.getElementById('azure-a2a-repository')?.value || 'aditum-postef',
+    pat: document.getElementById('azure-pat')?.value || ''
   };
 
   // Filter out empty mappings
@@ -6351,4 +6416,964 @@ function copyPkgUrl(btn, url) {
   }).catch(() => {
     showToast('error', 'Failed to copy URL');
   });
+}
+
+// ========== Azure DevOps Build Pages ==========
+
+let _buildStaInitialized = false;
+let _buildA2aInitialized = false;
+let _staPollInterval = null;
+let _a2aPollInterval = null;
+let _cachedBranches = {};
+
+async function fetchBranches(repository, forceRefresh = false) {
+  if (_cachedBranches[repository] && !forceRefresh) return _cachedBranches[repository];
+  if (!invoke) return [];
+  try {
+    _cachedBranches[repository] = await invoke('azure_fetch_branches', { repository });
+    return _cachedBranches[repository];
+  } catch (err) {
+    frontendLog('ERROR', 'BUILD: Failed to fetch branches', err.toString());
+    showToast('error', 'Failed to fetch branches: ' + err);
+    return [];
+  }
+}
+
+function getPipelineConfig(type) {
+  return type === 'sta'
+    ? { pipelineId: settings.azureDevops?.staPipelineId || 5, repository: settings.azureDevops?.staRepository || 'aditum-postef' }
+    : { pipelineId: settings.azureDevops?.a2aPipelineId || 0, repository: settings.azureDevops?.a2aRepository || 'aditum-postef' };
+}
+
+function setupBranchAutocomplete(inputId, dropdownId, refreshBtnId, type) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const refreshBtn = document.getElementById(refreshBtnId);
+  if (!input || !dropdown) return;
+
+  const config = getPipelineConfig(type);
+  let branches = [];
+
+  async function loadBranches(force = false) {
+    branches = await fetchBranches(config.repository, force);
+    renderDropdown(input.value);
+  }
+
+  function renderDropdown(filter) {
+    const filtered = filter
+      ? branches.filter(b => b.toLowerCase().includes(filter.toLowerCase()))
+      : branches;
+    if (filtered.length === 0 || !document.activeElement || document.activeElement !== input) {
+      dropdown.style.display = 'none';
+      return;
+    }
+    dropdown.innerHTML = filtered.slice(0, 30).map(b =>
+      `<div class="branch-option" data-branch="${b}">${b}</div>`
+    ).join('');
+    dropdown.style.display = 'block';
+  }
+
+  input.addEventListener('focus', () => {
+    if (branches.length === 0) loadBranches();
+    else renderDropdown(input.value);
+  });
+  input.addEventListener('input', () => renderDropdown(input.value));
+  input.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 200));
+
+  dropdown.addEventListener('click', (e) => {
+    const opt = e.target.closest('.branch-option');
+    if (opt) {
+      input.value = opt.dataset.branch;
+      dropdown.style.display = 'none';
+    }
+  });
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      await loadBranches(true);
+      refreshBtn.disabled = false;
+      showToast('success', `${branches.length} branches loaded`);
+    });
+  }
+
+  loadBranches();
+}
+
+// STA Build Page
+function initBuildStaPage() {
+  if (_buildStaInitialized) {
+    loadRecentBuilds('sta');
+    checkInProgressBuild('sta');
+    return;
+  }
+  _buildStaInitialized = true;
+
+  setupBranchAutocomplete('sta-branch-input', 'sta-branch-dropdown', 'sta-refresh-branches', 'sta');
+
+  // Stages: "Run all stages" toggle
+  setupStagesToggle('sta');
+
+  // Variables: "Add variable" button
+  setupVariablesUI('sta');
+
+  // Build Options rules
+  setupBuildOptionsRules('sta');
+
+  // Platforms: "All" mutual exclusion with individual platforms
+  setupPlatformsRules('sta');
+
+  // Custom themed dropdowns
+  const staPage = document.getElementById('page-build-sta');
+  if (staPage) initCustomSelects(staPage);
+
+  // Run Build
+  const runBtn = document.getElementById('sta-run-build');
+  if (runBtn) {
+    runBtn.addEventListener('click', () => runBuild('sta'));
+  }
+
+  // Cancel Build
+  const cancelBtn = document.getElementById('sta-cancel-build');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => cancelBuild('sta'));
+  }
+
+  // Restore Defaults
+  const restoreBtn = document.getElementById('sta-restore-defaults');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => restoreBuildDefaults('sta'));
+  }
+
+  loadRecentBuilds('sta');
+  checkInProgressBuild('sta');
+}
+
+// A2A Build Page
+function initBuildA2aPage() {
+  if (_buildA2aInitialized) {
+    loadRecentBuilds('a2a');
+    checkInProgressBuild('a2a');
+    return;
+  }
+  _buildA2aInitialized = true;
+
+  setupBranchAutocomplete('a2a-branch-input', 'a2a-branch-dropdown', 'a2a-refresh-branches', 'a2a');
+
+  // Stages: "Run all stages" toggle
+  setupStagesToggle('a2a');
+
+  // Variables: "Add variable" button
+  setupVariablesUI('a2a');
+
+  // Run Build
+  const runBtn = document.getElementById('a2a-run-build');
+  if (runBtn) {
+    runBtn.addEventListener('click', () => runBuild('a2a'));
+  }
+
+  // Cancel Build
+  const cancelBtn = document.getElementById('a2a-cancel-build');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => cancelBuild('a2a'));
+  }
+
+  // Restore Defaults
+  const restoreBtn = document.getElementById('a2a-restore-defaults');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => restoreBuildDefaults('a2a'));
+  }
+
+  loadRecentBuilds('a2a');
+  checkInProgressBuild('a2a');
+}
+
+function setupStagesToggle(type) {
+  const allCheckbox = document.getElementById(`${type}-stages-all`);
+  const stagesOptions = document.getElementById(`${type}-stages-options`);
+  if (!allCheckbox || !stagesOptions) return;
+
+  function updateStagesState() {
+    const checkboxes = stagesOptions.querySelectorAll(`.${type}-stage-checkbox`);
+    checkboxes.forEach(cb => {
+      cb.disabled = allCheckbox.checked;
+      if (allCheckbox.checked) cb.checked = true;
+    });
+  }
+  allCheckbox.addEventListener('change', updateStagesState);
+  updateStagesState();
+}
+
+function setupVariablesUI(type) {
+  const addBtn = document.getElementById(`${type}-add-variable`);
+  const list = document.getElementById(`${type}-variables-list`);
+  if (!addBtn || !list) return;
+
+  addBtn.addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'variable-row';
+    row.innerHTML = `
+      <input type="text" class="variable-name" placeholder="Variable name" />
+      <input type="text" class="variable-value" placeholder="Value" />
+      <button type="button" class="btn btn-sm btn-danger variable-remove">&times;</button>
+    `;
+    row.querySelector('.variable-remove').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+  });
+}
+
+function initCustomSelects(container) {
+  const selects = container.querySelectorAll('select');
+  selects.forEach(sel => {
+    if (sel.dataset.customized) return;
+    sel.dataset.customized = 'true';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select';
+
+    const trigger = document.createElement('div');
+    trigger.className = 'custom-select-trigger';
+    trigger.textContent = sel.options[sel.selectedIndex]?.text || '';
+
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'custom-select-options';
+
+    Array.from(sel.options).forEach(opt => {
+      const optEl = document.createElement('div');
+      optEl.className = 'custom-select-option' + (opt.selected ? ' selected' : '');
+      optEl.textContent = opt.text;
+      optEl.dataset.value = opt.value;
+      optEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change'));
+        trigger.textContent = opt.text;
+        optionsContainer.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+        optEl.classList.add('selected');
+        wrapper.classList.remove('open');
+      });
+      optionsContainer.appendChild(optEl);
+    });
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close all other open selects
+      document.querySelectorAll('.custom-select.open').forEach(s => {
+        if (s !== wrapper) s.classList.remove('open');
+      });
+      wrapper.classList.toggle('open');
+    });
+
+    sel.parentNode.insertBefore(wrapper, sel.nextSibling);
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(optionsContainer);
+  });
+}
+
+// Close custom selects on outside click
+document.addEventListener('click', () => {
+  document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
+});
+
+function restoreBuildDefaults(type) {
+  const page = document.getElementById(`page-build-${type}`);
+  if (!page) return;
+
+  // Uncheck all checkboxes first
+  page.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.disabled = false; });
+
+  // Reset all selects to first option
+  page.querySelectorAll('select').forEach(sel => { sel.selectedIndex = 0; });
+
+  // STA defaults
+  if (type === 'sta') {
+    const defaults = ['sta-use-authorizer', 'sta-linux-ci-03', 'sta-platforms-all', 'sta-build-smartpostef', 'sta-enabled-log-capture'];
+    defaults.forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
+    // Stages: Linux_Builds and Post_Builds checked
+    const stagesOpts = document.getElementById('sta-stages-options');
+    if (stagesOpts) {
+      stagesOpts.querySelectorAll('.sta-stage-checkbox').forEach(cb => {
+        cb.checked = (cb.value === 'Linux_Builds' || cb.value === 'Post_Builds');
+      });
+    }
+  }
+
+  // A2A defaults
+  if (type === 'a2a') {
+    const defaults = ['a2a-use-authorizer', 'a2a-linux-ci-03', 'a2a-linux-ci-04', 'a2a-platforms-all', 'a2a-androids-all', 'a2a-stages-all'];
+    defaults.forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
+    // Stages: Linux_Builds and Post_Builds checked
+    const stagesOpts = document.getElementById('a2a-stages-options');
+    if (stagesOpts) {
+      stagesOpts.querySelectorAll('.a2a-stage-checkbox').forEach(cb => {
+        cb.checked = true;
+        cb.disabled = true; // "Run all stages" is checked
+      });
+    }
+  }
+
+  // Clear custom variables
+  const varList = document.getElementById(`${type}-variables-list`);
+  if (varList) varList.innerHTML = '';
+
+  // Update custom selects visuals
+  page.querySelectorAll('.custom-select').forEach(cs => {
+    const sel = cs.querySelector('select');
+    const display = cs.querySelector('.custom-select-display');
+    if (sel && display) display.textContent = sel.options[sel.selectedIndex]?.text || '';
+  });
+
+  showToast('info', 'Options restored to defaults');
+}
+
+function setupPlatformsRules(type) {
+  const allCheckbox = document.getElementById(`${type}-platforms-all`);
+  const individualIds = [
+    `${type}-platforms-android`,
+    `${type}-platforms-android-tefsdk`,
+    `${type}-platforms-linux64`,
+    `${type}-platforms-linux32`,
+    `${type}-platforms-win-cross`,
+    `${type}-platforms-pax`,
+    `${type}-platforms-win`
+  ];
+  const individuals = individualIds.map(id => document.getElementById(id)).filter(Boolean);
+
+  if (!allCheckbox || !individuals.length) return;
+
+  // When "All" is checked, uncheck all individual platforms
+  allCheckbox.addEventListener('change', () => {
+    if (allCheckbox.checked) {
+      individuals.forEach(cb => { cb.checked = false; });
+    }
+  });
+
+  // When any individual platform is checked, uncheck "All"
+  individuals.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        allCheckbox.checked = false;
+      }
+    });
+  });
+}
+
+function setupBuildOptionsRules(type) {
+  const tefApi = document.getElementById(`${type}-build-tef-api-service`);
+  const tefLib = document.getElementById(`${type}-build-tef-library`);
+  const internalApps = document.getElementById(`${type}-build-internal-apps`);
+  const intposClient = document.getElementById(`${type}-build-intpos-client`);
+  const dbViewer = document.getElementById(`${type}-build-db-viewer`);
+  const logViewer = document.getElementById(`${type}-build-log-viewer`);
+  const debugLog = document.getElementById(`${type}-enable-debug-log`);
+  const logEncrypt = document.getElementById(`${type}-enabled-log-encrypt`);
+
+  // Rule: TEF API and TEF Library are mutually exclusive
+  if (tefApi && tefLib) {
+    tefApi.addEventListener('change', () => { if (tefApi.checked) tefLib.checked = false; });
+    tefLib.addEventListener('change', () => { if (tefLib.checked) tefApi.checked = false; });
+  }
+
+  // Rule: BUILD_INTERNAL_APPS checks intpos, db, log viewer. Unchecking any child unchecks parent.
+  const internalChildren = [intposClient, dbViewer, logViewer].filter(Boolean);
+  if (internalApps && internalChildren.length) {
+    internalApps.addEventListener('change', () => {
+      if (internalApps.checked) {
+        internalChildren.forEach(cb => cb.checked = true);
+      }
+    });
+    internalChildren.forEach(child => {
+      child.addEventListener('change', () => {
+        if (!child.checked) internalApps.checked = false;
+      });
+    });
+  }
+
+  // Rule: Debug log and log encrypt are mutually exclusive
+  if (debugLog && logEncrypt) {
+    debugLog.addEventListener('change', () => { if (debugLog.checked) logEncrypt.checked = false; });
+    logEncrypt.addEventListener('change', () => { if (logEncrypt.checked) debugLog.checked = false; });
+  }
+}
+
+function collectStagesToSkip(type) {
+  const allCheckbox = document.getElementById(`${type}-stages-all`);
+  if (allCheckbox?.checked) return [];
+
+  const checkboxes = document.querySelectorAll(`.${type}-stage-checkbox`);
+  const skipped = [];
+  checkboxes.forEach(cb => {
+    if (!cb.checked) skipped.push(cb.value);
+  });
+  return skipped;
+}
+
+function collectVariables(type) {
+  const vars = {};
+  // system.debug
+  const debugCb = document.getElementById(`${type}-var-debug`);
+  if (debugCb?.checked) {
+    vars['system.debug'] = 'true';
+  }
+  // Custom variables
+  const list = document.getElementById(`${type}-variables-list`);
+  if (list) {
+    list.querySelectorAll('.variable-row').forEach(row => {
+      const name = row.querySelector('.variable-name')?.value?.trim();
+      const value = row.querySelector('.variable-value')?.value || '';
+      if (name) vars[name] = value;
+    });
+  }
+  return vars;
+}
+
+function collectStaParameters() {
+  const params = {};
+  params.customer = document.getElementById('sta-customer')?.value || 'Aditum';
+  params.environment = document.getElementById('sta-environment')?.value || 'DEFAULT';
+  params.ENABLED_SSF = document.getElementById('sta-enabled-ssf')?.checked ? 'true' : 'false';
+  params.USE_AUTHORIZER = document.getElementById('sta-use-authorizer')?.checked ? 'true' : 'false';
+  params.linux_ci_03 = document.getElementById('sta-linux-ci-03')?.checked ? 'true' : 'false';
+  params.linux_ci_04 = document.getElementById('sta-linux-ci-04')?.checked ? 'true' : 'false';
+  params.platforms_All = document.getElementById('sta-platforms-all')?.checked ? 'true' : 'false';
+  params.platforms_Android = document.getElementById('sta-platforms-android')?.checked ? 'true' : 'false';
+  params.platforms_AndroidTefSdk = document.getElementById('sta-platforms-android-tefsdk')?.checked ? 'true' : 'false';
+  params.platforms_Linux_64 = document.getElementById('sta-platforms-linux64')?.checked ? 'true' : 'false';
+  params.platforms_Linux_32 = document.getElementById('sta-platforms-linux32')?.checked ? 'true' : 'false';
+  params.platforms_Windows_x86_crosscompiler = document.getElementById('sta-platforms-win-cross')?.checked ? 'true' : 'false';
+  params.platforms_PAX_S920 = document.getElementById('sta-platforms-pax')?.checked ? 'true' : 'false';
+  params.platforms_Windows_x86 = document.getElementById('sta-platforms-win')?.checked ? 'true' : 'false';
+
+  // Android devices
+  params.androids_all = document.getElementById('sta-androids-all')?.checked ? 'true' : 'false';
+  const devices = ['a910', 'dx8000', 'dx4000', 'ex4000', 'gpos700', 'gpos720', 'gpos760', 'l3', 'l3-2024', 'p2mini', 'p2', 'p2-lite-se', 'l400', 'x990-pro', 'x990-ux'];
+  const deviceParamNames = ['androids_A910', 'androids_DX8000', 'androids_DX4000', 'androids_EX4000', 'androids_GPOS700', 'androids_GPOS720', 'androids_GPOS760', 'androids_L3', 'androids_L3_2024', 'androids_P2MINI', 'androids_P2', 'androids_P2_LITE_SE', 'androids_L400', 'androids_X990_PRO', 'androids_X990_UX'];
+  const intentParamNames = ['a910AppIntentCategory', 'dx8000AppIntentCategory', 'dx4000AppIntentCategory', 'ex4000AppIntentCategory', 'gpos700AppIntentCategory', 'gpos720AppIntentCategory', 'gpos760AppIntentCategory', 'l3AppIntentCategory', 'l3_2024AppIntentCategory', 'p2miniAppIntentCategory', 'p2AppIntentCategory', 'p2_lite_seAppIntentCategory', 'l400AppIntentCategory', 'x990_ProAppIntentCategory', 'x990_UXAppIntentCategory'];
+
+  devices.forEach((d, i) => {
+    params[deviceParamNames[i]] = document.getElementById(`sta-android-${d}`)?.checked ? 'true' : 'false';
+    params[intentParamNames[i]] = document.getElementById(`sta-intent-${d}`)?.value || 'Launcher';
+  });
+
+  // Internal apps
+  params.BUILD_INTERNAL_APPS = document.getElementById('sta-build-internal-apps')?.checked ? 'true' : 'false';
+  params.BUILD_BODY_VIEWER = document.getElementById('sta-build-body-viewer')?.checked ? 'true' : 'false';
+  params.BUILD_CRYPTFILE = document.getElementById('sta-build-cryptfile')?.checked ? 'true' : 'false';
+  params.BUILD_DB_VIEWER = document.getElementById('sta-build-db-viewer')?.checked ? 'true' : 'false';
+  params.BUILD_LOG_VIEWER = document.getElementById('sta-build-log-viewer')?.checked ? 'true' : 'false';
+  params.BUILD_INTPOS_CLIENT = document.getElementById('sta-build-intpos-client')?.checked ? 'true' : 'false';
+  params.BUILD_TEF_LIBRARY = document.getElementById('sta-build-tef-library')?.checked ? 'true' : 'false';
+  params.BUILD_TEF_API_SERVICE = document.getElementById('sta-build-tef-api-service')?.checked ? 'true' : 'false';
+  params.BUILD_SMARTPOSTEF = document.getElementById('sta-build-smartpostef')?.checked ? 'true' : 'false';
+  params.ENABLE_DEBUG_LOG = document.getElementById('sta-enable-debug-log')?.checked ? 'true' : 'false';
+  params.BUILD_PACKAGE_MANAGER = document.getElementById('sta-build-package-manager')?.checked ? 'true' : 'false';
+  params.ENABLED_LOG_ENCRYPT = document.getElementById('sta-enabled-log-encrypt')?.checked ? 'true' : 'false';
+  params.ENABLED_HTTP_PROXY = document.getElementById('sta-enabled-http-proxy')?.checked ? 'true' : 'false';
+  params.ENABLED_LOG_CAPTURE = document.getElementById('sta-enabled-log-capture')?.checked ? 'true' : 'false';
+
+  return params;
+}
+
+function collectA2aParameters() {
+  const params = {};
+  params.customer = document.getElementById('a2a-customer')?.value || 'Aditum';
+  params.environment = document.getElementById('a2a-environment')?.value || 'DEFAULT';
+  params.ENABLED_SSF = document.getElementById('a2a-enabled-ssf')?.checked ? 'true' : 'false';
+  params.USE_AUTHORIZER = document.getElementById('a2a-use-authorizer')?.checked ? 'true' : 'false';
+  params.linux_ci_03 = document.getElementById('a2a-linux-ci-03')?.checked ? 'true' : 'false';
+  params.linux_ci_04 = document.getElementById('a2a-linux-ci-04')?.checked ? 'true' : 'false';
+  params.platforms_All = document.getElementById('a2a-platforms-all')?.checked ? 'true' : 'false';
+  params.platforms_Android = document.getElementById('a2a-platforms-android')?.checked ? 'true' : 'false';
+  params.platforms_TefSdk = document.getElementById('a2a-platforms-tefsdk')?.checked ? 'true' : 'false';
+  params.tefSdkStartupType = document.getElementById('a2a-tefsdk-startup')?.value || 'Auto';
+
+  // Android devices
+  params.androids_all = document.getElementById('a2a-androids-all')?.checked ? 'true' : 'false';
+  const deviceMap = {
+    'a910': 'androids_A910', 'dx8000': 'androids_DX8000', 'dx4000': 'androids_DX4000',
+    'gpos700': 'androids_GPOS700', 'gpos720': 'androids_GPOS720', 'gpos760': 'androids_GPOS760',
+    'l3': 'androids_L3', 'l3-2024': 'androids_L3_2024', 'l400': 'androids_L400',
+    'p2': 'androids_P2', 'p2mini': 'androids_P2MINI', 'p2-lite-se': 'androids_P2_LITE_SE',
+    'x990-pro': 'androids_X990_PRO', 'x990-ux': 'androids_X990_UX'
+  };
+  Object.entries(deviceMap).forEach(([htmlId, paramName]) => {
+    params[paramName] = document.getElementById(`a2a-android-${htmlId}`)?.checked ? 'true' : 'false';
+  });
+
+  return params;
+}
+
+async function runBuild(type) {
+  if (!invoke) return;
+  const branchInput = document.getElementById(`${type}-branch-input`);
+  const branch = branchInput?.value?.trim();
+  if (!branch) {
+    showToast('warning', 'Please select a branch');
+    return;
+  }
+
+  const parameters = type === 'sta' ? collectStaParameters() : collectA2aParameters();
+  const stagesToSkip = collectStagesToSkip(type);
+  const variables = collectVariables(type);
+  const config = getPipelineConfig(type);
+  const runBtn = document.getElementById(`${type}-run-build`);
+  if (runBtn) runBtn.disabled = true;
+
+  try {
+    frontendLog('INFO', `BUILD: Running ${type.toUpperCase()} build`, `Branch: ${branch}, Pipeline: ${config.pipelineId}`);
+    const result = await invoke('azure_run_pipeline', { branch, parameters, stagesToSkip, variables, pipelineId: config.pipelineId });
+    const runId = result.id;
+    const webUrl = result._links?.web?.href || '';
+
+    showToast('success', `Build started (Run #${runId})`);
+    frontendLog('INFO', `BUILD: ${type.toUpperCase()} build started`, `Run ID: ${runId}`);
+
+    // Show status card
+    const statusCard = document.getElementById(`${type}-build-status`);
+    const statusText = document.getElementById(`${type}-status-text`);
+    const statusLink = document.getElementById(`${type}-status-link`);
+    const statusIndicator = document.getElementById(`${type}-status-indicator`);
+    const cancelBtn2 = document.getElementById(`${type}-cancel-build`);
+
+    if (statusCard) statusCard.style.display = '';
+    if (statusText) statusText.textContent = 'In Progress...';
+    if (statusLink && webUrl) statusLink.href = webUrl;
+    if (statusIndicator) statusIndicator.className = 'build-status-indicator status-running';
+
+    // Show cancel button
+    if (cancelBtn2) {
+      cancelBtn2.style.display = '';
+      cancelBtn2.disabled = false;
+      cancelBtn2.dataset.buildId = runId;
+    }
+
+    // Populate build details from pipeline run response
+    populateBuildDetails(type, {
+      id: runId,
+      buildNumber: result.name || '-',
+      startTime: result.createdDate || null,
+      sourceBranch: `refs/heads/${branch}`,
+      templateParameters: result.templateParameters || parameters
+    });
+
+    // Start polling
+    startPolling(type, runId);
+  } catch (err) {
+    frontendLog('ERROR', `BUILD: Failed to run ${type.toUpperCase()} build`, err.toString());
+    let errorMsg = String(err);
+    try {
+      const jsonMatch = errorMsg.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.message) errorMsg = parsed.message;
+      }
+    } catch (_) { }
+    showToast('error', 'Failed to start build: ' + errorMsg);
+  } finally {
+    if (runBtn) runBtn.disabled = false;
+  }
+}
+
+async function cancelBuild(type) {
+  const cancelBtn = document.getElementById(`${type}-cancel-build`);
+  const buildId = cancelBtn?.dataset.buildId;
+  if (!buildId || !invoke) return;
+
+  cancelBtn.disabled = true;
+  const statusText = document.getElementById(`${type}-status-text`);
+  if (statusText) statusText.textContent = 'Canceling...';
+
+  try {
+    await invoke('azure_cancel_build', { buildId: parseInt(buildId) });
+    frontendLog('INFO', `BUILD: Cancel requested for ${type}`, `Build ID: ${buildId}`);
+    cancelBtn.style.display = 'none';
+  } catch (err) {
+    frontendLog('ERROR', `BUILD: Failed to cancel ${type} build`, err.toString());
+    if (statusText) statusText.textContent = 'Cancel failed';
+    cancelBtn.disabled = false;
+  }
+}
+
+async function checkInProgressBuild(type) {
+  if (!invoke) return;
+  const config = getPipelineConfig(type);
+  try {
+    const data = await invoke('azure_get_recent_builds', { top: 1, pipelineId: config.pipelineId });
+    const runs = data.value || [];
+    if (runs.length === 0) return;
+    const run = runs[0];
+    const buildStatus = (run.status || '').toLowerCase();
+    frontendLog('DEBUG', `BUILD: checkInProgressBuild ${type}`, `status="${run.status}", result="${run.result}", id=${run.id}`);
+    // Detect any active build (not completed, not canceled)
+    if (buildStatus !== 'completed') {
+      const runId = run.id;
+      const webUrl = run._links?.web?.href || '#';
+      const statusCard = document.getElementById(`${type}-build-status`);
+      const statusText = document.getElementById(`${type}-status-text`);
+      const statusLink = document.getElementById(`${type}-status-link`);
+      const statusIndicator = document.getElementById(`${type}-status-indicator`);
+      const cancelBtn = document.getElementById(`${type}-cancel-build`);
+
+      if (statusCard) statusCard.style.display = '';
+      if (buildStatus === 'notstarted') {
+        if (statusText) statusText.textContent = 'Queued...';
+      } else if (buildStatus === 'cancelling') {
+        if (statusText) statusText.textContent = 'Canceling...';
+      } else {
+        if (statusText) statusText.textContent = 'In Progress...';
+      }
+      if (statusLink && webUrl) statusLink.href = webUrl;
+      if (statusIndicator) statusIndicator.className = 'build-status-indicator status-running';
+
+      // Show cancel button for active builds
+      if (cancelBtn && buildStatus !== 'cancelling') {
+        cancelBtn.style.display = '';
+        cancelBtn.disabled = false;
+        cancelBtn.dataset.buildId = runId;
+      }
+
+      // Populate build details
+      populateBuildDetails(type, run);
+
+      startPolling(type, runId);
+    }
+  } catch (err) {
+    frontendLog('WARN', `BUILD: Failed to check in-progress build for ${type}`, err.toString());
+  }
+}
+
+function populateBuildDetails(type, run) {
+  const buildIdEl = document.getElementById(`${type}-build-id`);
+  const buildNumberEl = document.getElementById(`${type}-build-number`);
+  const buildStartEl = document.getElementById(`${type}-build-start-time`);
+  const buildBranchEl = document.getElementById(`${type}-build-branch`);
+  const paramsBtn = document.getElementById(`${type}-build-params-btn`);
+
+  if (buildIdEl) buildIdEl.textContent = run.id || '-';
+  if (buildNumberEl) buildNumberEl.textContent = run.buildNumber || '-';
+  if (buildStartEl) {
+    const startTime = run.startTime ? new Date(run.startTime) : null;
+    buildStartEl.textContent = startTime ? startTime.toLocaleString() : 'Queued';
+  }
+  if (buildBranchEl) {
+    const branch = run.sourceBranch ? run.sourceBranch.replace('refs/heads/', '') : '-';
+    buildBranchEl.textContent = branch;
+  }
+
+  // Parameters button
+  let params = null;
+  if (run.parameters) {
+    try { params = typeof run.parameters === 'string' ? JSON.parse(run.parameters) : run.parameters; } catch (_) { }
+  }
+  if (run.templateParameters) {
+    params = run.templateParameters;
+  }
+  if (paramsBtn) {
+    if (params && Object.keys(params).length > 0) {
+      paramsBtn.style.display = '';
+      paramsBtn.onclick = () => openBuildParamsModal(params, `Build #${run.buildNumber || run.id || ''}`);
+    } else {
+      paramsBtn.style.display = 'none';
+    }
+  }
+}
+
+function openBuildParamsModal(params, title) {
+  const modal = document.getElementById('build-params-modal');
+  const body = document.getElementById('build-params-modal-body');
+  const closeBtn = document.getElementById('build-params-modal-close');
+  const titleEl = modal ? modal.querySelector('.modal-header h3') : null;
+  if (!modal || !body) return;
+
+  if (titleEl) titleEl.textContent = title || 'Build Parameters';
+
+  // Normalize parameter name for readability
+  function formatParamName(name) {
+    return name
+      .replace(/^(platforms_|androids_|BUILD_|ENABLED_|ENABLE_)/, '')
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  // Filter out separator/description entries
+  function shouldSkip(key, val) {
+    const valStr = String(val);
+    if (/^-{2,}.*-{2,}$/.test(key)) return true;
+    if (valStr.length > 30 && /[.!]/.test(valStr)) return true;
+    if (key.endsWith('AppIntentCategory')) return true;
+    return false;
+  }
+
+  // Map device param name to intent param name
+  const deviceToIntent = {
+    'androids_A910': 'a910AppIntentCategory',
+    'androids_DX8000': 'dx8000AppIntentCategory',
+    'androids_DX4000': 'dx4000AppIntentCategory',
+    'androids_EX4000': 'ex4000AppIntentCategory',
+    'androids_GPOS700': 'gpos700AppIntentCategory',
+    'androids_GPOS720': 'gpos720AppIntentCategory',
+    'androids_GPOS760': 'gpos760AppIntentCategory',
+    'androids_L3': 'l3AppIntentCategory',
+    'androids_L3_2024': 'l3_2024AppIntentCategory',
+    'androids_P2MINI': 'p2miniAppIntentCategory',
+    'androids_P2': 'p2AppIntentCategory',
+    'androids_P2_LITE_SE': 'p2_lite_seAppIntentCategory',
+    'androids_L400': 'l400AppIntentCategory',
+    'androids_X990_PRO': 'x990_ProAppIntentCategory',
+    'androids_X990_UX': 'x990_UXAppIntentCategory'
+  };
+
+  // Group parameters by category
+  function categorize(key) {
+    if (key.startsWith('platforms_')) return 'Platforms';
+    if (key.startsWith('androids_')) return 'Android Devices';
+    if (key.startsWith('BUILD_')) return 'Build Options';
+    if (key.startsWith('ENABLED_') || key.startsWith('ENABLE_') || key === 'USE_AUTHORIZER') return 'Features';
+    if (key === 'customer' || key === 'environment' || key.startsWith('linux_ci') || key === 'stages') return 'General';
+    return null; // skip uncategorized
+  }
+
+  const entries = Object.entries(params);
+  if (entries.length === 0) {
+    body.innerHTML = '<p class="empty-state">No parameters</p>';
+  } else {
+    // Filter entries and only keep enabled/true params (or non-boolean values)
+    const filtered = entries.filter(([k, v]) => {
+      if (shouldSkip(k, v)) return false;
+      const cat = categorize(k);
+      if (!cat) return false; // skip "Other"
+      const valStr = String(v);
+      // For booleans, only keep true
+      if (valStr === 'false') return false;
+      return true;
+    });
+
+    // Group entries
+    const groups = {};
+    filtered.forEach(([key, val]) => {
+      const cat = categorize(key);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push([key, val]);
+    });
+
+    const groupOrder = ['General', 'Platforms', 'Build Options', 'Features', 'Android Devices'];
+    const sortedGroups = groupOrder.filter(g => groups[g] && groups[g].length > 0).map(g => [g, groups[g]]);
+
+    if (sortedGroups.length === 0) {
+      body.innerHTML = '<p class="empty-state">No active parameters</p>';
+    } else {
+      body.innerHTML = sortedGroups.map(([groupName, items]) => {
+        let rows;
+        if (groupName === 'General') {
+          // Key-value chips layout
+          rows = `<div class="build-param-chips">${items.map(([key, val]) => {
+            const valStr = String(val);
+            const label = formatParamName(key);
+            if (valStr === 'true') {
+              return `<span class="build-param-chip chip-active">${label}</span>`;
+            }
+            return `<span class="build-param-chip"><span class="chip-label">${label}</span><span class="chip-value">${valStr}</span></span>`;
+          }).join('')}</div>`;
+        } else if (groupName === 'Android Devices') {
+          // Show only checked devices with their intent
+          rows = items.map(([key, val]) => {
+            const deviceName = formatParamName(key);
+            const intentKey = deviceToIntent[key];
+            const intentVal = intentKey && params[intentKey] ? String(params[intentKey]) : '';
+            const label = intentVal ? `${deviceName} — ${intentVal}` : deviceName;
+            return `<div class="build-param-item"><span class="build-param-name">${label}</span><span class="build-param-badge param-on">✓</span></div>`;
+          }).join('');
+        } else {
+          // Platforms, Build Options, Features — show only enabled as tags
+          rows = `<div class="build-param-tags">${items.map(([key, val]) => {
+            const valStr = String(val);
+            const label = formatParamName(key);
+            if (valStr === 'true') {
+              return `<span class="build-param-tag">${label}</span>`;
+            }
+            return `<span class="build-param-tag"><span class="chip-label">${label}:</span> ${valStr}</span>`;
+          }).join('')}</div>`;
+        }
+        return `<div class="build-param-group"><h4 class="build-param-group-title">${groupName}</h4>${rows}</div>`;
+      }).join('');
+    }
+  }
+
+  modal.classList.add('active');
+  if (closeBtn) closeBtn.onclick = () => { modal.classList.remove('active'); };
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+}
+
+function startPolling(type, runId) {
+  const intervalRef = type === 'sta' ? '_staPollInterval' : '_a2aPollInterval';
+  const timeoutRef = type === 'sta' ? '_staPollTimeout' : '_a2aPollTimeout';
+  const config = getPipelineConfig(type);
+  // Clear existing
+  if (window[intervalRef]) clearInterval(window[intervalRef]);
+  if (window[timeoutRef]) { clearTimeout(window[timeoutRef]); window[timeoutRef] = null; }
+
+  window[intervalRef] = setInterval(async () => {
+    try {
+      const status = await invoke('azure_get_build_status', { runId, pipelineId: config.pipelineId });
+      const state = status.state || 'unknown';
+      const result = status.result || '';
+
+      const statusText = document.getElementById(`${type}-status-text`);
+      const statusIndicator = document.getElementById(`${type}-status-indicator`);
+      const cancelBtn = document.getElementById(`${type}-cancel-build`);
+
+      if (state === 'completed') {
+        if (statusText) statusText.textContent = `Completed: ${result}`;
+        if (statusIndicator) {
+          statusIndicator.className = `build-status-indicator status-${result === 'succeeded' ? 'succeeded' : result === 'failed' ? 'failed' : 'canceled'}`;
+        }
+        if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = true; }
+
+        // Continue polling for 60s after completion to confirm final state
+        if (!window[timeoutRef]) {
+          window[timeoutRef] = setTimeout(() => {
+            clearInterval(window[intervalRef]);
+            window[intervalRef] = null;
+            window[timeoutRef] = null;
+            loadRecentBuilds(type);
+          }, 60000);
+        }
+      } else if (state === 'canceling') {
+        if (statusText) statusText.textContent = 'Canceling...';
+        if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = true; }
+      } else {
+        if (statusText) statusText.textContent = 'In Progress...';
+      }
+    } catch (err) {
+      frontendLog('ERROR', `BUILD: Poll error for ${type}`, err.toString());
+    }
+  }, 30000); // 30s poll interval
+}
+
+async function loadRecentBuilds(type) {
+  if (!invoke) return;
+  const container = document.getElementById(`${type}-recent-builds`);
+  if (!container) return;
+
+  const config = getPipelineConfig(type);
+  try {
+    const data = await invoke('azure_get_recent_builds', { top: 5, pipelineId: config.pipelineId });
+    const runs = (data.value || []).slice(0, 5);
+    if (runs.length === 0) {
+      container.innerHTML = '<p class="empty-state">No recent builds</p>';
+      return;
+    }
+    const paramsMap = {};
+    container.innerHTML = runs.map(run => {
+      const status = run.status || 'unknown';
+      const result = run.result || '';
+      const runId = run.id || '-';
+      const buildNumber = run.buildNumber || '';
+      const branch = run.sourceBranch ? run.sourceBranch.replace('refs/heads/', '') : '-';
+      const requestedFor = run.requestedFor?.displayName || '-';
+      const reason = run.reason || '-';
+      const sourceVersion = run.sourceVersion ? run.sourceVersion.substring(0, 7) : '';
+      const startTime = run.startTime ? new Date(run.startTime) : null;
+      const finishTime = run.finishTime ? new Date(run.finishTime) : null;
+      const queueTime = run.queueTime ? new Date(run.queueTime) : null;
+      const dateStr = queueTime ? queueTime.toLocaleString() : (startTime ? startTime.toLocaleString() : '-');
+      let duration = '';
+      if (startTime && finishTime) {
+        const diffMs = finishTime - startTime;
+        const mins = Math.floor(diffMs / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+        duration = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      } else if (status === 'inProgress') {
+        duration = 'running...';
+      } else if (status === 'notStarted') {
+        duration = 'queued';
+      }
+      const webUrl = run._links?.web?.href || '#';
+      let parsedParams = null;
+      if (run.parameters) {
+        try {
+          let p = typeof run.parameters === 'string' ? JSON.parse(run.parameters) : run.parameters;
+          if (typeof p === 'string') p = JSON.parse(p);
+          parsedParams = p;
+        } catch (_) { }
+      }
+      if (!parsedParams && run.templateParameters) {
+        parsedParams = run.templateParameters;
+      }
+      if (parsedParams && Object.keys(parsedParams).length > 0) {
+        paramsMap[runId] = parsedParams;
+      }
+      const hasParams = parsedParams && Object.keys(parsedParams).length > 0;
+      let badge = 'badge-neutral';
+      let label = status;
+      let statusClass = '';
+      if (status === 'completed') {
+        if (result === 'succeeded') { badge = 'badge-success'; label = 'Succeeded'; statusClass = 'history-success'; }
+        else if (result === 'failed') { badge = 'badge-danger'; label = 'Failed'; statusClass = 'history-failed'; }
+        else if (result === 'canceled') { badge = 'badge-warning'; label = 'Canceled'; statusClass = 'history-canceled'; }
+        else { badge = 'badge-warning'; label = result || 'Unknown'; statusClass = 'history-canceled'; }
+      } else if (status === 'inProgress' || status === 'notStarted') {
+        badge = 'badge-info'; label = status === 'notStarted' ? 'Queued' : 'Running'; statusClass = 'history-running';
+      }
+      const reasonLabel = reason === 'manual' ? 'Manual' : reason === 'individualCI' ? 'CI' : reason === 'pullRequest' ? 'PR' : reason === 'schedule' ? 'Schedule' : reason;
+      return `<div class="build-history-item ${statusClass}">
+        <div class="build-history-content">
+          <div class="build-history-header">
+            <span class="build-history-id">#${buildNumber || runId}</span>
+            <span class="badge ${badge}">${label}</span>
+            <span class="build-history-branch" title="${branch}">⎇ ${branch}</span>
+          </div>
+          <div class="build-history-meta">
+            <span class="build-history-meta-item">⏱ ${duration || '-'}</span>
+            <span class="build-history-meta-item">⚡ ${reasonLabel}</span>
+            <span class="build-history-meta-item">👤 ${requestedFor}</span>
+            ${sourceVersion ? `<span class="build-history-meta-item">⌗ ${sourceVersion}</span>` : ''}
+          </div>
+          <div class="build-history-footer">
+            <span class="build-history-date">${dateStr}</span>
+            <span class="build-history-build-number">#${runId}</span>
+          </div>
+        </div>
+        <div class="build-history-actions">
+          <button class="build-history-params-btn" data-run-id="${runId}" data-build-number="${buildNumber}" title="View Parameters">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </button>
+          <a href="${webUrl}" target="_blank" class="build-history-view-btn" title="View in Azure DevOps">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Bind click events for view params buttons
+    container.querySelectorAll('.build-history-params-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const rid = btn.getAttribute('data-run-id');
+        const bnum = btn.getAttribute('data-build-number') || rid;
+        const modalTitle = `Build #${bnum}`;
+        if (paramsMap[rid]) {
+          openBuildParamsModal(paramsMap[rid], modalTitle);
+          return;
+        }
+        // Fetch params on-demand via Pipelines Runs API
+        try {
+          btn.style.opacity = '0.5';
+          const runData = await invoke('azure_get_build_status', { runId: parseInt(rid), pipelineId: config.pipelineId });
+          btn.style.opacity = '';
+          let params = runData.templateParameters || null;
+          if (params && Object.keys(params).length > 0) {
+            paramsMap[rid] = params;
+            openBuildParamsModal(params, modalTitle);
+          } else {
+            openBuildParamsModal({}, modalTitle);
+          }
+        } catch (e) {
+          btn.style.opacity = '';
+          openBuildParamsModal({}, modalTitle);
+        }
+      });
+    });
+  } catch (err) {
+    container.innerHTML = `<p class="empty-state">Failed to load: ${err}</p>`;
+  }
 }

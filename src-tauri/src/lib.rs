@@ -25,6 +25,59 @@ pub struct Settings {
     pub portal_settings: PortalSettings,
     #[serde(rename = "customPlatforms", default)]
     pub custom_platforms: Vec<CustomDevice>,
+    #[serde(rename = "azureDevops", default)]
+    pub azure_devops: AzureDevOpsSettings,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AzureDevOpsSettings {
+    #[serde(rename = "orgUrl", default = "default_azure_org_url")]
+    pub org_url: String,
+    #[serde(default = "default_azure_project")]
+    pub project: String,
+    #[serde(rename = "staPipelineId", default = "default_sta_pipeline_id")]
+    pub sta_pipeline_id: u32,
+    #[serde(rename = "staRepository", default = "default_sta_repository")]
+    pub sta_repository: String,
+    #[serde(rename = "a2aPipelineId", default = "default_a2a_pipeline_id")]
+    pub a2a_pipeline_id: u32,
+    #[serde(rename = "a2aRepository", default = "default_a2a_repository")]
+    pub a2a_repository: String,
+    #[serde(default)]
+    pub pat: String,
+}
+
+fn default_azure_org_url() -> String {
+    "https://dev.azure.com/aditum-products".to_string()
+}
+fn default_azure_project() -> String {
+    "aditum-postef".to_string()
+}
+fn default_sta_pipeline_id() -> u32 {
+    5
+}
+fn default_sta_repository() -> String {
+    "aditum-postef".to_string()
+}
+fn default_a2a_pipeline_id() -> u32 {
+    0
+}
+fn default_a2a_repository() -> String {
+    "aditum-postef".to_string()
+}
+
+impl Default for AzureDevOpsSettings {
+    fn default() -> Self {
+        AzureDevOpsSettings {
+            org_url: default_azure_org_url(),
+            project: default_azure_project(),
+            sta_pipeline_id: default_sta_pipeline_id(),
+            sta_repository: default_sta_repository(),
+            a2a_pipeline_id: default_a2a_pipeline_id(),
+            a2a_repository: default_a2a_repository(),
+            pat: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -223,6 +276,7 @@ impl Default for Settings {
             client_mappings: vec![],
             portal_settings: PortalSettings::default(),
             custom_platforms: vec![],
+            azure_devops: AzureDevOpsSettings::default(),
         }
     }
 }
@@ -4956,6 +5010,278 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
 
         Ok(spf_path.to_string_lossy().to_string())
     }
+
+    // ========== Azure DevOps API Commands ==========
+
+    #[tauri::command]
+    pub async fn azure_fetch_branches(repository: String) -> Result<Vec<String>, String> {
+        log_to_file("INFO", "AZURE: Fetching branches", Some(&format!("Repository: {}", repository)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured. Please set it in Settings > Azure DevOps.".to_string());
+        }
+
+        let repo_name = if repository.is_empty() { settings.azure_devops.project.clone() } else { repository };
+        let url = format!(
+            "{}/{}/_apis/git/repositories/{}/refs?filter=heads/&api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            repo_name
+        );
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to fetch branches", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Branch fetch returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to parse branches response", Some(&e.to_string()));
+            e.to_string()
+        })?;
+
+        let branches: Vec<String> = json.get("value")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|item| item.get("name").and_then(|n| n.as_str()))
+                    .map(|name| name.strip_prefix("refs/heads/").unwrap_or(name).to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        log_to_file("INFO", "AZURE: Branches fetched", Some(&format!("Count: {}", branches.len())));
+        Ok(branches)
+    }
+
+    #[tauri::command]
+    pub async fn azure_run_pipeline(branch: String, parameters: HashMap<String, String>, stages_to_skip: Vec<String>, variables: HashMap<String, String>, pipeline_id: u32) -> Result<serde_json::Value, String> {
+        log_to_file("INFO", "AZURE: Running pipeline", Some(&format!("Pipeline: {}, Branch: {}, Parameters: {:?}, StagesToSkip: {:?}", pipeline_id, branch, parameters.keys().collect::<Vec<_>>(), stages_to_skip)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let pid = if pipeline_id > 0 { pipeline_id } else { settings.azure_devops.sta_pipeline_id };
+        let url = format!(
+            "{}/{}/_apis/pipelines/{}/runs?api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            pid
+        );
+
+        let mut body = serde_json::json!({
+            "resources": {
+                "repositories": {
+                    "self": {
+                        "refName": format!("refs/heads/{}", branch)
+                    }
+                }
+            },
+            "templateParameters": parameters
+        });
+
+        // Add stagesToSkip if any stages are unchecked
+        if !stages_to_skip.is_empty() {
+            body["stagesToSkip"] = serde_json::json!(stages_to_skip);
+        }
+
+        // Add variables if any are set
+        if !variables.is_empty() {
+            let vars_obj: serde_json::Map<String, serde_json::Value> = variables.iter().map(|(k, v)| {
+                (k.clone(), serde_json::json!({ "value": v, "isSecret": false }))
+            }).collect();
+            body["variables"] = serde_json::Value::Object(vars_obj);
+        }
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.post(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to run pipeline", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Pipeline run returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to parse pipeline run response", Some(&e.to_string()));
+            e.to_string()
+        })?;
+
+        log_to_file("INFO", "AZURE: Pipeline run started", Some(&format!(
+            "Run ID: {}, URL: {}",
+            json.get("id").and_then(|v| v.as_u64()).unwrap_or(0),
+            json.get("_links").and_then(|l| l.get("web")).and_then(|w| w.get("href")).and_then(|h| h.as_str()).unwrap_or("N/A")
+        )));
+        Ok(json)
+    }
+
+    #[tauri::command]
+    pub async fn azure_get_build_status(run_id: u64, pipeline_id: u32) -> Result<serde_json::Value, String> {
+        log_to_file("DEBUG", "AZURE: Getting build status", Some(&format!("Run ID: {}, Pipeline: {}", run_id, pipeline_id)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let pid = if pipeline_id > 0 { pipeline_id } else { settings.azure_devops.sta_pipeline_id };
+        let url = format!(
+            "{}/{}/_apis/pipelines/{}/runs/{}?api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            pid,
+            run_id
+        );
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to get build status", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Build status returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        Ok(json)
+    }
+
+    #[tauri::command]
+    pub async fn azure_get_recent_builds(top: Option<u32>, pipeline_id: u32) -> Result<serde_json::Value, String> {
+        let count = top.unwrap_or(10);
+        log_to_file("DEBUG", "AZURE: Getting recent builds", Some(&format!("Top: {}, Pipeline: {}", count, pipeline_id)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let pid = if pipeline_id > 0 { pipeline_id } else { settings.azure_devops.sta_pipeline_id };
+        let url = format!(
+            "{}/{}/_apis/build/builds?definitions={}&$top={}&queryOrder=queueTimeDescending&api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            pid,
+            count
+        );
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to get recent builds", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Recent builds returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        log_to_file("DEBUG", "AZURE: Recent builds fetched", Some(&format!(
+            "Count: {}", json.get("count").and_then(|v| v.as_u64()).unwrap_or(0)
+        )));
+        Ok(json)
+    }
+
+    #[tauri::command]
+    pub async fn azure_cancel_build(build_id: u64) -> Result<serde_json::Value, String> {
+        log_to_file("INFO", "AZURE: Canceling build", Some(&format!("Build ID: {}", build_id)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let url = format!(
+            "{}/{}/_apis/build/builds/{}?api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            build_id
+        );
+
+        let body = serde_json::json!({ "status": "cancelling" });
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.patch(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to cancel build", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let resp_body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Cancel build returned error", Some(&format!("Status: {}, Body: {}", status, resp_body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, resp_body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        log_to_file("INFO", "AZURE: Build cancel requested", Some(&format!("Build ID: {}", build_id)));
+        Ok(json)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -5018,6 +5344,11 @@ pub fn run() {
             commands::parse_spf_content,
             commands::save_release_with_spf,
             commands::load_release_from_spf,
+            commands::azure_fetch_branches,
+            commands::azure_run_pipeline,
+            commands::azure_get_build_status,
+            commands::azure_get_recent_builds,
+            commands::azure_cancel_build,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

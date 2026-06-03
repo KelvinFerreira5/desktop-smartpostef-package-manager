@@ -5,6 +5,36 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-06-03
+
+### Added
+
+- **Build Parameters Modal**: "View Parameters" button on all recent builds (STA/A2A) that fetches pipeline parameters on-demand via Azure Pipelines Runs API. Modal displays build number in header (`Build #20260602.10`), filters out false/off booleans and noise keys (separators, descriptions, intent), and presents active parameters in a categorized chip/tag layout (General, Platforms, Build Options, Features, Android Devices).
+
+- **Theme accent color system**: New `--accent`, `--accent-bg`, and `--accent-border` CSS custom properties added to all 8 themes, providing consistent accent styling for interactive elements (params button, chips, tags).
+
+- **Themed release summary background**: New `--card-body-bg` variable for light themes replaces the plain gray `rgba(0,0,0,0.15)` overlay in expanded release cards with theme-colored tints (teal, purple, orange, blue).
+
+### Changed
+
+- **STA/A2A nav icons redesigned**: STA icon now depicts a POS terminal with screen, 2-row keypad, and a card being inserted from the bottom. A2A icon is the 4-square grid with top-right diamond. Both use thinner strokes (`stroke-width: 1.5`). A2A icon reduced to 10x10 for better visual balance.
+
+- **Lavender Breeze accent color**: Changed from burnt orange (`#e67e22`) to dark purple (`#5b21b6`) to match the theme's identity.
+
+- **Build history text visibility**: Changed `--text-muted` to `--text-secondary` for build history meta items, dates, and build numbers for better contrast across all themes.
+
+### Fixed
+
+- **Invisible text in light themes**: Removed all `color-mix()` CSS function calls which are not supported in the Tauri WebView (older WebKit). Replaced with pre-computed rgba custom properties (`--accent-bg`, `--accent-border`). This was causing entire property declarations to silently fail, making text invisible in Lavender Breeze, Teal Glow Light, and other light themes.
+
+- **Missing `--bg-primary` in themes**: Restored accidentally removed `--bg-primary` variable to all 8 themes after bulk search-replace operation.
+
+## [3.4.0] - 2026-06-02
+
+### Added
+
+- **Azure DevOps Build Integration**: New STA and A2A build pages with pipeline trigger UI, real-time build monitoring, and recent builds history from Azure Pipelines REST API v7.1.
+
 ## [3.3.20] - 2026-06-01
 
 ### Added
