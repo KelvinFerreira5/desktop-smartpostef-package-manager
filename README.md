@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.5.1 (Tauri Edition)
+# SmartPosTEF Package Manager v3.6.0 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -38,7 +38,8 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 
 | Tool | Description |
 |------|-------------|
-| **Daily Password Generator** | Generates 6-char hex passwords using Algorithm v3.1 (hash-based mixing) |
+| **Pwd Gen** (Releases Portal Pass Generator) | Generates 6-char hex passwords using Algorithm v3.1 (hash-based mixing) |
+| **ASCII to Hex** | General converter between Text (ASCII/ANSI), Hexadecimal, Base64, and Decimal |
 
 **Advanced Options** provides configuration management:
 

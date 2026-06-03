@@ -5,6 +5,20 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-06-03
+
+### Added
+
+- **Tools nav dropdown**: Converted the flat "Tools" nav item into an expandable dropdown group (same UX as the Build group), with sub-items for each tool. New tools can now be added as children without UI redesign.
+
+- **ASCII to Hex converter**: New tool page (`Tools → ASCII to Hex`) with a 2×2 grid of textareas for Text (ASCII/ANSI), Hexadecimal, Base64, and Decimal. Type in any field, click Convert, and the other 3 update automatically. Includes per-field Copy/Clear buttons and a Clear All button.
+
+### Changed
+
+- **Daily Password Generator renamed**: Tool is now called "Releases Portal Pass Generator" with nav label "Pwd Gen" to better reflect its purpose.
+
+- **Tools restructured into sub-pages**: Each tool is now a separate page under the Tools dropdown (`tools-pwd`, `tools-ascii`) instead of cards on a shared page.
+
 ## [3.5.1] - 2026-06-03
 
 ### Changed

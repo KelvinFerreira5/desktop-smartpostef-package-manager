@@ -202,10 +202,10 @@ const HELP_CONTENT = {
       { heading: 'Save Settings', body: 'Click the <strong>Save Settings</strong> button in the action bar at the bottom to persist all changes across all tabs (JFrog, Client Mappings, HTML Settings). Theme and Data operations save immediately without this button.' },
     ]
   },
-  'tools': {
-    title: 'Tools — Utilities',
+  'tools-pwd': {
+    title: 'Releases Portal Pass Generator',
     sections: [
-      { heading: 'Purpose', body: 'Access utility tools for day-to-day operations.' },
+      { heading: 'Purpose', body: 'Generate the daily administrative password for the SmartPosTef Releases Portal.' },
       {
         heading: 'Daily Password Generator', body: `
         <p>Generates a time-based daily password using the v3.1 algorithm (hash-based mixing).</p>
@@ -213,6 +213,21 @@ const HELP_CONTENT = {
           <tr><td><strong>Date selector</strong></td><td>Pick any date to generate its corresponding password</td></tr>
           <tr><td><strong>Copy button</strong></td><td>Copy the generated password to clipboard</td></tr>
         </table>
+      ` },
+    ]
+  },
+  'tools-ascii': {
+    title: 'ASCII to Hex — Converter',
+    sections: [
+      { heading: 'Purpose', body: 'Convert between Text (ASCII/ANSI), Hexadecimal, Base64, and Decimal representations.' },
+      {
+        heading: 'How to Use', body: `
+        <ol>
+          <li>Enter or paste a value in any of the 4 fields</li>
+          <li>Click <strong>Convert</strong> — the other 3 fields update automatically</li>
+          <li>Use Copy/Clear buttons on each field as needed</li>
+        </ol>
+        <p>The last field you edited or focused will be used as the conversion source.</p>
       ` },
     ]
   },
@@ -666,6 +681,16 @@ function initNavigation() {
       if (group) group.classList.toggle('expanded');
     });
   }
+
+  // Tools nav group expand/collapse
+  const toolsToggle = document.getElementById('nav-tools-toggle');
+  if (toolsToggle) {
+    toolsToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const group = document.getElementById('nav-group-tools');
+      if (group) group.classList.toggle('expanded');
+    });
+  }
 }
 
 function switchPage(pageName) {
@@ -682,8 +707,17 @@ function switchPage(pageName) {
     }
   }
 
+  // Auto-expand tools nav group when navigating to a tools page
+  const toolsGroup = document.getElementById('nav-group-tools');
+  if (toolsGroup) {
+    if (pageName === 'tools-pwd' || pageName === 'tools-ascii') {
+      toolsGroup.classList.add('expanded');
+    }
+  }
+
   // Initialize page-specific logic
-  if (pageName === 'tools') initToolsPage();
+  if (pageName === 'tools-pwd') initToolsPage();
+  if (pageName === 'tools-ascii') initAsciiToHexPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
   if (pageName === 'settings' && window._renderThemeGrid) window._renderThemeGrid();
   if (pageName === 'build-sta') initBuildStaPage();
@@ -5759,6 +5793,179 @@ function generateDailyPassword(appVersion, date) {
   const result = (unsignedHash % 0xF00000) + 0x100000;
 
   return result.toString(16).toUpperCase();
+}
+
+// ============================================================
+// Phase 4b: Tools Page - ASCII to Hex Converter
+// ============================================================
+
+function initAsciiToHexPage() {
+  frontendLog('INFO', 'TOOLS: Initializing ASCII to Hex page');
+
+  const fields = {
+    text: document.getElementById('conv-text'),
+    hex: document.getElementById('conv-hex'),
+    base64: document.getElementById('conv-base64'),
+    decimal: document.getElementById('conv-decimal')
+  };
+
+  let lastEditedField = 'text';
+
+  // Track which field was last edited
+  Object.keys(fields).forEach(key => {
+    if (fields[key]) {
+      fields[key].addEventListener('input', () => { lastEditedField = key; });
+      fields[key].addEventListener('focus', () => { lastEditedField = key; });
+    }
+  });
+
+  // Convert button
+  const btnConvert = document.getElementById('btn-convert');
+  if (btnConvert) {
+    const newBtn = btnConvert.cloneNode(true);
+    btnConvert.parentNode.replaceChild(newBtn, btnConvert);
+    newBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const errorDiv = document.getElementById('converter-error');
+      if (errorDiv) { errorDiv.style.display = 'none'; errorDiv.textContent = ''; }
+
+      try {
+        let textValue;
+        const source = fields[lastEditedField]?.value || '';
+
+        switch (lastEditedField) {
+          case 'text':
+            textValue = source;
+            break;
+          case 'hex':
+            textValue = hexToText(source);
+            break;
+          case 'base64':
+            textValue = base64ToText(source);
+            break;
+          case 'decimal':
+            textValue = decimalToText(source);
+            break;
+        }
+
+        // Update all fields from text
+        if (lastEditedField !== 'text' && fields.text) fields.text.value = textValue;
+        if (lastEditedField !== 'hex' && fields.hex) fields.hex.value = textToHex(textValue);
+        if (lastEditedField !== 'base64' && fields.base64) fields.base64.value = textToBase64(textValue);
+        if (lastEditedField !== 'decimal' && fields.decimal) fields.decimal.value = textToDecimal(textValue);
+
+        frontendLog('INFO', 'TOOLS: Conversion done', `Source: ${lastEditedField}`);
+      } catch (err) {
+        if (errorDiv) {
+          errorDiv.style.display = 'block';
+          errorDiv.textContent = `Conversion error: ${err.message}`;
+        }
+        frontendLog('ERROR', 'TOOLS: Conversion failed', err.message);
+      }
+    });
+  }
+
+  // Copy buttons
+  document.querySelectorAll('#page-tools-ascii .btn-copy-field').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = btn.dataset.target;
+      const textarea = document.getElementById(targetId);
+      if (textarea && textarea.value) {
+        navigator.clipboard.writeText(textarea.value).then(() => {
+          showToast('success', 'Copied to clipboard');
+        }).catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = textarea.value;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('success', 'Copied to clipboard');
+        });
+      }
+    });
+  });
+
+  // Clear buttons
+  document.querySelectorAll('#page-tools-ascii .btn-clear-field').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = btn.dataset.target;
+      const textarea = document.getElementById(targetId);
+      if (textarea) textarea.value = '';
+    });
+  });
+
+  // Clear All button
+  const btnClearAll = document.getElementById('btn-clear-all');
+  if (btnClearAll) {
+    const newClearAll = btnClearAll.cloneNode(true);
+    btnClearAll.parentNode.replaceChild(newClearAll, btnClearAll);
+    newClearAll.addEventListener('click', (e) => {
+      e.preventDefault();
+      Object.values(fields).forEach(f => { if (f) f.value = ''; });
+      const errorDiv = document.getElementById('converter-error');
+      if (errorDiv) { errorDiv.style.display = 'none'; errorDiv.textContent = ''; }
+    });
+  }
+}
+
+// --- Conversion helpers ---
+
+function textToHex(text) {
+  return Array.from(text).map(ch => {
+    const code = ch.charCodeAt(0);
+    return code.toString(16).toUpperCase().padStart(2, '0');
+  }).join(' ');
+}
+
+function hexToText(hex) {
+  const cleaned = hex.replace(/0x/gi, '').replace(/[^0-9a-fA-F\s]/g, '');
+  const bytes = cleaned.trim().split(/\s+/);
+  if (bytes.length === 1 && bytes[0].length > 2) {
+    // No spaces — split into pairs
+    const pairs = bytes[0].match(/.{1,2}/g) || [];
+    return pairs.map(b => String.fromCharCode(parseInt(b, 16))).join('');
+  }
+  return bytes.map(b => {
+    const code = parseInt(b, 16);
+    if (isNaN(code)) throw new Error(`Invalid hex value: "${b}"`);
+    return String.fromCharCode(code);
+  }).join('');
+}
+
+function textToBase64(text) {
+  // Handle extended ASCII (Latin-1) properly
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    bytes[i] = text.charCodeAt(i) & 0xFF;
+  }
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
+function base64ToText(b64) {
+  const cleaned = b64.trim();
+  if (!cleaned) return '';
+  const binary = atob(cleaned);
+  return binary;
+}
+
+function textToDecimal(text) {
+  return Array.from(text).map(ch => ch.charCodeAt(0).toString(10)).join(' ');
+}
+
+function decimalToText(dec) {
+  const cleaned = dec.trim();
+  if (!cleaned) return '';
+  const values = cleaned.split(/[\s,]+/);
+  return values.map(v => {
+    const code = parseInt(v, 10);
+    if (isNaN(code)) throw new Error(`Invalid decimal value: "${v}"`);
+    return String.fromCharCode(code);
+  }).join('');
 }
 
 // ============================================================

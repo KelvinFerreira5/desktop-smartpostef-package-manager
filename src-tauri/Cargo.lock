@@ -3457,7 +3457,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smartpostef-package-manager"
-version = "3.0.0"
+version = "3.6.0"
 dependencies = [
  "aes-gcm",
  "base64 0.21.7",
