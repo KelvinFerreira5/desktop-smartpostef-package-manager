@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.6.0 (Tauri Edition)
+# SmartPosTEF Package Manager v3.7.0 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 

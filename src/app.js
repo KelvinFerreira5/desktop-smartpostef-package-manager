@@ -25,19 +25,21 @@ let kebabCloseListenerAdded = false;
 
 // Contextual Help Content — keyed by page/sub-state
 const HELP_CONTENT = {
-  'deploy-purpose': {
-    title: 'New Deploy — Choose Your Flow',
+  'welcome': {
+    title: 'Welcome — Home',
     sections: [
-      { heading: 'Purpose', body: 'This is the starting screen for all deployment operations. Choose how you want to proceed based on your goal.' },
+      { heading: 'Purpose', body: 'This is the home screen of SmartPosTEF Package Manager. It provides a quick overview of all features and shows the latest changes.' },
       {
-        heading: 'Options', body: `
+        heading: 'Features', body: `
         <table class="help-table">
-          <tr><td><strong>Release from Scratch</strong></td><td>Upload packages to JFrog and create a full release with version, date, release notes, and an SPF manifest file.</td></tr>
-          <tr><td><strong>Upload Only</strong></td><td>Just upload packages to JFrog without creating a formal release. Useful for quick deploys or hotfixes.</td></tr>
-          <tr><td><strong>Import Release</strong></td><td>Import an existing <code>.spf</code> file to edit, manage, or update a previously created release.</td></tr>
+          <tr><td><strong>Deploy</strong></td><td>Upload packages to JFrog and create releases with SPF manifests.</td></tr>
+          <tr><td><strong>Releases</strong></td><td>View, search, and manage saved releases.</td></tr>
+          <tr><td><strong>Build</strong></td><td>Trigger STA/A2A pipeline builds on Azure DevOps.</td></tr>
+          <tr><td><strong>Tools</strong></td><td>Password generator and ASCII/Hex converter utilities.</td></tr>
+          <tr><td><strong>Advanced</strong></td><td>Manage custom devices and platforms.</td></tr>
+          <tr><td><strong>Settings</strong></td><td>Configure JFrog, client mappings, themes, and data management.</td></tr>
         </table>
       ` },
-      { heading: 'Workflow', body: '<ol><li>Click one of the three option cards</li><li>You\'ll be taken to the corresponding form</li><li>Use the ← back arrow (top-left) to return here</li></ol>' },
     ]
   },
   'deploy-release': {
@@ -245,7 +247,7 @@ const HELP_CONTENT = {
       ` },
     ]
   },
-  'import-release': {
+  'deploy-import': {
     title: 'Import / Edit Release',
     sections: [
       { heading: 'Purpose', body: 'Import an SPF file to view, edit, or update an existing release. Also used when clicking "Edit" on a release card.' },
@@ -279,11 +281,8 @@ function showHelp() {
 
   // Deploy page sub-state detection
   if (pageId === 'deploy') {
-    const purposeSelection = document.getElementById('deploy-purpose-selection');
     const uploadOnlyCard = document.getElementById('upload-only-info-card');
-    if (purposeSelection && purposeSelection.style.display !== 'none') {
-      helpKey = 'deploy-purpose';
-    } else if (uploadOnlyCard && uploadOnlyCard.style.display !== 'none') {
+    if (uploadOnlyCard && uploadOnlyCard.style.display !== 'none') {
       helpKey = 'deploy-upload';
     } else {
       helpKey = 'deploy-release';
@@ -335,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Set up all event handlers immediately (no Tauri required)
   initNavigation();
-  initDeployPage();
+  initDeployShared();
   initReleasesPage();
   initSettingsPage();
   initThemeToggle();
@@ -485,6 +484,9 @@ async function initTauriApis() {
     } catch (e) {
       console.warn('Could not get app version:', e);
     }
+
+    // Initialize welcome page (now that version is available)
+    initWelcomePage();
 
     // Load initial data
     await loadInitialData();
@@ -691,13 +693,27 @@ function initNavigation() {
       if (group) group.classList.toggle('expanded');
     });
   }
+
+  // Deploy nav group expand/collapse
+  const deployToggle = document.getElementById('nav-deploy-toggle');
+  if (deployToggle) {
+    deployToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const group = document.getElementById('nav-group-deploy');
+      if (group) group.classList.toggle('expanded');
+    });
+  }
 }
 
 function switchPage(pageName) {
   if (!navItems || !pages) return;
   frontendLog('INFO', 'NAVIGATION: Page switched', `Page: ${pageName}`);
+
+  // Map deploy sub-pages to shared page
+  const pageId = (pageName === 'deploy-new' || pageName === 'deploy-upload') ? 'deploy' : pageName;
+
   navItems.forEach(item => item.classList.toggle('active', item.dataset.page === pageName));
-  pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageName}`));
+  pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageId}`));
 
   // Auto-expand build nav group when navigating to a build page
   const buildGroup = document.getElementById('nav-group-build');
@@ -715,7 +731,19 @@ function switchPage(pageName) {
     }
   }
 
+  // Auto-expand deploy nav group when navigating to a deploy page
+  const deployGroup = document.getElementById('nav-group-deploy');
+  if (deployGroup) {
+    if (pageName === 'deploy-new' || pageName === 'deploy-upload' || pageName === 'deploy-import') {
+      deployGroup.classList.add('expanded');
+    }
+  }
+
   // Initialize page-specific logic
+  if (pageName === 'welcome') initWelcomePage();
+  if (pageName === 'deploy-new') initDeployNewPage();
+  if (pageName === 'deploy-upload') initDeployUploadPage();
+  if (pageName === 'deploy-import') initImportReleasePage();
   if (pageName === 'tools-pwd') initToolsPage();
   if (pageName === 'tools-ascii') initAsciiToHexPage();
   if (pageName === 'advanced') initAdvancedOptionsPage();
@@ -724,71 +752,113 @@ function switchPage(pageName) {
   if (pageName === 'build-a2a') initBuildA2aPage();
 }
 
-// Deploy Page
-function initDeployPage() {
-  console.log('Initializing deploy page...');
+// ============================================================
+// Welcome Page
+// ============================================================
 
-  // Purpose selection
-  const purposeBtns = document.querySelectorAll('.deploy-purpose-btn');
-  purposeBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      currentDeployPurpose = btn.dataset.purpose;
-      frontendLog('INFO', 'DEPLOY: Purpose selected', `Purpose: ${currentDeployPurpose}`);
-      const purposeSelection = document.getElementById('deploy-purpose-selection');
-      const deployContent = document.getElementById('deploy-content');
+function initWelcomePage() {
+  frontendLog('INFO', 'WELCOME: Initializing Welcome page');
 
-      if (purposeSelection) purposeSelection.style.display = 'none';
-      if (deployContent) deployContent.style.display = 'block';
-      const backBtn = document.getElementById('btn-back-to-purpose');
-      if (backBtn) backBtn.style.display = '';
-
-      const releaseInfoCard = document.getElementById('release-info-card');
-      const uploadOnlyCard = document.getElementById('upload-only-info-card');
-      const btnGenerateSpf = document.getElementById('btn-generate-spf');
-
-      if (currentDeployPurpose === 'import') {
-        // Navigate to the Import Release page
-        if (purposeSelection) purposeSelection.style.display = 'block';
-        if (deployContent) deployContent.style.display = 'none';
-        currentDeployPurpose = null;
-        switchPage('import-release');
-        initImportReleasePage();
-        return;
-      }
-
-      if (currentDeployPurpose === 'release') {
-        if (releaseInfoCard) releaseInfoCard.style.display = 'block';
-        if (uploadOnlyCard) uploadOnlyCard.style.display = 'none';
-        if (btnGenerateSpf) btnGenerateSpf.style.display = 'inline-flex';
-        initializeDatePicker();
-      } else {
-        if (releaseInfoCard) releaseInfoCard.style.display = 'none';
-        if (uploadOnlyCard) uploadOnlyCard.style.display = 'block';
-        if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
-      }
-    });
-  });
-
-  // Back to purpose button (in page header)
-  const btnBackToPurpose = document.getElementById('btn-back-to-purpose');
-  if (btnBackToPurpose) {
-    btnBackToPurpose.addEventListener('click', (e) => {
-      e.preventDefault();
-      frontendLog('INFO', 'DEPLOY: Back to purpose clicked');
-      currentDeployPurpose = null;
-      clearPackages();
-      const purposeSelection = document.getElementById('deploy-purpose-selection');
-      const deployContent = document.getElementById('deploy-content');
-      if (purposeSelection) purposeSelection.style.display = 'block';
-      if (deployContent) deployContent.style.display = 'none';
-      btnBackToPurpose.style.display = 'none';
-    });
+  // Set version badge
+  const versionBadge = document.getElementById('welcome-version');
+  const appVersionEl = document.getElementById('app-version');
+  if (versionBadge && appVersionEl && appVersionEl.textContent !== 'v...') {
+    versionBadge.textContent = appVersionEl.textContent;
   }
 
-  // Version inputs (version is now auto-detected from scanned packages)
-  const deployVersionInput = document.getElementById('deploy-version');
-  const uploadVersionInput = document.getElementById('upload-version');
+  // Load and render changelog
+  const changelogDiv = document.getElementById('welcome-changelog');
+  if (changelogDiv && !changelogDiv.dataset.loaded) {
+    loadChangelog(changelogDiv);
+  }
+}
+
+async function loadChangelog(container) {
+  try {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (!invoke) {
+      container.innerHTML = '<p>Changelog not available (Tauri not loaded)</p>';
+      return;
+    }
+    const content = await invoke('read_changelog');
+    // Extract first 2 version entries (up to the 3rd ## heading)
+    const lines = content.split('\n');
+    let entryCount = 0;
+    let extracted = [];
+    for (const line of lines) {
+      if (line.startsWith('## [')) {
+        entryCount++;
+        if (entryCount > 2) break;
+      }
+      if (entryCount > 0) {
+        extracted.push(line);
+      }
+    }
+    const markdown = extracted.join('\n');
+    if (typeof marked !== 'undefined') {
+      container.innerHTML = marked.parse(markdown);
+    } else {
+      container.innerHTML = markdown.replace(/\n/g, '<br>');
+    }
+    container.dataset.loaded = 'true';
+  } catch (err) {
+    container.innerHTML = '<p>Could not load changelog</p>';
+    frontendLog('ERROR', 'WELCOME: Failed to load changelog', err.message);
+  }
+}
+
+// ============================================================
+// Deploy Pages
+// ============================================================
+
+// Deploy Page - New Release mode
+function initDeployNewPage() {
+  frontendLog('INFO', 'DEPLOY: Initializing New Release page');
+  currentDeployPurpose = 'release';
+
+  // Update page title
+  const title = document.getElementById('deploy-page-title');
+  const subtitle = document.getElementById('deploy-page-subtitle');
+  if (title) title.textContent = 'New Release';
+  if (subtitle) subtitle.textContent = 'Upload packages and create a full release with notes and SPF file';
+
+  // Show release card, hide upload card
+  const releaseInfoCard = document.getElementById('release-info-card');
+  const uploadOnlyCard = document.getElementById('upload-only-info-card');
+  const btnGenerateSpf = document.getElementById('btn-generate-spf');
+  if (releaseInfoCard) releaseInfoCard.style.display = 'block';
+  if (uploadOnlyCard) uploadOnlyCard.style.display = 'none';
+  if (btnGenerateSpf) btnGenerateSpf.style.display = 'inline-flex';
+
+  initializeDatePicker();
+  initDeployShared();
+}
+
+// Deploy Page - Upload Only mode
+function initDeployUploadPage() {
+  frontendLog('INFO', 'DEPLOY: Initializing Upload Only page');
+  currentDeployPurpose = 'upload';
+
+  // Update page title
+  const title = document.getElementById('deploy-page-title');
+  const subtitle = document.getElementById('deploy-page-subtitle');
+  if (title) title.textContent = 'Upload Only';
+  if (subtitle) subtitle.textContent = 'Just upload packages to JFrog without creating a release';
+
+  // Show upload card, hide release card
+  const releaseInfoCard = document.getElementById('release-info-card');
+  const uploadOnlyCard = document.getElementById('upload-only-info-card');
+  const btnGenerateSpf = document.getElementById('btn-generate-spf');
+  if (releaseInfoCard) releaseInfoCard.style.display = 'none';
+  if (uploadOnlyCard) uploadOnlyCard.style.display = 'block';
+  if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
+
+  initDeployShared();
+}
+
+// Shared deploy page initialization
+function initDeployShared() {
+  console.log('Initializing deploy page...');
 
   // Deploy mode buttons (Scan Folder / Add Manually)
   const deployModeBtns = document.querySelectorAll('.deploy-mode-btn');
@@ -1790,12 +1860,8 @@ async function handleFinalizeDeployOnly() {
     if (versionInput) versionInput.value = '';
     if (descriptionInput) descriptionInput.value = '';
 
-    // Reset purpose selection
+    // Reset deploy state
     currentDeployPurpose = null;
-    const purposeSelection = document.getElementById('deploy-purpose-selection');
-    const deployContent = document.getElementById('deploy-content');
-    if (purposeSelection) purposeSelection.style.display = 'block';
-    if (deployContent) deployContent.style.display = 'none';
 
     // Step 5: Navigate to Releases page
     frontendLog('INFO', 'DEPLOY_ONLY: Step 5 - Navigating to Releases page');
@@ -2405,12 +2471,8 @@ async function handleFinalizeRelease() {
     const notesPreview = document.getElementById('deploy-notes-preview');
     if (notesPreview) notesPreview.innerHTML = '';
 
-    // Reset purpose selection
+    // Reset deploy state
     currentDeployPurpose = null;
-    const purposeSelection = document.getElementById('deploy-purpose-selection');
-    const deployContent = document.getElementById('deploy-content');
-    if (purposeSelection) purposeSelection.style.display = 'block';
-    if (deployContent) deployContent.style.display = 'none';
 
     // Step 6: Navigate to Releases page
     frontendLog('INFO', 'FINALIZE: Step 6 - Navigating to Releases page');
@@ -3274,7 +3336,7 @@ function attachReleaseEventListeners(container) {
       frontendLog('INFO', 'RELEASES: Edit release button clicked', `Release ID: ${id}`);
       const release = releases.find(r => r.id === id);
       if (release) {
-        switchPage('import-release');
+        switchPage('deploy-import');
         initImportReleasePage(release);
       }
     });

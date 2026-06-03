@@ -5,6 +5,26 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2026-06-03
+
+### Added
+
+- **Welcome page**: New home/landing page displayed on app start, featuring a features grid highlighting key capabilities and a changelog section showing the latest 2 release entries parsed from `CHANGELOG.md` (read via Tauri backend at compile time).
+
+- **Deploy nav dropdown**: Converted the flat "New deploy" nav item into an expandable "Deploy" dropdown group with three sub-items: "New" (release from scratch), "Upload" (upload only), and "Import" (import release).
+
+### Changed
+
+- **Deploy page restructured**: Removed the purpose selection screen and back button from the deploy page. "New" and "Upload" now navigate directly to the deploy form with appropriate title/subtitle and visible/hidden sections pre-configured.
+
+- **Deploy page shared state**: "New" and "Upload" share the same deploy page (`page-deploy`) with dynamic title/subtitle and section visibility, while "Import" uses its own dedicated page (`page-deploy-import`).
+
+- **Upload nav icon**: Replaced the generic upload arrow icon with Material Symbols "backup" icon (cloud with arrow up) for the Deploy → Upload nav item.
+
+### Fixed
+
+- **Welcome page Settings icon**: Completed the truncated SVG gear path for the Settings feature card.
+
 ## [3.6.0] - 2026-06-03
 
 ### Added

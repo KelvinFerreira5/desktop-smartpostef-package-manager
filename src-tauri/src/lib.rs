@@ -2027,6 +2027,11 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn read_changelog() -> String {
+        include_str!("../../CHANGELOG.md").to_string()
+    }
+
+    #[tauri::command]
     pub fn get_app_paths() -> AppPaths {
         log_to_file("DEBUG", "APP_PATHS: Retrieving application paths", None);
         let app_dir = get_app_data_dir();
@@ -5310,6 +5315,7 @@ pub fn run() {
 
         .invoke_handler(tauri::generate_handler![
             commands::get_app_version,
+            commands::read_changelog,
             commands::get_app_paths,
             commands::get_settings,
             commands::save_settings,

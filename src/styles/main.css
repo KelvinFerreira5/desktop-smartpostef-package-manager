@@ -717,18 +717,6 @@ body {
   gap: 0.5rem;
 }
 
-.btn-back-purpose {
-  padding: 0.25rem;
-  border-radius: 6px;
-  color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
-}
-
-.btn-back-purpose:hover {
-  color: var(--primary);
-  background: var(--accent-glow);
-}
-
 .page-header h2 {
   font-size: 1.75rem;
   font-weight: 700;
@@ -2700,66 +2688,6 @@ input[type="number"] {
   }
 }
 
-/* Deploy Purpose Selection */
-.deploy-purpose-options {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-}
-
-.deploy-purpose-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  padding: 2rem 1.5rem;
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-}
-
-.deploy-purpose-btn:hover {
-  border-color: transparent;
-  background: var(--accent-glow);
-  transform: translateY(-2px);
-}
-
-.deploy-purpose-btn svg {
-  width: 48px;
-  height: 48px;
-  color: var(--primary-light);
-}
-
-.deploy-purpose-btn .purpose-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.deploy-purpose-btn .purpose-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.deploy-purpose-btn .purpose-desc {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-@media (max-width: 768px) {
-  .deploy-purpose-options {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Button ghost style */
 .btn-ghost {
   background: transparent;
@@ -4148,6 +4076,124 @@ select::-webkit-scrollbar-thumb {
   margin-top: 0.5rem;
 }
 
+/* ============================================================
+   Welcome Page
+   ============================================================ */
+
+.welcome-version-badge {
+  display: inline-block;
+  padding: 0.35rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent, #4ade80);
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid var(--accent-border, rgba(74, 222, 128, 0.3));
+  border-radius: 999px;
+  margin-bottom: 1.5rem;
+}
+
+.welcome-features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 900px) {
+  .welcome-features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .welcome-features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.welcome-feature-card {
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.welcome-feature-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.welcome-feature-icon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 0.75rem;
+  color: var(--primary-light, var(--primary));
+}
+
+.welcome-feature-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.welcome-feature-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.welcome-feature-card p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.welcome-changelog-section h3 {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.welcome-changelog {
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.welcome-changelog h2 {
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.welcome-changelog h3 {
+  font-size: 0.9rem;
+  color: var(--accent, #4ade80);
+  margin: 1rem 0 0.5rem;
+}
+
+.welcome-changelog ul {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+
+.welcome-changelog li {
+  margin-bottom: 0.35rem;
+}
+
+.welcome-changelog strong {
+  color: var(--text-primary);
+}
+
 .password-result {
   margin-top: 1.25rem;
   padding: 1.25rem;
@@ -5132,7 +5178,7 @@ select::-webkit-scrollbar-thumb {
 }
 
 .nav-group.expanded .nav-group-children {
-  max-height: 120px;
+  max-height: 200px;
 }
 
 .nav-child {
