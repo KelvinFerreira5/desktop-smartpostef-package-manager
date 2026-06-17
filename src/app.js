@@ -36,8 +36,7 @@ const HELP_CONTENT = {
           <tr><td><strong>Releases</strong></td><td>View, search, and manage saved releases.</td></tr>
           <tr><td><strong>Build</strong></td><td>Trigger STA/A2A pipeline builds on Azure DevOps.</td></tr>
           <tr><td><strong>Tools</strong></td><td>Password generator and ASCII/Hex converter utilities.</td></tr>
-          <tr><td><strong>Advanced</strong></td><td>Manage custom devices and platforms.</td></tr>
-          <tr><td><strong>Settings</strong></td><td>Configure JFrog, client mappings, themes, and data management.</td></tr>
+          <tr><td><strong>Settings</strong></td><td>Configure JFrog, client mappings, themes, custom devices, and data management.</td></tr>
         </table>
       ` },
     ]
@@ -60,9 +59,9 @@ const HELP_CONTENT = {
       {
         heading: 'Icons & Indicators', body: `
         <table class="help-table">
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Green checkmark</td><td>Package uploaded successfully</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Red X</td><td>Upload failed</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Spinner</td><td>Upload in progress</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg> Green checkmark</td><td>Package uploaded successfully</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Red X</td><td>Upload failed</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Spinner</td><td>Upload in progress</td></tr>
           <tr><td><strong>Platform badges</strong></td><td>Windows, Linux, Embedded, STA, A2A — auto-detected from filename/URL</td></tr>
         </table>
       ` },
@@ -142,7 +141,7 @@ const HELP_CONTENT = {
   'settings': {
     title: 'Settings — Application Configuration',
     sections: [
-      { heading: 'Purpose', body: 'Configure all application preferences. Use the <strong>sidebar tabs</strong> on the left to switch between sections: Preferences, JFrog, Client Mappings, HTML Settings, Data Export/Import, and Paths & Logs.' },
+      { heading: 'Purpose', body: 'Configure all application preferences. Use the <strong>sidebar tabs</strong> on the left to switch between sections: Preferences, JFrog, Client Mappings, HTML Settings, Data Export/Import, Custom Devices, and Paths & Logs.' },
       {
         heading: 'Preferences (Theme)', body: `
         <p>Choose a visual theme for the application. 8 themes are available (4 dark, 4 light). Click any theme card to apply it instantly.</p>
@@ -155,7 +154,7 @@ const HELP_CONTENT = {
       {
         heading: 'JFrog Configuration', body: `
         <table class="help-table">
-          <tr><td><strong>API Key</strong></td><td>Authentication key for JFrog API access. Stored encrypted locally (AES-256-GCM). Use the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> eye button to toggle visibility.</td></tr>
+          <tr><td><strong>API Key</strong></td><td>Authentication key for JFrog API access. Stored encrypted locally (AES-256-GCM). Use the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> eye button to toggle visibility.</td></tr>
           <tr><td><strong>Base URL</strong></td><td>The base URL of your JFrog Artifactory instance (e.g., <code>https://artifactory.example.com/artifactory</code>)</td></tr>
           <tr><td><strong>Default Repository</strong></td><td>The default repository path used when building upload destinations</td></tr>
         </table>
@@ -164,10 +163,10 @@ const HELP_CONTENT = {
         heading: 'Client Mappings', body: `
         <p>Map client names to numeric codes used in version strings and SPF file paths.</p>
         <table class="help-table">
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <strong>Locked rows</strong></td><td>Built-in mappings (Lyra, Unica, B1, Valori, Bin, Basa) — cannot be edited or removed</td></tr>
-          <tr><td><strong>Custom rows</strong></td><td>Your own mappings — editable and removable via the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> delete button</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <strong>Locked rows</strong></td><td>Built-in mappings (Lyra, Unica, B1, Valori, Bin, Basa) — cannot be edited or removed</td></tr>
+          <tr><td><strong>Custom rows</strong></td><td>Your own mappings — editable and removable via the <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> delete button</td></tr>
           <tr><td><strong>+ Add Mapping</strong></td><td>Add a new custom client name → code mapping</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> <strong>Generate</strong></td><td>Auto-generate a unique 3-digit code from the client name using DJB2 hash</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg> <strong>Generate</strong></td><td>Auto-generate a unique 3-digit code from the client name using DJB2 hash</td></tr>
         </table>
       ` },
       {
@@ -184,8 +183,8 @@ const HELP_CONTENT = {
         heading: 'Data Export / Import', body: `
         <p>Backup or restore your application data selectively by category.</p>
         <table class="help-table">
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <strong>Export</strong></td><td>Choose which categories to save to a JSON file</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <strong>Import</strong></td><td>Restore data from a backup file; only selected categories are overwritten</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> <strong>Export</strong></td><td>Choose which categories to save to a JSON file</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> <strong>Import</strong></td><td>Restore data from a backup file; only selected categories are overwritten</td></tr>
         </table>
         <p><strong>Available categories:</strong> Releases, Theme, JFrog Settings (API key encrypted), Client Mappings, HTML Settings.</p>
       ` },
@@ -197,11 +196,20 @@ const HELP_CONTENT = {
           <tr><td><strong>Releases</strong></td><td>Where release JSON records are stored</td></tr>
           <tr><td><strong>HTML Output</strong></td><td>Where generated HTML reports are saved</td></tr>
           <tr><td><strong>Logs</strong></td><td>Application log files location</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <strong>Open</strong></td><td>Opens the directory in your system file manager</td></tr>
-          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> <strong>View Logs</strong></td><td>Opens a modal with recent application log entries</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <strong>Open</strong></td><td>Opens the directory in your system file manager</td></tr>
+          <tr><td><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> <strong>View Logs</strong></td><td>Opens a modal with recent application log entries</td></tr>
         </table>
       ` },
       { heading: 'Save Settings', body: 'Click the <strong>Save Settings</strong> button in the action bar at the bottom to persist all changes across all tabs (JFrog, Client Mappings, HTML Settings). Theme and Data operations save immediately without this button.' },
+      {
+        heading: 'Custom Devices', body: `
+        <p>Define custom device models and platform configurations that extend the built-in detection rules.</p>
+        <table class="help-table">
+          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name, type, and URL identifier pattern</td></tr>
+          <tr><td><strong>Delete</strong></td><td>Remove a custom device from the list</td></tr>
+        </table>
+        <p>Custom devices extend the built-in detection rules. They are used during package filename/URL detection to identify hardware targets not covered by the default device map.</p>
+      ` },
     ]
   },
   'tools-pwd': {
@@ -230,20 +238,6 @@ const HELP_CONTENT = {
           <li>Use Copy/Clear buttons on each field as needed</li>
         </ol>
         <p>The last field you edited or focused will be used as the conversion source.</p>
-      ` },
-    ]
-  },
-  'advanced': {
-    title: 'Advanced Options — Custom Devices & Platforms',
-    sections: [
-      { heading: 'Purpose', body: 'Define custom device models and platform configurations that extend the built-in detection rules.' },
-      {
-        heading: 'Custom Devices', body: `
-        <table class="help-table">
-          <tr><td><strong>Add Device</strong></td><td>Create a new custom device entry with name, type, and URL identifier pattern</td></tr>
-          <tr><td><strong>Delete</strong></td><td>Remove a custom device from the list</td></tr>
-        </table>
-        <p>Custom devices extend the built-in detection rules. They are used during package filename/URL detection to identify hardware targets not covered by the default device map.</p>
       ` },
     ]
   },
@@ -746,8 +740,10 @@ function switchPage(pageName) {
   if (pageName === 'deploy-import') initImportReleasePage();
   if (pageName === 'tools-pwd') initToolsPage();
   if (pageName === 'tools-ascii') initAsciiToHexPage();
-  if (pageName === 'advanced') initAdvancedOptionsPage();
-  if (pageName === 'settings' && window._renderThemeGrid) window._renderThemeGrid();
+  if (pageName === 'settings') {
+    if (window._renderThemeGrid) window._renderThemeGrid();
+    initAdvancedOptionsPage();
+  }
   if (pageName === 'build-sta') initBuildStaPage();
   if (pageName === 'build-a2a') initBuildA2aPage();
 }
@@ -831,7 +827,6 @@ function initDeployNewPage() {
   if (btnGenerateSpf) btnGenerateSpf.style.display = 'inline-flex';
 
   initializeDatePicker();
-  initDeployShared();
 }
 
 // Deploy Page - Upload Only mode
@@ -852,8 +847,6 @@ function initDeployUploadPage() {
   if (releaseInfoCard) releaseInfoCard.style.display = 'none';
   if (uploadOnlyCard) uploadOnlyCard.style.display = 'block';
   if (btnGenerateSpf) btnGenerateSpf.style.display = 'none';
-
-  initDeployShared();
 }
 
 // Shared deploy page initialization
@@ -1311,18 +1304,18 @@ function showConfirmDialog(title, message, options = {}) {
 
   // Icon SVGs
   const icons = {
-    delete: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40">
+    delete: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
       <polyline points="3 6 5 6 21 6"/>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
       <line x1="10" y1="11" x2="10" y2="17"/>
       <line x1="14" y1="11" x2="14" y2="17"/>
     </svg>`,
-    warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40">
+    warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
       <line x1="12" y1="9" x2="12" y2="13"/>
       <line x1="12" y1="17" x2="12.01" y2="17"/>
     </svg>`,
-    info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40">
+    info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
       <circle cx="12" cy="12" r="10"/>
       <line x1="12" y1="16" x2="12" y2="12"/>
       <line x1="12" y1="8" x2="12.01" y2="8"/>
@@ -1397,7 +1390,7 @@ function renderSignatureField(pkg, index) {
     return `<input type="text" class="package-field-input filled" placeholder="Signature" value="${pkg.signature}" data-field="signature" data-index="${index}">`;
   } else {
     return `<button class="add-field-btn" data-field="signature" data-index="${index}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Signature
     </button>`;
   }
@@ -1409,7 +1402,7 @@ function renderClientField(pkg, index) {
     return `<input type="text" class="package-field-input filled" placeholder="Client" value="${pkg.client}" data-field="client" data-index="${index}">`;
   } else {
     return `<button class="add-field-btn" data-field="client" data-index="${index}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Client
     </button>`;
   }
@@ -1469,7 +1462,7 @@ function renderPackages() {
   if (packages.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
           <line x1="12" y1="22.08" x2="12" y2="12"/>
@@ -1524,7 +1517,7 @@ function renderPackages() {
         <span class="status-badge ${getStatusClass(pkg)}">${getStatusText(pkg)}</span>
         ${pkg.error ? `<button class="btn btn-sm btn-secondary btn-retry" data-index="${index}">Retry</button>` : ''}
         <button class="btn-remove-package" data-index="${index}" title="Remove package">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -1898,6 +1891,87 @@ function clearPackages() {
   updateActionButtons();
 }
 
+function getPackageSpecialHandlingData(pkg) {
+  return {
+    specialHandling: pkg.specialHandling || pkg.special_handling || '',
+    extractFolder: pkg.extractFolder || pkg.extract_folder || ''
+  };
+}
+
+function isOnlineCompanionPackage(pkg) {
+  const fileName = pkg.fileName || pkg.file_name || '';
+  const { specialHandling } = getPackageSpecialHandlingData(pkg);
+  return fileName === 'Linux_64-Gui-Installer.zip' ||
+    fileName === 'Linux_i386-Installer.zip' ||
+    fileName === 'x86.zip' ||
+    (specialHandling && specialHandling !== 'extract-s920-root');
+}
+
+async function uploadPackageToJfrog(pkg, options = {}) {
+  const filePath = pkg.filePath || pkg.file_path;
+  let uploadPath = filePath;
+  let uploadName = pkg.fileName || pkg.file_name;
+  const { specialHandling, extractFolder } = getPackageSpecialHandlingData(pkg);
+  const releaseType = options.releaseType || 'Production';
+  const resolveJfrogPath = options.jfrogPathResolver || ((candidatePkg) => candidatePkg.jfrogPath || candidatePkg.jfrog_path || '');
+
+  if (!filePath) {
+    throw new Error('Package file path is missing');
+  }
+
+  let temporaryZipPath = null;
+  try {
+    let jfrogPath = resolveJfrogPath(pkg, uploadName);
+
+    if (specialHandling === 'extract-s920-root' && extractFolder) {
+      return await invoke('extract_root_and_upload_to_jfrog', {
+        zipPath: filePath,
+        folderName: extractFolder,
+        jfrogPath: jfrogPath,
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
+      });
+    }
+
+    if (specialHandling && extractFolder) {
+      return await invoke('extract_and_upload_to_jfrog', {
+        zipPath: filePath,
+        extractFolder: extractFolder,
+        jfrogPath: jfrogPath,
+        apiKey: settings.jfrogApiKey,
+        baseUrl: settings.jfrogBaseUrl || null
+      });
+    }
+
+    if (shouldZipApk(pkg, releaseType) && filePath) {
+      const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
+      if (zipResult.success) {
+        uploadPath = zipResult.zipPath;
+        uploadName = zipResult.zipFileName;
+        temporaryZipPath = zipResult.zipPath;
+      } else {
+        throw new Error(`Failed to zip APK: ${zipResult.message}`);
+      }
+    }
+
+    jfrogPath = resolveJfrogPath(pkg, uploadName);
+    return await invoke('upload_to_jfrog', {
+      filePath: uploadPath,
+      jfrogPath: jfrogPath,
+      apiKey: settings.jfrogApiKey,
+      baseUrl: settings.jfrogBaseUrl || null
+    });
+  } finally {
+    if (temporaryZipPath) {
+      try {
+        await invoke('delete_file', { filePath: temporaryZipPath });
+      } catch (e) {
+        // Ignore temp cleanup failures.
+      }
+    }
+  }
+}
+
 // Handle upload all
 async function handleUploadAll() {
   frontendLog('INFO', 'UPLOAD: Starting upload all operation', `Packages: ${packages.length}`);
@@ -1937,60 +2011,11 @@ async function handleUploadAll() {
     renderPackages();
 
     try {
-      const filePath = pkg.filePath || pkg.file_path;
-      const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
-      const specialHandling = pkg.specialHandling || pkg.special_handling;
-      const extractFolder = pkg.extractFolder || pkg.extract_folder;
-
-      let result;
-
-      // Check if this package needs special handling (extract ZIP and upload folder)
-      if (specialHandling === 'extract-s920-root' && extractFolder) {
-        // S920 unsigned: extract ZIP root to named folder and upload folder
-        result = await invoke('extract_root_and_upload_to_jfrog', {
-          zipPath: filePath,
-          folderName: extractFolder,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-      } else if (specialHandling && extractFolder) {
-        // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
-        result = await invoke('extract_and_upload_to_jfrog', {
-          zipPath: filePath,
-          extractFolder: extractFolder,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-      } else {
-        // Regular file upload — check APK zip rule first
-        let uploadPath = filePath;
-        let uploadName = pkg.fileName || pkg.file_name;
-        const deployType = document.getElementById('deploy-type');
-        const currentReleaseType = deployType ? deployType.value : 'Production';
-        if (shouldZipApk(pkg, currentReleaseType) && filePath) {
-          frontendLog('INFO', 'UPLOAD: Zipping APK for STA upload', `File: ${uploadName}`);
-          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
-          if (zipResult.success) {
-            uploadPath = zipResult.zipPath;
-            uploadName = zipResult.zipFileName;
-            frontendLog('INFO', 'UPLOAD: APK zipped successfully', `ZIP: ${uploadName}`);
-          } else {
-            throw new Error(`Failed to zip APK: ${zipResult.message}`);
-          }
-        }
-        result = await invoke('upload_to_jfrog', {
-          filePath: uploadPath,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-        // Clean up temporary zip file after upload attempt
-        if (uploadPath !== filePath) {
-          try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
-        }
-      }
+      const deployType = document.getElementById('deploy-type');
+      const currentReleaseType = deployType ? deployType.value : 'Production';
+      const result = await uploadPackageToJfrog(pkg, {
+        releaseType: currentReleaseType
+      });
 
       if (result.success) {
         pkg.uploaded = true;
@@ -2053,54 +2078,11 @@ async function handleRetryAll() {
     renderPackages();
 
     try {
-      const filePath = pkg.filePath || pkg.file_path;
-      const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
-      const specialHandling = pkg.specialHandling || pkg.special_handling;
-      const extractFolder = pkg.extractFolder || pkg.extract_folder;
-
-      let result;
-
-      if (specialHandling === 'extract-s920-root' && extractFolder) {
-        result = await invoke('extract_root_and_upload_to_jfrog', {
-          zipPath: filePath,
-          folderName: extractFolder,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-      } else if (specialHandling && extractFolder) {
-        result = await invoke('extract_and_upload_to_jfrog', {
-          zipPath: filePath,
-          extractFolder: extractFolder,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-      } else {
-        let uploadPath = filePath;
-        let uploadName = pkg.fileName || pkg.file_name;
-        const deployType = document.getElementById('deploy-type');
-        const currentReleaseType = deployType ? deployType.value : 'Production';
-        if (shouldZipApk(pkg, currentReleaseType) && filePath) {
-          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
-          if (zipResult.success) {
-            uploadPath = zipResult.zipPath;
-            uploadName = zipResult.zipFileName;
-          } else {
-            throw new Error(`Failed to zip APK: ${zipResult.message}`);
-          }
-        }
-        result = await invoke('upload_to_jfrog', {
-          filePath: uploadPath,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey,
-          baseUrl: settings.jfrogBaseUrl || null
-        });
-        // Clean up temporary zip file after upload attempt
-        if (uploadPath !== filePath) {
-          try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
-        }
-      }
+      const deployType = document.getElementById('deploy-type');
+      const currentReleaseType = deployType ? deployType.value : 'Production';
+      const result = await uploadPackageToJfrog(pkg, {
+        releaseType: currentReleaseType
+      });
 
       if (result.success) {
         pkg.uploaded = true;
@@ -2146,60 +2128,11 @@ async function retryUpload(index) {
   renderPackages();
 
   try {
-    const filePath = pkg.filePath || pkg.file_path;
-    const jfrogPath = pkg.jfrogPath || pkg.jfrog_path || '';
-    const specialHandling = pkg.specialHandling || pkg.special_handling;
-    const extractFolder = pkg.extractFolder || pkg.extract_folder;
-
-    let result;
-
-    // Check if this package needs special handling (extract ZIP and upload folder)
-    if (specialHandling === 'extract-s920-root' && extractFolder) {
-      // S920 unsigned: extract ZIP root to named folder and upload folder
-      result = await invoke('extract_root_and_upload_to_jfrog', {
-        zipPath: filePath,
-        folderName: extractFolder,
-        jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey,
-        baseUrl: settings.jfrogBaseUrl || null
-      });
-    } else if (specialHandling && extractFolder) {
-      // Use extract_and_upload_to_jfrog for ZIP files that need subfolder extraction (e.g., online companions)
-      result = await invoke('extract_and_upload_to_jfrog', {
-        zipPath: filePath,
-        extractFolder: extractFolder,
-        jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey,
-        baseUrl: settings.jfrogBaseUrl || null
-      });
-    } else {
-      // Regular file upload — check APK zip rule first
-      let uploadPath = filePath;
-      let uploadName = pkg.fileName || pkg.file_name;
-      const deployType = document.getElementById('deploy-type');
-      const currentReleaseType = deployType ? deployType.value : 'Production';
-      if (shouldZipApk(pkg, currentReleaseType) && filePath) {
-        frontendLog('INFO', 'UPLOAD: Zipping APK for STA retry upload', `File: ${uploadName}`);
-        const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
-        if (zipResult.success) {
-          uploadPath = zipResult.zipPath;
-          uploadName = zipResult.zipFileName;
-          frontendLog('INFO', 'UPLOAD: APK zipped successfully', `ZIP: ${uploadName}`);
-        } else {
-          throw new Error(`Failed to zip APK: ${zipResult.message}`);
-        }
-      }
-      result = await invoke('upload_to_jfrog', {
-        filePath: uploadPath,
-        jfrogPath: jfrogPath,
-        apiKey: settings.jfrogApiKey,
-        baseUrl: settings.jfrogBaseUrl || null
-      });
-      // Clean up temporary zip file after upload attempt
-      if (uploadPath !== filePath) {
-        try { await invoke('delete_file', { filePath: uploadPath }); } catch (e) { /* ignore cleanup errors */ }
-      }
-    }
+    const deployType = document.getElementById('deploy-type');
+    const currentReleaseType = deployType ? deployType.value : 'Production';
+    const result = await uploadPackageToJfrog(pkg, {
+      releaseType: currentReleaseType
+    });
 
     if (result.success) {
       pkg.uploaded = true;
@@ -2720,7 +2653,7 @@ function renderReleases() {
   if (!releases || releases.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
         </svg>
@@ -2735,7 +2668,7 @@ function renderReleases() {
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
         </svg>
@@ -2788,14 +2721,14 @@ function renderReleases() {
         </div>
         <div class="release-card-actions">
           <button class="btn btn-sm btn-outline btn-generate-html" data-id="${release.id}" title="Generate HTML">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             Generate HTML
           </button>
           <button class="btn btn-sm btn-outline btn-edit-release" data-id="${release.id}" title="Edit Release">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
             </svg>
@@ -2807,21 +2740,21 @@ function renderReleases() {
             </button>
             <div class="release-kebab-menu">
               <button class="kebab-item btn-overflow-spf" data-id="${release.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export SPF
               </button>
               <button class="kebab-item btn-overflow-purge" data-id="${release.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/><path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M12 23c-3.6 0-8-2.4-8-7.6C4 10 12 1 12 1s8 9 8 14.4c0 5.2-4.4 7.6-8 7.6z"/><path d="M12 23c-1.8 0-4-1.2-4-3.8C8 16 12 11 12 11s4 5 4 8.2c0 2.6-2.2 3.8-4 3.8z"/></svg>
                 Purge
               </button>
               <button class="kebab-item btn-overflow-delete" data-id="${release.id}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Delete
               </button>
             </div>
           </div>
           <button class="btn btn-sm btn-outline btn-toggle-expand" data-id="${release.id}" title="Expand/Collapse">
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
@@ -2832,7 +2765,7 @@ function renderReleases() {
           <div class="release-summary-header">
             <h4>Release Summary</h4>
             ${release.releaseNotes ? `<button class="btn btn-sm btn-outline btn-view-notes" data-id="${release.id}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
                 <line x1="16" y1="13" x2="8" y2="13"/>
@@ -2924,7 +2857,7 @@ function renderReleaseSummary(release) {
     const safeUrl = url.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const displayPath = url.replace('https://artifactory.aditum.com.br/artifactory/', '').replace(/"/g, '&quot;');
     return `<button class="btn-copy-url" title="${displayPath}" onclick="copyPkgUrl(this, '${safeUrl}')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
       </svg>
@@ -3032,10 +2965,15 @@ function renderReleaseSummary(release) {
       platformGroups['Embedded'].forEach(pkg => {
         const icon = getPlatformIcon('Embedded', pkg);
         const name = pkg.device ? `${displayDeviceName(pkg.device)} Package` : 'S920 Package';
+        const sigTag = (pkg.signature && pkg.signature.toLowerCase() !== 'signed') ? makeTag(pkg.signature, 'blue') : '';
+        const clientTag = pkg.client ? makeTag(pkg.client, 'green') : '';
         html += `
           <div class="platform-package-item">
             <img src="${icon}" alt="Embedded" class="platform-icon" onerror="this.style.display='none'" />
             <span class="package-name">${name}</span>
+            ${sigTag}
+            ${clientTag}
+            ${sigIcon(pkg)}
             ${copyUrlBtn(pkg.url)}
           </div>`;
       });
@@ -3460,7 +3398,7 @@ async function viewRelease(id) {
       <span class="device">${displayDeviceName(pkg.device)}</span>
       ${pkg.category ? `<span class="category">${pkg.category}</span>` : ''}
       ${pkg.url ? `<a href="${pkg.url}" target="_blank" class="url download-link">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
@@ -3964,7 +3902,7 @@ function renderClientMappings() {
         <div class="mapping-item mapping-item--builtin">
           <input type="text" class="mapping-name" value="${mapping.name}" disabled>
           <span class="mapping-lock-icon" title="Built-in mapping — cannot be changed">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
@@ -3977,13 +3915,13 @@ function renderClientMappings() {
     <div class="mapping-item">
       <input type="text" class="mapping-name" value="${mapping.name}" placeholder="Client Name" data-index="${index}" data-field="name">
       <button class="btn-generate-mapping" data-index="${index}" title="Generate code from name">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
           <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>
         </svg>
       </button>
       <input type="text" class="mapping-number" value="${mapping.number}" placeholder="000" data-index="${index}" data-field="number">
       <button class="btn-remove-mapping" data-index="${index}" title="Remove mapping">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -4164,11 +4102,11 @@ function showExportImportDialog(mode, availableCategories = null) {
   const confirmLabel = isExport ? 'Export' : 'Import';
 
   const categories = [
-    { key: 'releases', label: 'Releases', desc: 'All releases and their SPF files', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
-    { key: 'defaultTheme', label: 'Default Theme', desc: 'Your selected color theme', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' },
-    { key: 'jfrogSettings', label: 'JFrog Settings', desc: 'Encrypted API key', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
-    { key: 'clientMappings', label: 'Client Mappings', desc: 'Client number-to-name mappings', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
-    { key: 'htmlSettings', label: 'HTML Settings', desc: 'Portal title and company name', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' },
+    { key: 'releases', label: 'Releases', desc: 'All releases and their SPF files', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
+    { key: 'defaultTheme', label: 'Default Theme', desc: 'Your selected color theme', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>' },
+    { key: 'jfrogSettings', label: 'JFrog Settings', desc: 'Encrypted API key', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' },
+    { key: 'clientMappings', label: 'Client Mappings', desc: 'Client number-to-name mappings', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' },
+    { key: 'htmlSettings', label: 'HTML Settings', desc: 'Portal title and company name', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="20" height="20"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' },
   ];
 
   frontendLog('INFO', `UI: ${title} dialog shown`);
@@ -4204,8 +4142,8 @@ function showExportImportDialog(mode, availableCategories = null) {
         <div class="confirm-header confirm-header-info">
           <div class="confirm-icon">
             ${isExport
-        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
-        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
       }
           </div>
           <h3 class="confirm-title">${title}</h3>
@@ -4376,10 +4314,10 @@ function showToast(type, message, options = {}) {
   toast.className = `toast toast-${type}`;
 
   const icons = {
-    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
-    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
   };
 
   const titles = {
@@ -4395,14 +4333,14 @@ function showToast(type, message, options = {}) {
     actionsHtml = `
       <div class="toast-actions">
         <button class="toast-action-btn toast-btn-open" title="Open in default application">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
             <circle cx="12" cy="12" r="10"/>
             <polygon points="10 8 16 12 10 16 10 8"/>
           </svg>
           Open
         </button>
         <button class="toast-action-btn toast-btn-find" title="Show in folder">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           Find
@@ -4577,7 +4515,7 @@ function renderSpfDropZone(container) {
   container.innerHTML = `
     <div class="card spf-drop-zone" id="spf-drop-zone">
       <div class="drop-zone-content">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
           <line x1="12" y1="18" x2="12" y2="12"/>
@@ -4586,7 +4524,7 @@ function renderSpfDropZone(container) {
         <h3>Import SPF File</h3>
         <p>Drag and drop an .spf file here, or click to browse</p>
         <button class="btn btn-secondary" id="btn-browse-spf">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           Browse Files
@@ -4798,6 +4736,20 @@ function detectPackageFromUrl(url) {
     platform = 'Embedded';
     device = 'S920';
     category = 'Package';
+
+    // S920 signed client variant: SmartPosTef-{P|D}-(S920-)?{version}.{hash}-{signature}_sign.zip
+    const s920SignMatch = fileName.match(/^SmartPosTef-[PD]-(?:S920-)?\d+\.\d+\.\d+(?:\+[0-9a-fA-F]+|\.\d+)-([A-Za-z][A-Za-z0-9_]*)_sign\.zip$/i);
+    if (s920SignMatch) {
+      const signer = s920SignMatch[1];
+      const excluded = ['release', 'debug', 'sign', 'signed', 'unsigned', 'offline', 'online'];
+      if (!excluded.includes(signer.toLowerCase())) {
+        signature = signer;
+        if (!client && settings.clientMappings && settings.clientMappings.length > 0) {
+          const mappedClient = settings.clientMappings.find(m => m.name.toLowerCase() === signer.toLowerCase());
+          if (mappedClient) client = mappedClient.name;
+        }
+      }
+    }
   } else if (lowerName.includes('.a2a') || lowerUrl.includes('/a2a/')) {
     platform = 'A2A';
     device = 'Android';
@@ -4919,14 +4871,14 @@ function renderImportReleasePage() {
         Cancel
       </button>
       <button class="btn btn-secondary" id="btn-import-add-packages">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         Add Packages
       </button>
       <button class="btn btn-primary" id="btn-import-update-release">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
@@ -5179,6 +5131,8 @@ async function handleImportAddPackages() {
       url: '',
       version: scanned.version || '',
       isDev: scanned.isDev || scanned.is_dev || false,
+      specialHandling: scanned.specialHandling || scanned.special_handling || '',
+      extractFolder: scanned.extractFolder || scanned.extract_folder || '',
     };
 
     // Version validation: compare package version with release version
@@ -5201,7 +5155,7 @@ async function handleImportAddPackages() {
     pkg.isNew = true;
     pkg.filePath = filePath;
     pkg.fileName = fileName;
-    pkg.jfrogPath = buildJfrogPath(pkg, fileName);
+    pkg.jfrogPath = scanned.jfrogPath || scanned.jfrog_path || buildJfrogPath(pkg, fileName);
 
     importReleaseState.newPackages.push(pkg);
     importReleaseState.packages.push(pkg);
@@ -5318,16 +5272,21 @@ function detectPackageFromFileName(fileName, filePath) {
   // Detect signature — extract actual signer name from filename (mirrors Rust extract_signature)
   if (lowerName.includes('_sign.')) {
     const excluded = ['release', 'debug', 'sign', 'signed', 'unsigned', 'offline', 'online'];
+    // S920 signed client variant: SmartPosTef-{P|D}-(S920-)?{version}.{hash}-{signature}_sign.zip
+    const s920SignMatch = fileName.match(/^SmartPosTef-[PD]-(?:S920-)?\d+\.\d+\.\d+(?:\+[0-9a-fA-F]+|\.\d+)-([A-Za-z][A-Za-z0-9_]*)_sign\.zip$/i);
+    if (s920SignMatch && !excluded.includes(s920SignMatch[1].toLowerCase())) {
+      signature = s920SignMatch[1];
+    }
     // Try v2 format: version+hexhash-SIGNATURE-release_sign.ext
-    const v2Match = fileName.match(/\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+    const v2Match = !signature ? fileName.match(/\d+\.\d+\.\d+\+[0-9a-fA-F]+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/) : null;
     if (v2Match && !excluded.includes(v2Match[1].toLowerCase())) {
       signature = v2Match[1];
     } else {
       // Try v1 format: version.hash-SIGNATURE-release_sign.ext or version.A2A.hash-SIGNATURE-release_sign.ext
-      const v1Match = fileName.match(/\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/);
+      const v1Match = !signature ? fileName.match(/\d+\.\d+\.\d+\.(?:A2A\.)?\d+-([A-Za-z][A-Za-z0-9_]*)-(?:release|debug)_sign\.(?:zip|apk)$/) : null;
       if (v1Match && !excluded.includes(v1Match[1].toLowerCase())) {
         signature = v1Match[1];
-      } else {
+      } else if (!signature) {
         signature = 'Signed';
       }
     }
@@ -5535,30 +5494,14 @@ async function handleUpdateRelease() {
 
     for (const pkg of newPkgs) {
       try {
-        let filePath = pkg.filePath;
-        let uploadFileName = pkg.fileName;
-
-        // STA APK→ZIP rule: For STA dev or prod-signed, APK must be zipped
-        const needsZip = shouldZipApk(pkg, importReleaseState.release ? importReleaseState.release.releaseType : 'Production');
-        if (needsZip && filePath) {
-          frontendLog('INFO', 'IMPORT: Zipping APK for STA upload', `File: ${pkg.fileName}`);
-          const zipResult = await invoke('create_zip_from_file', { filePath: filePath });
-          if (zipResult.success) {
-            filePath = zipResult.zipPath;
-            uploadFileName = zipResult.zipFileName;
-            frontendLog('INFO', 'IMPORT: APK zipped successfully', `ZIP: ${uploadFileName}`);
-          } else {
-            throw new Error(`Failed to zip APK: ${zipResult.message}`);
+        const result = await uploadPackageToJfrog(pkg, {
+          releaseType: importReleaseState.release ? importReleaseState.release.releaseType : 'Production',
+          jfrogPathResolver: (candidatePkg, candidateName) => {
+            const path = buildJfrogPath(candidatePkg, candidateName);
+            candidatePkg.jfrogPath = path;
+            candidatePkg.jfrog_path = path;
+            return path;
           }
-        }
-
-        // Determine JFrog path
-        const jfrogPath = buildJfrogPath(pkg, uploadFileName);
-
-        const result = await invoke('upload_to_jfrog', {
-          filePath: filePath,
-          jfrogPath: jfrogPath,
-          apiKey: settings.jfrogApiKey
         });
 
         if (result.success) {
@@ -5586,6 +5529,9 @@ async function handleUpdateRelease() {
   }
 
   // Build release data
+  const spfPackages = importReleaseState.packages.filter(pkg => !isOnlineCompanionPackage(pkg));
+  const spfVersion = getFullVersionForSpf(spfPackages, rel.version);
+
   const releaseData = {
     id: importReleaseState.originalRelease ? importReleaseState.originalRelease.id : `${rel.version}-${(rel.releaseType || 'production').toLowerCase()}-${Date.now()}`,
     version: rel.version,
@@ -5593,7 +5539,7 @@ async function handleUpdateRelease() {
     type: rel.releaseType || 'Production',
     description: rel.description || '',
     releaseNotes: rel.releaseNotes || '',
-    packages: importReleaseState.packages.map(p => ({
+    packages: spfPackages.map(p => ({
       platform: p.platform || 'Unknown',
       device: p.device || '',
       category: p.category || '',
@@ -5608,13 +5554,16 @@ async function handleUpdateRelease() {
   showLoadingModal('Saving release...');
 
   try {
-    // Generate SPF content and save internally
-    const spfContent = await invoke('generate_spf_content', { release: releaseData });
+    // Generate SPF content
+    const spfReleaseData = { ...releaseData, version: spfVersion };
+    const spfContent = await invoke('generate_spf_content', { release: spfReleaseData });
 
-    // Save SPF to internal releases folder
+    // Save SPF following new release flow behavior
     const typeShort = getTypeShort(rel);
-    const spfFileName = `release_${rel.version}-${rel.date}-${typeShort}.spf`;
-    await invoke('save_internal_spf', { content: spfContent, fileName: spfFileName });
+    const spfFileName = `release_${spfVersion}-${rel.date}-${typeShort}.spf`;
+    const paths = await invoke('get_app_paths');
+    const spfSavePath = `${paths.userData}/${spfFileName}`;
+    await invoke('save_spf_file', { content: spfContent, filePath: spfSavePath });
 
     // Save release to releases.json (cache/index)
     releaseData.spfFileName = spfFileName;
@@ -5632,8 +5581,8 @@ async function handleUpdateRelease() {
     importReleaseState = { release: null, originalRelease: null, packages: [], newPackages: [], isEditing: false, spfContent: null };
     switchPage('releases');
 
-    showToast('success', `Release ${rel.version} saved successfully!`);
-    frontendLog('INFO', 'IMPORT: Release saved', `Version: ${rel.version}`);
+    showToast('success', `Release ${spfVersion} saved successfully!`);
+    frontendLog('INFO', 'IMPORT: Release saved', `Version: ${spfVersion}`);
   } catch (err) {
     hideLoadingModal();
     frontendLog('ERROR', 'IMPORT: Save release failed', err.toString());
@@ -5892,29 +5841,46 @@ function initAsciiToHexPage() {
       if (errorDiv) { errorDiv.style.display = 'none'; errorDiv.textContent = ''; }
 
       try {
-        let textValue;
         const source = fields[lastEditedField]?.value || '';
+        const values = {
+          text: '',
+          hex: '',
+          base64: '',
+          decimal: ''
+        };
 
         switch (lastEditedField) {
           case 'text':
-            textValue = source;
+            values.text = source;
+            values.hex = textToHex(source);
+            values.base64 = textToBase64(source);
+            values.decimal = textToDecimal(source);
             break;
           case 'hex':
-            textValue = hexToText(source);
+            values.text = hexToText(source);
+            values.hex = normalizeHex(source);
+            values.base64 = textToBase64(values.text);
+            values.decimal = hexToDecimal(source);
             break;
           case 'base64':
-            textValue = base64ToText(source);
+            values.text = base64ToText(source);
+            values.hex = textToHex(values.text);
+            values.base64 = source.trim();
+            values.decimal = textToDecimal(values.text);
             break;
           case 'decimal':
-            textValue = decimalToText(source);
+            values.text = decimalToText(source);
+            values.hex = decimalToHex(source);
+            values.base64 = textToBase64(values.text);
+            values.decimal = normalizeDecimal(source);
             break;
         }
 
-        // Update all fields from text
-        if (lastEditedField !== 'text' && fields.text) fields.text.value = textValue;
-        if (lastEditedField !== 'hex' && fields.hex) fields.hex.value = textToHex(textValue);
-        if (lastEditedField !== 'base64' && fields.base64) fields.base64.value = textToBase64(textValue);
-        if (lastEditedField !== 'decimal' && fields.decimal) fields.decimal.value = textToDecimal(textValue);
+        Object.entries(fields).forEach(([key, field]) => {
+          if (field && key !== lastEditedField) {
+            field.value = values[key];
+          }
+        });
 
         frontendLog('INFO', 'TOOLS: Conversion done', `Source: ${lastEditedField}`);
       } catch (err) {
@@ -5982,17 +5948,28 @@ function textToHex(text) {
   }).join(' ');
 }
 
-function hexToText(hex) {
-  const cleaned = hex.replace(/0x/gi, '').replace(/[^0-9a-fA-F\s]/g, '');
-  const bytes = cleaned.trim().split(/\s+/);
-  if (bytes.length === 1 && bytes[0].length > 2) {
-    // No spaces — split into pairs
-    const pairs = bytes[0].match(/.{1,2}/g) || [];
-    return pairs.map(b => String.fromCharCode(parseInt(b, 16))).join('');
+function parseHexValues(hex) {
+  const cleaned = hex.replace(/0x/gi, '').replace(/[^0-9a-fA-F\s]/g, '').trim();
+  if (!cleaned) return [];
+
+  const values = cleaned.split(/\s+/);
+  if (values.length === 1 && values[0].length > 2) {
+    return values[0].match(/.{1,2}/g) || [];
   }
-  return bytes.map(b => {
-    const code = parseInt(b, 16);
-    if (isNaN(code)) throw new Error(`Invalid hex value: "${b}"`);
+
+  return values;
+}
+
+function normalizeHex(hex) {
+  return parseHexValues(hex)
+    .map(value => value.toUpperCase())
+    .join(' ');
+}
+
+function hexToText(hex) {
+  return parseHexValues(hex).map(value => {
+    const code = parseInt(value, 16);
+    if (isNaN(code)) throw new Error(`Invalid hex value: "${value}"`);
     return String.fromCharCode(code);
   }).join('');
 }
@@ -6017,6 +5994,36 @@ function base64ToText(b64) {
 
 function textToDecimal(text) {
   return Array.from(text).map(ch => ch.charCodeAt(0).toString(10)).join(' ');
+}
+
+function normalizeDecimal(dec) {
+  const cleaned = dec.trim();
+  if (!cleaned) return '';
+
+  return cleaned.split(/[\s,]+/).map(value => {
+    const code = parseInt(value, 10);
+    if (isNaN(code)) throw new Error(`Invalid decimal value: "${value}"`);
+    return code.toString(10);
+  }).join(' ');
+}
+
+function decimalToHex(dec) {
+  const cleaned = dec.trim();
+  if (!cleaned) return '';
+
+  return cleaned.split(/[\s,]+/).map(value => {
+    const code = parseInt(value, 10);
+    if (isNaN(code)) throw new Error(`Invalid decimal value: "${value}"`);
+    return code.toString(16).toUpperCase().padStart(2, '0');
+  }).join(' ');
+}
+
+function hexToDecimal(hex) {
+  return parseHexValues(hex).map(value => {
+    const code = parseInt(value, 16);
+    if (isNaN(code)) throw new Error(`Invalid hex value: "${value}"`);
+    return code.toString(10);
+  }).join(' ');
 }
 
 function decimalToText(dec) {
@@ -6067,7 +6074,7 @@ function renderCustomDevices() {
   if (devices.length === 0) {
     container.innerHTML = `
       <div class="empty-state" style="padding: 2rem;">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         <p>No custom devices registered yet.</p>
         <p style="font-size: 0.8125rem; margin-top: 0.5rem;">Use the form above to add custom devices that will be recognized during package detection.</p>
       </div>
@@ -6086,7 +6093,7 @@ function renderCustomDevices() {
         </div>
         <div class="cd-actions">
           <button class="btn btn-sm btn-danger" onclick="handleDeleteCustomDevice(${index})" title="Delete device">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
       </div>
@@ -6268,7 +6275,7 @@ function renderImportAccordions() {
     html += `
       <div class="accordion-item" data-platform="${escapeHtml(platform)}">
         <div class="accordion-header" onclick="toggleAccordion(this)">
-          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="accordion-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
           ${iconHtml}
@@ -6442,10 +6449,10 @@ function renderPackageTable(pkgs) {
           <span class="pkg-card-title">${escapeHtml(title)}</span>
           <div class="pkg-card-header-actions">
             <span class="btn-pkg-info" title="${escapeHtml(jfrogPath)}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </span>
             <button class="btn-pkg-delete" title="Delete package" onclick="handleDeleteFromJfrog(${pkg._index})">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
@@ -6456,7 +6463,7 @@ function renderPackageTable(pkgs) {
         <div class="pkg-card-actions">
           ${pkg.url ? `
             <button class="btn-pkg-download" title="Download ${escapeHtml(fileName)}" onclick="window.open('${escapeHtml(pkg.url)}', '_blank')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
@@ -6464,12 +6471,12 @@ function renderPackageTable(pkgs) {
               Download
             </button>
             <button class="btn-pkg-copy" title="Copy URL" onclick="copyToClipboard('${escapeHtml(pkg.url)}')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
             </button>
-          ` : `<span class="pkg-badge-added"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Added</span>`}
+          ` : `<span class="pkg-badge-added"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Added</span>`}
         </div>
       </div>
     `;
@@ -6595,10 +6602,10 @@ function renderA2ACardHtml(pkg, title, fileName) {
           <span class="pkg-card-title">${escapeHtml(title)}</span>
           <div class="pkg-card-header-actions">
             <span class="btn-pkg-info" title="${escapeHtml(jfrogPath)}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </span>
             <button class="btn-pkg-delete" title="Delete package" onclick="handleDeleteFromJfrog(${pkg._index})">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
@@ -6609,7 +6616,7 @@ function renderA2ACardHtml(pkg, title, fileName) {
         <div class="pkg-card-actions">
           ${pkg.url ? `
             <button class="btn-pkg-download" title="Download ${escapeHtml(fileName)}" onclick="window.open('${escapeHtml(pkg.url)}', '_blank')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
@@ -6617,12 +6624,12 @@ function renderA2ACardHtml(pkg, title, fileName) {
               Download
             </button>
             <button class="btn-pkg-copy" title="Copy URL" onclick="copyToClipboard('${escapeHtml(pkg.url)}')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
             </button>
-          ` : `<span class="pkg-badge-added"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Added</span>`}
+          ` : `<span class="pkg-badge-added"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg> Added</span>`}
         </div>
       </div>
     `;
@@ -6651,7 +6658,7 @@ function renderCustomPlatformAccordion(pkgs) {
           ${pkg.url ? `<a href="${escapeHtml(pkg.url)}" target="_blank" style="color: var(--primary);">${escapeHtml(fileName)}</a>` : '-'}
         </span>
         <button class="btn-pkg-delete" title="Delete package" onclick="handleDeleteFromJfrog(${pkg._index})">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
           </svg>
@@ -6675,7 +6682,7 @@ function copyPkgUrl(btn, url) {
   navigator.clipboard.writeText(url).then(() => {
     btn.classList.add('copied');
     const origSvg = btn.innerHTML;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
       <polyline points="20 6 9 17 4 12"/>
     </svg>`;
     setTimeout(() => {
@@ -7518,7 +7525,7 @@ function openBuildParamsModal(params, title) {
             const intentKey = deviceToIntent[key];
             const intentVal = intentKey && params[intentKey] ? String(params[intentKey]) : '';
             const label = intentVal ? `${deviceName} — ${intentVal}` : deviceName;
-            return `<div class="build-param-item"><span class="build-param-name">${label}</span><span class="build-param-badge param-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg></span></div>`;
+            return `<div class="build-param-item"><span class="build-param-name">${label}</span><span class="build-param-badge param-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="12" height="12"><polyline points="20 6 9 17 4 12"/></svg></span></div>`;
           }).join('');
         } else {
           // Platforms, Build Options, Features — show only enabled as tags
@@ -7673,10 +7680,10 @@ async function loadRecentBuilds(type) {
         </div>
         <div class="build-history-actions">
           <button class="build-history-params-btn" data-run-id="${runId}" data-build-number="${buildNumber}" title="View Parameters">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           </button>
           <a href="${webUrl}" target="_blank" class="build-history-view-btn" title="View in Azure DevOps">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
         </div>
       </div>`;

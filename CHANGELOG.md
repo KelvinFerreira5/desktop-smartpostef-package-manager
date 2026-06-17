@@ -5,6 +5,50 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.2] - 2026-06-08
+
+### Changed
+
+- **Settings tab consistency**: Updated the Custom Devices tab icon to follow the same thin stroke SVG style as the other Settings tabs.
+
+- **Custom Devices tab icon redesign**: Changed the icon from a plain monitor to a monitor with a plus sign inside to better communicate "add/manage devices".
+
+- **Custom Devices panel title cleanup**: Removed the icon from the Custom Devices card title so the heading matches the visual style of other Settings cards.
+
+- **Release Summary (Embedded/S920) signature parity**: Embedded S920 rows now display the same signature context as STA/A2A package rows, including signature/client badges and signed/unsigned icon rendering.
+
+- **S920 signed filename support expanded**: Parser and frontend detection now recognize signed S920 filenames with optional signer segment before `_sign` (for example `...-Martins_sign.zip`, `...-Entrepay_sign.zip`, `...-TecToy_sign.zip`).
+
+- **Upload behavior parity (Edit Release vs New Deploy)**: Edit Release uploads now run through the same upload pipeline used by New Deploy, including all special package handling branches (online companion extraction, S920 extract-root flow, APK zip-before-upload rules, and shared base URL propagation).
+
+- **SPF parity on release update**: Updating an existing release now follows the same SPF conventions used during new release finalization, including companion filtering, full package-derived SPF version usage, and synchronized SPF filename metadata updates.
+
+### Fixed
+
+- **Settings sidebar icon color mismatch**: Corrected Custom Devices tab icon coloring so inactive, hover, and active states match the same color behavior used by the other Settings tab icons.
+
+- **Tauri dev startup schema error**: Removed unsupported NSIS keys from `tauri.conf.json` (`installerIcon`, `uninstallerIcon`, `installerHooks`) to allow `tauri dev` hot reload to start successfully.
+
+- **S920 signer metadata propagation**: When a signed S920 filename includes a signer name, signature/client metadata is now propagated through scan/import flows so Release Summary badges and icon state stay consistent.
+
+## [3.7.1] - 2026-06-05
+
+### Changed
+
+- **Thinner icons**: Reduced `stroke-width` from `2` to `1.5` across all inline SVG icons in `index.html` and `app.js`. Proportionally reduced bolder variants (`2.5` → `2`, `3` → `2.5`). Added global CSS `stroke-linecap: round` and `stroke-linejoin: round` for consistent rounded line endings.
+
+- **Material Symbols weight**: Set global `font-variation-settings: 'wght' 100` for thinner Material Symbol icons.
+
+- **Nav icon updates**: Replaced Tools nav icon (wrench → `extension` Material Symbol), Pwd Gen nav icon (lock → `password_2` Material Symbol).
+
+- **Settings nav icon**: Replaced gear Material Symbol with inline SVG gear using `stroke-width="1.5"` to match all other nav icons.
+
+- **Connections tab icon**: Replaced filled SVG with stroke-based outline network icon.
+
+- **Custom Devices moved to Settings**: Removed the standalone "Advanced Options" page and nav item. Custom Devices is now a tab within the Settings page, placed between "Data Export/Import" and "Paths & Logs".
+
+- **Custom Devices tab icon**: Replaced `add_to_queue` Material Symbol with inline SVG monitor icon matching other settings tabs.
+
 ## [3.7.0] - 2026-06-03
 
 ### Added

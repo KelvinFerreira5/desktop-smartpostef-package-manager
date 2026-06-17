@@ -624,6 +624,14 @@ fn extract_signature(file_name: &str) -> Option<String> {
     None
 }
 
+fn extract_client_from_signature_name(signature: &str, settings: &Settings) -> Option<String> {
+    settings
+        .client_mappings
+        .iter()
+        .find(|mapping| mapping.name.eq_ignore_ascii_case(signature))
+        .map(|mapping| mapping.name.clone())
+}
+
 // Extract base version (Major.Minor.Patch) from full version string
 // "2.5.1.183749" -> "2.5.1"
 // "2.4.1.A2A.96873" -> "2.4.1"
@@ -965,8 +973,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
 
     // ==================== EMBEDDED S920 PACKAGES ====================
     
-    // Embedded S920 Signed v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}_sign.zip
-    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)_sign\.zip$").unwrap();
+    // Embedded S920 Signed v2: SmartPosTef-{P|D}-S920-{version}+{hexhash}(-{signature})?_sign.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\+([0-9a-fA-F]+)(?:-([A-Za-z][A-Za-z0-9_]*))?_sign\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         pkg.platform = Some("Embedded".to_string());
         pkg.device = Some("S920".to_string());
@@ -974,6 +982,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
+        if let Some(sig) = caps.get(4) {
+            let sig_name = sig.as_str().to_string();
+            pkg.signature = Some(sig_name.clone());
+            if pkg.client.is_none() {
+                pkg.client = extract_client_from_signature_name(&sig_name, settings);
+            }
+        }
         pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/pax/s920/" }.to_string());
         return pkg;
     }
@@ -996,8 +1011,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         return pkg;
     }
 
-    // Embedded S920 Signed (new format): SmartPosTef-{P|D}-S920-{version}.{hash}_sign.zip
-    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\.(\d+)_sign\.zip$").unwrap();
+    // Embedded S920 Signed (new format): SmartPosTef-{P|D}-S920-{version}.{hash}(-{signature})?_sign.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-S920-(\d+\.\d+\.\d+)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?_sign\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         pkg.platform = Some("Embedded".to_string());
         pkg.device = Some("S920".to_string());
@@ -1005,6 +1020,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
+        if let Some(sig) = caps.get(4) {
+            let sig_name = sig.as_str().to_string();
+            pkg.signature = Some(sig_name.clone());
+            if pkg.client.is_none() {
+                pkg.client = extract_client_from_signature_name(&sig_name, settings);
+            }
+        }
         pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/pax/s920/" }.to_string());
         return pkg;
     }
@@ -1029,8 +1051,8 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         return pkg;
     }
 
-    // Embedded S920 Signed (legacy format): SmartPosTef-{P|D}-{version}.{hash}_sign.zip
-    let re = Regex::new(r"^SmartPosTef-([PD])-(\d+\.\d+\.\d+)\.(\d+)_sign\.zip$").unwrap();
+    // Embedded S920 Signed (legacy format): SmartPosTef-{P|D}-{version}.{hash}(-{signature})?_sign.zip
+    let re = Regex::new(r"^SmartPosTef-([PD])-(\d+\.\d+\.\d+)\.(\d+)(?:-([A-Za-z][A-Za-z0-9_]*))?_sign\.zip$").unwrap();
     if let Some(caps) = re.captures(file_name) {
         pkg.platform = Some("Embedded".to_string());
         pkg.device = Some("S920".to_string());
@@ -1038,6 +1060,13 @@ fn parse_package(file_name: &str, file_path: &str, settings: &Settings) -> Packa
         pkg.hash = Some(caps.get(3).unwrap().as_str().to_string());
         pkg.is_dev = caps.get(1).unwrap().as_str().to_uppercase() == "D";
         pkg.is_signed = true;
+        if let Some(sig) = caps.get(4) {
+            let sig_name = sig.as_str().to_string();
+            pkg.signature = Some(sig_name.clone());
+            if pkg.client.is_none() {
+                pkg.client = extract_client_from_signature_name(&sig_name, settings);
+            }
+        }
         pkg.jfrog_path = Some(if pkg.is_dev { "packages/dev/pax/s920/" } else { "packages/pax/s920/" }.to_string());
         return pkg;
     }

@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.7.0 (Tauri Edition)
+# SmartPosTEF Package Manager v3.7.2 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -30,6 +30,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 |---------|-------------|
 | **SPF Import** | Drag-and-drop or file picker to import `.spf` files with automatic parsing |
 | **Edit Release** | Modify version, date, type, release notes, and packages of existing releases |
+| **Upload Parity** | Edit Release uploads use the same package processing pipeline as New Release, including special handling (online companions extraction, S920 extract-root flow, and APK zip rules) |
 | **Package Accordions** | Platform-grouped collapsible sections with tabbed views, device lists, and card grids |
 | **Delete from JFrog** | Remove individual packages from JFrog Artifactory directly from the UI |
 | **Add Packages** | Add new packages to an imported release with automatic metadata detection |
@@ -41,13 +42,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 | **Pwd Gen** (Releases Portal Pass Generator) | Generates 6-char hex passwords using Algorithm v3.1 (hash-based mixing) |
 | **ASCII to Hex** | General converter between Text (ASCII/ANSI), Hexadecimal, Base64, and Decimal |
 
-**Advanced Options** provides configuration management:
-
-| Feature | Description |
-|---------|-------------|
-| **Custom Devices** | Create, view, and delete custom device platforms for use in releases |
-
-**Additional Features** include releases management (view, manage, search, purge, and delete saved releases), release descriptions (optional subtitle for each release), HTML generation for landing pages, comprehensive settings management, data export/import (v2 with SPF portability) for backup and migration, and an 8-theme system (4 dark + 4 light themes with glassmorphism UI).
+**Additional Features** include releases management (view, manage, search, purge, and delete saved releases), release descriptions (optional subtitle for each release), HTML generation for landing pages, comprehensive settings management (including custom device platforms), data export/import (v2 with SPF portability) for backup and migration, and an 8-theme system (4 dark + 4 light themes with glassmorphism UI).
 
 ### Package Detection
 
@@ -61,6 +56,7 @@ The application automatically detects and categorizes packages based on file nam
 | Linux 64-bit | amd64, x86_64 | AditumTEFLib-P-amd64-2.5.1.289844-1.zip |
 | Linux 32-bit | i386 | AditumTEF-installer-P-2.5.1.289844-i386-offline |
 | S920 Embedded (new format) | P-S920, D-S920 | SmartPosTef-P-S920-2.5.1.138693.zip |
+| S920 Embedded signed (client) | P-S920, D-S920 + signer | SmartPosTef-P-S920-2.5.1.138693-Martins_sign.zip |
 | S920 Embedded (legacy) | P, D | SmartPosTef-P-2.5.1.138693.zip |
 | A2A SDK Integration | A2A | AditumSdkIntegration-A2A-D-2.4.4+8e450cfb1-release.aar |
 | A2A Device APK | A2A | SmartPosTef-A2A-D-L3-2.4.4+8e450cfb1-release_sign.apk |
@@ -97,6 +93,8 @@ For unsigned production S920 packages, the extraction logic handles both cases:
 - ZIP with files at root (e.g., `AditumApps.aup`) → extracts `AditumApps.aup` to folder root
 
 Signed S920 packages (`_sign.zip`) or development are uploaded directly without extraction.
+
+S920 signed packages also support client-signing suffixes (for example Martins, Entrepay, TecToy) before `_sign`, such as `SmartPosTef-P-S920-2.5.1.138693-Martins_sign.zip`. These signer names are detected and shown in Release Summary as signature/client badges together with the signed icon.
 
 ### Client Mapping
 
