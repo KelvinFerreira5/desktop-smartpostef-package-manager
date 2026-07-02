@@ -6941,6 +6941,15 @@ function initCustomSelects(container) {
       optionsContainer.appendChild(optEl);
     });
 
+    function syncCustomSelectUi() {
+      trigger.textContent = sel.options[sel.selectedIndex]?.text || '';
+      optionsContainer.querySelectorAll('.custom-select-option').forEach(optEl => {
+        optEl.classList.toggle('selected', optEl.dataset.value === sel.value);
+      });
+    }
+
+    sel.addEventListener('change', syncCustomSelectUi);
+
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       // Close all other open selects
@@ -6953,6 +6962,8 @@ function initCustomSelects(container) {
     sel.parentNode.insertBefore(wrapper, sel.nextSibling);
     wrapper.appendChild(trigger);
     wrapper.appendChild(optionsContainer);
+
+    syncCustomSelectUi();
   });
 }
 
@@ -6965,48 +6976,46 @@ function restoreBuildDefaults(type) {
   const page = document.getElementById(`page-build-${type}`);
   if (!page) return;
 
-  // Uncheck all checkboxes first
-  page.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.disabled = false; });
-
-  // Reset all selects to first option
-  page.querySelectorAll('select').forEach(sel => { sel.selectedIndex = 0; });
-
-  // STA defaults
-  if (type === 'sta') {
-    const defaults = ['sta-use-authorizer', 'sta-linux-ci-03', 'sta-platforms-all', 'sta-build-smartpostef', 'sta-enabled-log-capture'];
-    defaults.forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
-    // Stages: Linux_Builds and Post_Builds checked
-    const stagesOpts = document.getElementById('sta-stages-options');
-    if (stagesOpts) {
-      stagesOpts.querySelectorAll('.sta-stage-checkbox').forEach(cb => {
-        cb.checked = (cb.value === 'Linux_Builds' || cb.value === 'Post_Builds');
-      });
+  // Reset all inputs to their HTML defaults to keep one true source of state.
+  page.querySelectorAll('input, select, textarea').forEach(el => {
+    if ('disabled' in el) {
+      el.disabled = false;
     }
-  }
 
-  // A2A defaults
-  if (type === 'a2a') {
-    const defaults = ['a2a-use-authorizer', 'a2a-linux-ci-03', 'a2a-linux-ci-04', 'a2a-platforms-all', 'a2a-stages-all'];
-    defaults.forEach(id => { const el = document.getElementById(id); if (el) el.checked = true; });
-    // Stages: Linux_Builds and Post_Builds checked
-    const stagesOpts = document.getElementById('a2a-stages-options');
-    if (stagesOpts) {
-      stagesOpts.querySelectorAll('.a2a-stage-checkbox').forEach(cb => {
-        cb.checked = true;
-        cb.disabled = true; // "Run all stages" is checked
-      });
+    if (el.tagName === 'INPUT') {
+      const inputType = (el.type || '').toLowerCase();
+      if (inputType === 'checkbox' || inputType === 'radio') {
+        el.checked = el.defaultChecked;
+      } else if (inputType !== 'file') {
+        el.value = el.defaultValue || '';
+      }
+      return;
     }
-  }
+
+    if (el.tagName === 'SELECT') {
+      let defaultIndex = 0;
+      for (let i = 0; i < el.options.length; i++) {
+        if (el.options[i].defaultSelected) {
+          defaultIndex = i;
+          break;
+        }
+      }
+      el.selectedIndex = defaultIndex;
+      return;
+    }
+
+    if (el.tagName === 'TEXTAREA') {
+      el.value = el.defaultValue || '';
+    }
+  });
 
   // Clear custom variables
   const varList = document.getElementById(`${type}-variables-list`);
   if (varList) varList.innerHTML = '';
 
-  // Update custom selects visuals
-  page.querySelectorAll('.custom-select').forEach(cs => {
-    const sel = cs.querySelector('select');
-    const display = cs.querySelector('.custom-select-display');
-    if (sel && display) display.textContent = sel.options[sel.selectedIndex]?.text || '';
+  // Re-apply all dependent rules and custom-select visuals.
+  page.querySelectorAll('select, input[type="checkbox"], input[type="radio"]').forEach(el => {
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   });
 
   showToast('info', 'Options restored to defaults');
@@ -7249,6 +7258,14 @@ function collectA2aParameters() {
 
 async function runBuild(type) {
   if (!invoke) return;
+  const page = document.getElementById(`page-build-${type}`);
+  if (page) {
+    // Ensure custom UI wrappers and native controls are consistent before collect.
+    page.querySelectorAll('select').forEach(sel => {
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
   const branchInput = document.getElementById(`${type}-branch-input`);
   const branch = branchInput?.value?.trim();
   if (!branch) {
@@ -7256,9 +7273,15 @@ async function runBuild(type) {
     return;
   }
 
-  const parameters = type === 'sta' ? collectStaParameters() : collectA2aParameters();
-  const stagesToSkip = collectStagesToSkip(type);
-  const variables = collectVariables(type);
+  const buildSnapshot = {
+    parameters: type === 'sta' ? collectStaParameters() : collectA2aParameters(),
+    stagesToSkip: collectStagesToSkip(type),
+    variables: collectVariables(type)
+  };
+
+  const parameters = buildSnapshot.parameters;
+  const stagesToSkip = buildSnapshot.stagesToSkip;
+  const variables = buildSnapshot.variables;
   const config = getPipelineConfig(type);
   const runBtn = document.getElementById(`${type}-run-build`);
   if (runBtn) runBtn.disabled = true;

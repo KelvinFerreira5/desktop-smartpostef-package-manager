@@ -5,6 +5,22 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.3] - 2026-07-02
+
+### Changed
+
+- **`restoreBuildDefaults()` rewritten to HTML-native defaults**: Replaced hardcoded STA/A2A checkbox and select lists with a generic loop that resets every `input`, `select`, and `textarea` to its own `defaultChecked`/`defaultValue` HTML attribute. After resetting, dispatches a `change` event on every control so dependent visibility rules and custom-select visuals re-apply automatically. This makes the function self-maintaining — no manual sync needed when new fields are added to either build page.
+
+- **`initCustomSelects()` reactive sync**: Added a `syncCustomSelectUi()` helper inside the custom-select initializer that updates the trigger label and option highlights to match the underlying `<select>` value. The helper is called both at initialisation time (so the display is correct on first render) and on every native `change` event fired on the `<select>`, keeping the custom dropdown in sync when the value is changed programmatically (e.g., by `restoreBuildDefaults` or `setupA2aPlatformsRules`).
+
+- **`runBuild()` pre-collect sync**: Before collecting parameters, `runBuild()` now dispatches a `change` event on every `<select>` inside the active build page to guarantee custom-select wrapper labels and option highlights are consistent with the underlying control state at the moment the build is triggered.
+
+- **DESIGN-SYSTEM.md rewritten to agent-ready format**: Replaced the narrative design-philosophy document with a concise, structured reference (sections: Purpose, Source of Truth, Visual Philosophy, Theme System). The new format is optimised for LLM consumption and codebase agents.
+
+### Fixed
+
+- **Custom select display out of sync after restore/programmatic change**: The custom dropdown trigger label and selected-option highlight were not updated when the underlying `<select>` value changed via JavaScript. The new `syncCustomSelectUi` listener ensures both the visual wrapper and the native control always reflect the same value.
+
 ## [3.7.2] - 2026-06-08
 
 ### Changed
