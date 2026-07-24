@@ -5300,6 +5300,33 @@ select::-webkit-scrollbar-thumb {
   letter-spacing: 0.05em;
 }
 
+.build-section-subtitle {
+  margin: -0.5rem 0 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.build-subsection {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.build-subsection h5 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.build-subsection .build-param-field input[type="text"] {
+  max-width: 300px;
+}
+
 .build-checkboxes {
   display: flex;
   flex-wrap: wrap;
@@ -5449,9 +5476,88 @@ select::-webkit-scrollbar-thumb {
 
 .build-devices-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 0.5rem;
   margin-top: 0.75rem;
+}
+
+.build-device-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm, 4px);
+}
+
+/* Device chip toggle */
+.device-chip {
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.device-chip input {
+  display: none;
+}
+
+.device-chip span {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.device-chip input:checked+span {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb, 45, 212, 191), 0.3);
+}
+
+.device-chip span:hover {
+  border-color: var(--primary);
+}
+
+/* Device inline select */
+.device-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-select select {
+  width: 100%;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-primary);
+}
+
+.build-device-group {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.build-device-group .build-param-field[data-param-type="select"] {
+  margin-left: 1.75rem;
+}
+
+.build-device-group .build-param-field[data-param-type="select"] label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .build-device-row {
@@ -6092,6 +6198,9 @@ select[data-customized] {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  border-top-color: var(--border-color);
+  border-left-color: var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .build-stages-card h3,
@@ -6185,4 +6294,170 @@ select[data-customized] {
 
 .build-android-section[style*="display: none"] {
   display: none;
+}
+
+/* ========== Dynamic Build Form (YAML-Driven) ========== */
+
+.build-pipeline-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+#page-build>.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.build-pipeline-selector label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.build-pipeline-selector select {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.build-params-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.build-param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.build-param-field label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.build-param-field input[type="text"],
+.build-param-field input[type="number"],
+.build-param-field select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input, var(--bg));
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.build-param-field .toggle-label {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+/* YAML sync status */
+.build-yaml-sync-status {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.sync-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary);
+}
+
+.sync-success {
+  color: var(--success, #22c55e);
+}
+
+.sync-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--warning, #f59e0b);
+}
+
+.sync-hint {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* YAML warning banner */
+.build-yaml-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--warning, #f59e0b) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 30%, transparent);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.build-yaml-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  stroke: var(--warning, #f59e0b);
+}
+
+/* Build param list (modal) */
+.build-param-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.build-param-list .build-param-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.build-param-list .build-param-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.build-param-list .build-param-value {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Sync YAML button styling */
+#build-sync-yaml {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
 }

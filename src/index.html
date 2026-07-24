@@ -37,45 +37,13 @@
           <span>Welcome</span>
         </a>
         <!-- Build Nav Group (Expandable) -->
-        <div class="nav-group" id="nav-group-build">
-          <a href="#" class="nav-group-header" id="nav-build-toggle">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            <span>Build</span>
-            <svg class="nav-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-              width="14" height="14">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </a>
-          <div class="nav-group-children">
-            <a href="#" class="nav-item nav-child" data-page="build-sta">
-              <svg class="nav-icon-sm" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                <rect x="5" y="1" width="17" height="19" rx="2" />
-                <rect x="7" y="3" width="13" height="5" rx="1" />
-                <circle cx="9" cy="13" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="12" cy="13" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="13" r="0.7" fill="currentColor" stroke="none" />
-                <circle cx="18" cy="13" r="0.7" fill="currentColor" stroke="none" />
-                <rect x="8.5" y="23" width="10" height="10" rx="1" />
-                <line x1="12" y1="22" x2="12" y2="29" stroke-width="1" />
-              </svg>
-              <span>STA</span>
-            </a>
-            <a href="#" class="nav-item nav-child" data-page="build-a2a">
-              <svg class="nav-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                stroke-linecap="round" stroke-linejoin="round" width="7" height="7">
-                <rect x="2" y="2" width="8" height="8" rx="2" />
-                <rect x="14" y="14" width="8" height="8" rx="2" />
-                <rect x="2" y="14" width="8" height="8" rx="2" />
-                <rect x="14.5" y="2.5" width="7" height="7" rx="2" transform="rotate(45 18 6)" />
-              </svg>
-              <span>A2A</span>
-            </a>
-          </div>
-        </div>
+        <a href="#" class="nav-item" data-page="build">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>Build</span>
+        </a>
 
         <!-- Deploy Nav Group (Expandable) -->
         <div class="nav-group" id="nav-group-deploy">
@@ -1342,11 +1310,10 @@
         </div>
       </div>
 
-      <!-- STA Build Page -->
-      <div id="page-build-sta" class="page">
+      <!-- Unified Build Page -->
+      <div id="page-build" class="page">
         <div class="page-header">
-          <h2>STA Build</h2>
-          <p>Run STA pipeline builds via Azure DevOps</p>
+          <h2>Build</h2>
         </div>
         <div class="build-page-content">
           <!-- Branch Selection -->
@@ -1354,247 +1321,37 @@
             <h3>Branch</h3>
             <div class="form-group">
               <div class="branch-autocomplete">
-                <input type="text" id="sta-branch-input" placeholder="Search or select a branch..." autocomplete="off">
-                <button type="button" class="btn btn-sm btn-outline" id="sta-refresh-branches" title="Refresh branches">
+                <input type="text" id="build-branch-input" placeholder="Search or select a branch..."
+                  autocomplete="off">
+                <button type="button" class="btn btn-sm btn-outline" id="build-refresh-branches"
+                  title="Refresh branches">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                     <polyline points="23 4 23 10 17 10" />
                     <polyline points="1 20 1 14 7 14" />
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                   </svg>
                 </button>
-                <div class="branch-dropdown" id="sta-branch-dropdown"></div>
+                <button type="button" class="btn btn-sm btn-outline" id="build-sync-yaml"
+                  title="Sync parameters from pipeline YAML">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                  Sync YAML
+                </button>
+                <div class="branch-dropdown" id="build-branch-dropdown"></div>
               </div>
+              <div class="build-yaml-sync-status" id="build-yaml-sync-status" style="display:none;"></div>
             </div>
           </div>
 
-          <!-- Parameters -->
+          <!-- Parameters (dynamically filled from YAML) -->
           <div class="card build-params-card">
             <h3>Parameters</h3>
-
-            <!-- Basic -->
-            <div class="build-section">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="sta-customer">Customer</label>
-                  <select id="sta-customer">
-                    <option value="Aditum" selected>Aditum</option>
-                    <option value="PlugRede">PlugRede</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="sta-environment">Environment</label>
-                  <select id="sta-environment">
-                    <option value="DEFAULT" selected>DEFAULT</option>
-                    <option value="development">development</option>
-                    <option value="production">production</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="toggle-label">
-                    <input type="checkbox" id="sta-enabled-ssf"> ENABLED_SSF
-                  </label>
-                </div>
-                <div class="form-group">
-                  <label class="toggle-label">
-                    <input type="checkbox" id="sta-use-authorizer" checked> USE_AUTHORIZER
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Linux CI Instances -->
-            <div class="build-section">
-              <h4>Linux CI Instances</h4>
-              <div class="form-grid">
-                <label class="toggle-label"><input type="checkbox" id="sta-linux-ci-03" checked>
-                  aditum-tefpos-linux-ci-03</label>
-                <label class="toggle-label"><input type="checkbox" id="sta-linux-ci-04">
-                  aditum-tefpos-linux-ci-04</label>
-              </div>
-            </div>
-
-            <!-- Platforms -->
-            <div class="build-section">
-              <h4>Platforms</h4>
-              <div class="platform-chips">
-                <label class="platform-chip"><input type="checkbox" id="sta-platforms-all"
-                    checked><span>All</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-android"><span>Android</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-android-tefsdk"><span>AndroidTefSdk</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-linux64"><span>Linux_64</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-linux32"><span>Linux_32</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-win-cross"><span>Windows_x86_crosscompiler</span></label>
-                <label class="platform-chip"><input type="checkbox" id="sta-platforms-pax"><span>PAX_S920</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="sta-platforms-win"><span>Windows_x86</span></label>
-              </div>
-            </div>
-
-            <!-- Android Devices -->
-            <div class="build-section build-android-section" id="sta-android-section">
-              <h4>Android Devices</h4>
-              <label class="toggle-label"><input type="checkbox" id="sta-androids-all"> Build all android
-                devices</label>
-              <div class="build-options-grid" id="sta-devices-grid">
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Pax</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-a910"> A910</label><select id="sta-intent-a910">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Gertec</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-gpos700"> GPOS700</label><select id="sta-intent-gpos700">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-gpos720"> GPOS720</label><select id="sta-intent-gpos720">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-gpos760"> GPOS760</label><select id="sta-intent-gpos760">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Sunmi</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox" id="sta-android-p2">
-                      P2</label><select id="sta-intent-p2">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-p2-lite-se"> P2_LITE_SE</label><select id="sta-intent-p2-lite-se">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-p2mini"> P2MINI</label><select id="sta-intent-p2mini">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Verifone</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-x990-pro"> X990_PRO</label><select id="sta-intent-x990-pro">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-x990-ux"> X990_UX</label><select id="sta-intent-x990-ux">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Positivo</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox" id="sta-android-l3">
-                      L3</label><select id="sta-intent-l3">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-l3-2024"> L3_2024</label><select id="sta-intent-l3-2024">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-l400"> L400</label><select id="sta-intent-l400">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Ingenico</span>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-dx8000"> DX8000</label><select id="sta-intent-dx8000">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-dx4000"> DX4000</label><select id="sta-intent-dx4000">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                  <div class="build-device-row"><label class="toggle-label"><input type="checkbox"
-                        id="sta-android-ex4000"> EX4000</label><select id="sta-intent-ex4000">
-                      <option value="Launcher" selected>Launcher</option>
-                      <option value="App">App</option>
-                      <option value="Both">Both</option>
-                    </select></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Build Options -->
-            <div class="build-section">
-              <h4>Build Options</h4>
-              <div class="build-options-grid">
-                <div class="build-options-group">
-                  <span class="build-options-group-label">TEF Builds</span>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-smartpostef" checked>
-                    BUILD_SMARTPOSTEF</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-tef-api-service">
-                    BUILD_TEF_API_SERVICE</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-tef-library">
-                    BUILD_TEF_LIBRARY</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Tools & Viewers</span>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-internal-apps">
-                    BUILD_INTERNAL_APPS</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-intpos-client">
-                    BUILD_INTPOS_CLIENT</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-db-viewer"> BUILD_DB_VIEWER</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-log-viewer"> BUILD_LOG_VIEWER</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-package-manager">
-                    BUILD_PACKAGE_MANAGER</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Libraries & Services</span>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-body-viewer">
-                    BUILD_BODY_VIEWER</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-build-cryptfile"> BUILD_CRYPTFILE</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Flags & Features</span>
-                  <label class="toggle-label"><input type="checkbox" id="sta-enable-debug-log"> ENABLE_DEBUG_LOG</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-enabled-log-encrypt">
-                    ENABLED_LOG_ENCRYPT</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-enabled-log-capture" checked>
-                    ENABLED_LOG_CAPTURE</label>
-                  <label class="toggle-label"><input type="checkbox" id="sta-enabled-http-proxy">
-                    ENABLED_HTTP_PROXY</label>
-                </div>
-              </div>
+            <div id="build-params-container" class="build-params-container">
+              <p class="empty-state">Select a branch to load pipeline parameters</p>
             </div>
           </div>
 
@@ -1602,34 +1359,29 @@
           <div class="build-stages-variables-row">
             <div class="card build-variables-card">
               <h3>Variables</h3>
-              <label class="toggle-label"><input type="checkbox" id="sta-var-debug"> system.debug</label>
-              <div class="build-variables-list" id="sta-variables-list"></div>
-              <button class="btn btn-sm btn-outline" id="sta-add-variable" type="button">+ Add variable</button>
+              <label class="toggle-label"><input type="checkbox" id="build-var-debug"> system.debug</label>
+              <div class="build-variables-list" id="build-variables-list"></div>
+              <button class="btn btn-sm btn-outline" id="build-add-variable" type="button">+ Add variable</button>
             </div>
 
             <div class="card build-stages-card">
               <h3>Stages to Run</h3>
-              <label class="toggle-label"><input type="checkbox" id="sta-stages-all"> Run all stages</label>
-              <div class="build-stages-options" id="sta-stages-options">
-                <label class="toggle-label"><input type="checkbox" class="sta-stage-checkbox" value="Linux_Builds"
-                    checked> Linux_Builds</label>
-                <label class="toggle-label"><input type="checkbox" class="sta-stage-checkbox" value="Windows_Builds">
-                  Windows_Builds</label>
-                <label class="toggle-label"><input type="checkbox" class="sta-stage-checkbox" value="Post_Builds"
-                    checked> Post_Builds</label>
+              <label class="toggle-label"><input type="checkbox" id="build-stages-all"> Run all stages</label>
+              <div class="build-stages-options" id="build-stages-options">
+                <p class="empty-state" id="build-stages-empty">Select a branch to load stages</p>
               </div>
             </div>
           </div>
 
           <!-- Run Button -->
           <div class="build-actions">
-            <button class="btn btn-primary btn-lg" id="sta-run-build">
+            <button class="btn btn-primary btn-lg" id="build-run-build">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
               Run Build
             </button>
-            <button class="btn btn-outline btn-sm build-restore-btn" id="sta-restore-defaults"
+            <button class="btn btn-outline btn-sm build-restore-btn" id="build-restore-defaults"
               title="Restore to Default">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
                 <polyline points="1 4 1 10 7 10" />
@@ -1640,15 +1392,15 @@
           </div>
 
           <!-- Build Status -->
-          <div class="card build-status-card" id="sta-build-status" style="display:none;">
+          <div class="card build-status-card" id="build-build-status" style="display:none;">
             <h3>Current Build</h3>
             <div class="build-status-content">
-              <div class="build-status-indicator" id="sta-status-indicator"></div>
+              <div class="build-status-indicator" id="build-status-indicator"></div>
               <div class="build-status-info">
-                <span class="build-status-text" id="sta-status-text">-</span>
-                <a href="#" class="build-status-link" id="sta-status-link" target="_blank">View in Azure DevOps</a>
+                <span class="build-status-text" id="build-status-text">-</span>
+                <a href="#" class="build-status-link" id="build-status-link" target="_blank">View in Azure DevOps</a>
               </div>
-              <button class="btn build-cancel-btn" id="sta-cancel-build" style="display:none;" title="Cancel Build">
+              <button class="btn build-cancel-btn" id="build-cancel-build" style="display:none;" title="Cancel Build">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
@@ -1658,13 +1410,14 @@
             </div>
             <div class="build-status-details">
               <div class="build-status-meta">
-                <span class="build-status-meta-item" title="Build ID">#<span id="sta-build-id">-</span></span>
-                <span class="build-status-meta-item" title="Build Number">⌗ <span id="sta-build-number">-</span></span>
+                <span class="build-status-meta-item" title="Build ID">#<span id="build-build-id">-</span></span>
+                <span class="build-status-meta-item" title="Build Number">⌗ <span
+                    id="build-build-number">-</span></span>
                 <span class="build-status-meta-item" title="Start Time">⏱ <span
-                    id="sta-build-start-time">-</span></span>
-                <span class="build-status-meta-item" title="Branch">⎇ <span id="sta-build-branch">-</span></span>
+                    id="build-build-start-time">-</span></span>
+                <span class="build-status-meta-item" title="Branch">⎇ <span id="build-build-branch">-</span></span>
               </div>
-              <button class="btn btn-sm build-params-btn" id="sta-build-params-btn" style="display:none;">View
+              <button class="btn btn-sm build-params-btn" id="build-build-params-btn" style="display:none;">View
                 Parameters</button>
             </div>
           </div>
@@ -1672,220 +1425,7 @@
           <!-- Recent Builds -->
           <div class="card build-history-card">
             <h3>Recent Builds</h3>
-            <div id="sta-recent-builds" class="build-history-list">
-              <p class="empty-state">No recent builds</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- A2A Build Page -->
-      <div id="page-build-a2a" class="page">
-        <div class="page-header">
-          <h2>A2A Build</h2>
-          <p>Run A2A pipeline builds via Azure DevOps</p>
-        </div>
-        <div class="build-page-content">
-          <!-- Branch Selection -->
-          <div class="card build-branch-card">
-            <h3>Branch</h3>
-            <div class="form-group">
-              <div class="branch-autocomplete">
-                <input type="text" id="a2a-branch-input" placeholder="Search or select a branch..." autocomplete="off">
-                <button type="button" class="btn btn-sm btn-outline" id="a2a-refresh-branches" title="Refresh branches">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
-                    <polyline points="23 4 23 10 17 10" />
-                    <polyline points="1 20 1 14 7 14" />
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                  </svg>
-                </button>
-                <div class="branch-dropdown" id="a2a-branch-dropdown"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Parameters -->
-          <div class="card build-params-card">
-            <h3>Parameters</h3>
-
-            <!-- Basic -->
-            <div class="build-section">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="a2a-customer">Customer</label>
-                  <select id="a2a-customer">
-                    <option value="Aditum" selected>Aditum</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="a2a-environment">Environment</label>
-                  <select id="a2a-environment">
-                    <option value="DEFAULT" selected>DEFAULT</option>
-                    <option value="development">development</option>
-                    <option value="production">production</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-grid">
-                <div class="form-group">
-                  <label class="toggle-label">
-                    <input type="checkbox" id="a2a-enabled-ssf"> ENABLED_SSF
-                  </label>
-                </div>
-                <div class="form-group">
-                  <label class="toggle-label">
-                    <input type="checkbox" id="a2a-use-authorizer" checked> USE_AUTHORIZER
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Linux CI Instances -->
-            <div class="build-section">
-              <h4>Linux CI Instances</h4>
-              <div class="form-grid">
-                <label class="toggle-label"><input type="checkbox" id="a2a-linux-ci-03" checked>
-                  aditum-tefpos-linux-ci-03</label>
-                <label class="toggle-label"><input type="checkbox" id="a2a-linux-ci-04" checked>
-                  aditum-tefpos-linux-ci-04</label>
-              </div>
-            </div>
-
-            <!-- Platforms -->
-            <div class="build-section">
-              <h4>Platforms</h4>
-              <div class="platform-chips">
-                <label class="platform-chip"><input type="checkbox" id="a2a-platforms-all"
-                    checked><span>All</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="a2a-platforms-android"><span>Android</span></label>
-                <label class="platform-chip"><input type="checkbox"
-                    id="a2a-platforms-tefsdk"><span>TefSdk</span></label>
-              </div>
-              <div class="form-group" id="a2a-tefsdk-options" style="margin-top: 8px;">
-                <label for="a2a-tefsdk-startup">TefSdk Startup Type</label>
-                <select id="a2a-tefsdk-startup" style="max-width: 200px;">
-                  <option value="Auto" selected>Auto</option>
-                  <option value="Manual">Manual</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Android Devices -->
-            <div class="build-section build-android-section" id="a2a-android-section">
-              <h4>Android Devices</h4>
-              <label class="toggle-label"><input type="checkbox" id="a2a-androids-all" checked> Build all android
-                devices</label>
-              <div class="build-options-grid" id="a2a-devices-grid">
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Pax</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-a910"> A910</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Gertec</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos700"> GPOS700</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos720"> GPOS720</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-gpos760"> GPOS760</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Sunmi</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2"> P2</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2-lite-se"> P2_LITE_SE</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-p2mini"> P2MINI</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Verifone</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-pro"> X990_PRO</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-x990-ux"> X990_UX</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Positivo</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l3"> L3</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l3-2024"> L3_2024</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-l400"> L400</label>
-                </div>
-                <div class="build-options-group">
-                  <span class="build-options-group-label">Ingenico</span>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-dx8000"> DX8000</label>
-                  <label class="toggle-label"><input type="checkbox" id="a2a-android-dx4000"> DX4000</label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Variables & Stages Row -->
-          <div class="build-stages-variables-row">
-            <div class="card build-variables-card">
-              <h3>Variables</h3>
-              <label class="toggle-label"><input type="checkbox" id="a2a-var-debug"> system.debug</label>
-              <div class="build-variables-list" id="a2a-variables-list"></div>
-              <button class="btn btn-sm btn-outline" id="a2a-add-variable" type="button">+ Add variable</button>
-            </div>
-
-            <div class="card build-stages-card">
-              <h3>Stages to Run</h3>
-              <label class="toggle-label"><input type="checkbox" id="a2a-stages-all" checked> Run all stages</label>
-              <div class="build-stages-options" id="a2a-stages-options">
-                <label class="toggle-label"><input type="checkbox" class="a2a-stage-checkbox" value="Linux_Builds"
-                    checked> Linux_Builds</label>
-                <label class="toggle-label"><input type="checkbox" class="a2a-stage-checkbox" value="Post_Builds"
-                    checked> Post_Builds</label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Run Button -->
-          <div class="build-actions">
-            <button class="btn btn-primary btn-lg" id="a2a-run-build">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              Run Build
-            </button>
-            <button class="btn btn-outline btn-sm build-restore-btn" id="a2a-restore-defaults"
-              title="Restore to Default">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
-                <polyline points="1 4 1 10 7 10" />
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-              </svg>
-              Restore Defaults
-            </button>
-          </div>
-
-          <!-- Build Status -->
-          <div class="card build-status-card" id="a2a-build-status" style="display:none;">
-            <h3>Current Build</h3>
-            <div class="build-status-content">
-              <div class="build-status-indicator" id="a2a-status-indicator"></div>
-              <div class="build-status-info">
-                <span class="build-status-text" id="a2a-status-text">-</span>
-                <a href="#" class="build-status-link" id="a2a-status-link" target="_blank">View in Azure DevOps</a>
-              </div>
-              <button class="btn build-cancel-btn" id="a2a-cancel-build" style="display:none;" title="Cancel Build">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-                Cancel
-              </button>
-            </div>
-            <div class="build-status-details">
-              <div class="build-status-meta">
-                <span class="build-status-meta-item" title="Build ID">#<span id="a2a-build-id">-</span></span>
-                <span class="build-status-meta-item" title="Build Number">⌗ <span id="a2a-build-number">-</span></span>
-                <span class="build-status-meta-item" title="Start Time">⏱ <span
-                    id="a2a-build-start-time">-</span></span>
-                <span class="build-status-meta-item" title="Branch">⎇ <span id="a2a-build-branch">-</span></span>
-              </div>
-              <button class="btn btn-sm build-params-btn" id="a2a-build-params-btn" style="display:none;">View
-                Parameters</button>
-            </div>
-          </div>
-
-          <!-- Recent Builds -->
-          <div class="card build-history-card">
-            <h3>Recent Builds</h3>
-            <div id="a2a-recent-builds" class="build-history-list">
+            <div id="build-recent-builds" class="build-history-list">
               <p class="empty-state">No recent builds</p>
             </div>
           </div>

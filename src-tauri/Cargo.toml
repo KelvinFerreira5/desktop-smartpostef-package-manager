@@ -1,6 +1,6 @@
 [package]
 name = "smartpostef-package-manager"
-version = "3.7.0"
+version = "3.8.1"
 description = "SmartPosTEF Package Manager - Desktop application for managing and deploying packages to JFrog"
 authors = ["Aditum Pagamentos"]
 license = "MIT"
@@ -29,6 +29,7 @@ walkdir = "2"
 md5 = "0.7"
 aes-gcm = "0.10"
 base64 = "0.21"
+serde_yaml = "0.9"
 
 [features]
 default = ["custom-protocol"]

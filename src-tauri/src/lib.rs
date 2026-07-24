@@ -110,6 +110,38 @@ pub struct CustomDevice {
     pub identifier: String,
 }
 
+// Pipeline YAML definition types
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PipelineStage {
+    pub id: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PipelineParameter {
+    pub name: String,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    #[serde(rename = "type")]
+    pub param_type: String,
+    pub default: Option<serde_json::Value>,
+    pub values: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PipelineVariable {
+    pub name: String,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PipelineDefinition {
+    pub stages: Vec<PipelineStage>,
+    pub parameters: Vec<PipelineParameter>,
+    pub variables: Vec<PipelineVariable>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExportOptions {
     pub releases: bool,
@@ -546,6 +578,36 @@ fn load_releases() -> Vec<Release> {
         }
     }
     Vec::new()
+}
+
+fn yaml_to_json(val: &serde_yaml::Value) -> serde_json::Value {
+    match val {
+        serde_yaml::Value::Null => serde_json::Value::Null,
+        serde_yaml::Value::Bool(b) => serde_json::Value::Bool(*b),
+        serde_yaml::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                serde_json::Value::Number(i.into())
+            } else if let Some(f) = n.as_f64() {
+                serde_json::json!(f)
+            } else {
+                serde_json::Value::String(n.to_string())
+            }
+        }
+        serde_yaml::Value::String(s) => serde_json::Value::String(s.clone()),
+        serde_yaml::Value::Sequence(seq) => {
+            serde_json::Value::Array(seq.iter().map(yaml_to_json).collect())
+        }
+        serde_yaml::Value::Mapping(map) => {
+            let obj: serde_json::Map<String, serde_json::Value> = map.iter()
+                .filter_map(|(k, v)| {
+                    let key = k.as_str()?.to_string();
+                    Some((key, yaml_to_json(v)))
+                })
+                .collect();
+            serde_json::Value::Object(obj)
+        }
+        _ => serde_json::Value::Null,
+    }
 }
 
 fn load_settings() -> Settings {
@@ -5105,6 +5167,137 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
     }
 
     #[tauri::command]
+    pub async fn azure_fetch_pipeline_definition(repository: String, branch: String) -> Result<PipelineDefinition, String> {
+        log_to_file("INFO", "AZURE: Fetching pipeline definition", Some(&format!("Repository: {}, Branch: {}", repository, branch)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured. Please set it in Settings > Azure DevOps.".to_string());
+        }
+
+        let repo_name = if repository.is_empty() { settings.azure_devops.project.clone() } else { repository };
+        let url = format!(
+            "{}/{}/_apis/git/repositories/{}/items?path=.vsts/azure_pipelines/azure-pipelines-build.yml&versionDescriptor.version={}&versionDescriptor.versionType=branch&api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            repo_name,
+            branch
+        );
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .header("Accept", "text/plain")
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to fetch pipeline YAML", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Pipeline YAML fetch returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let yaml_text = resp.text().await.map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to read pipeline YAML body", Some(&e.to_string()));
+            format!("Failed to read response body: {}", e)
+        })?;
+
+        let yaml: serde_yaml::Value = serde_yaml::from_str(&yaml_text).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to parse pipeline YAML", Some(&e.to_string()));
+            format!("Failed to parse YAML: {}", e)
+        })?;
+
+        // Extract stages
+        let stages = yaml.get("stages")
+            .and_then(|s| s.as_sequence())
+            .map(|arr| {
+                arr.iter().filter_map(|item| {
+                    let id = item.get("stage")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if id.is_empty() { return None; }
+                    let display_name = item.get("displayName")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&id)
+                        .to_string();
+                    Some(PipelineStage { id, display_name })
+                }).collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        // Extract parameters
+        let parameters = yaml.get("parameters")
+            .and_then(|p| p.as_sequence())
+            .map(|arr| {
+                arr.iter().filter_map(|item| {
+                    let name = item.get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if name.is_empty() { return None; }
+                    let display_name = item.get("displayName")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let param_type = item.get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("string")
+                        .to_string();
+                    let default = item.get("default").map(|v| yaml_to_json(v));
+                    let values = item.get("values")
+                        .and_then(|v| v.as_sequence())
+                        .map(|vals| vals.iter().map(|v| yaml_to_json(v)).collect());
+                    Some(PipelineParameter { name, display_name, param_type, default, values })
+                }).collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        // Extract variables
+        let variables = yaml.get("variables")
+            .and_then(|v| {
+                // Variables can be a mapping or a sequence
+                if let Some(map) = v.as_mapping() {
+                    Some(map.iter().filter_map(|(k, v)| {
+                        let name = k.as_str()?.to_string();
+                        let value = v.as_str().map(|s| s.to_string());
+                        Some(PipelineVariable { name, value })
+                    }).collect::<Vec<_>>())
+                } else if let Some(seq) = v.as_sequence() {
+                    Some(seq.iter().filter_map(|item| {
+                        let name = item.get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if name.is_empty() { return None; }
+                        let value = item.get("value")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        Some(PipelineVariable { name, value })
+                    }).collect::<Vec<_>>())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
+        log_to_file("INFO", "AZURE: Pipeline definition parsed", Some(&format!(
+            "Stages: {}, Parameters: {}, Variables: {}",
+            stages.len(), parameters.len(), variables.len()
+        )));
+
+        Ok(PipelineDefinition { stages, parameters, variables })
+    }
+
+    #[tauri::command]
     pub async fn azure_run_pipeline(branch: String, parameters: HashMap<String, String>, stages_to_skip: Vec<String>, variables: HashMap<String, String>, pipeline_id: u32) -> Result<serde_json::Value, String> {
         log_to_file("INFO", "AZURE: Running pipeline", Some(&format!("Pipeline: {}, Branch: {}, Parameters: {:?}, StagesToSkip: {:?}", pipeline_id, branch, parameters.keys().collect::<Vec<_>>(), stages_to_skip)));
         let settings = load_settings();
@@ -5380,6 +5573,7 @@ pub fn run() {
             commands::save_release_with_spf,
             commands::load_release_from_spf,
             commands::azure_fetch_branches,
+            commands::azure_fetch_pipeline_definition,
             commands::azure_run_pipeline,
             commands::azure_get_build_status,
             commands::azure_get_recent_builds,

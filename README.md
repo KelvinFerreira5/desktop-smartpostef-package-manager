@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.7.2 (Tauri Edition)
+# SmartPosTEF Package Manager v3.8.0 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -41,6 +41,18 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 |------|-------------|
 | **Pwd Gen** (Releases Portal Pass Generator) | Generates 6-char hex passwords using Algorithm v3.1 (hash-based mixing) |
 | **ASCII to Hex** | General converter between Text (ASCII/ANSI), Hexadecimal, Base64, and Decimal |
+
+**Build (Azure DevOps)** provides a unified, YAML-driven interface for running pipeline builds:
+
+| Feature | Description |
+|---------|-------------|
+| **Unified Build Page** | Single page for both STA and A2A pipelines, auto-detected from branch name |
+| **Dynamic Parameters** | Parameters, stages, and variables loaded from the pipeline YAML of the selected branch |
+| **Sync YAML** | Manual re-fetch of pipeline definition with loading feedback |
+| **Section Grouping** | Parameters grouped into semantic sections (General, Platforms, Devices, Build Options, Features) |
+| **Device Cards** | Android devices rendered as chip toggles with inline intent category selects |
+| **Interaction Rules** | Mutual exclusion and parent-child checkbox rules applied dynamically |
+| **View Parameters** | Modal showing active build parameters grouped with chips, tags, and device lists |
 
 **Additional Features** include releases management (view, manage, search, purge, and delete saved releases), release descriptions (optional subtitle for each release), HTML generation for landing pages, comprehensive settings management (including custom device platforms), data export/import (v2 with SPF portability) for backup and migration, and an 8-theme system (4 dark + 4 light themes with glassmorphism UI).
 

@@ -704,18 +704,11 @@ function switchPage(pageName) {
   frontendLog('INFO', 'NAVIGATION: Page switched', `Page: ${pageName}`);
 
   // Map deploy sub-pages to shared page
-  const pageId = (pageName === 'deploy-new' || pageName === 'deploy-upload') ? 'deploy' : pageName;
+  const pageId = (pageName === 'deploy-new' || pageName === 'deploy-upload') ? 'deploy'
+    : pageName;
 
   navItems.forEach(item => item.classList.toggle('active', item.dataset.page === pageName));
   pages.forEach(page => page.classList.toggle('active', page.id === `page-${pageId}`));
-
-  // Auto-expand build nav group when navigating to a build page
-  const buildGroup = document.getElementById('nav-group-build');
-  if (buildGroup) {
-    if (pageName === 'build-sta' || pageName === 'build-a2a') {
-      buildGroup.classList.add('expanded');
-    }
-  }
 
   // Auto-expand tools nav group when navigating to a tools page
   const toolsGroup = document.getElementById('nav-group-tools');
@@ -744,8 +737,7 @@ function switchPage(pageName) {
     if (window._renderThemeGrid) window._renderThemeGrid();
     initAdvancedOptionsPage();
   }
-  if (pageName === 'build-sta') initBuildStaPage();
-  if (pageName === 'build-a2a') initBuildA2aPage();
+  if (pageName === 'build') initBuildPage();
 }
 
 // ============================================================
@@ -6694,13 +6686,16 @@ function copyPkgUrl(btn, url) {
   });
 }
 
-// ========== Azure DevOps Build Pages ==========
+// ========== Azure DevOps Build Pages (Unified, YAML-Driven) ==========
 
-let _buildStaInitialized = false;
-let _buildA2aInitialized = false;
-let _staPollInterval = null;
-let _a2aPollInterval = null;
+let _activePipeline = 'sta';
+let _buildInitialized = false;
+let _buildPollInterval = null;
+let _buildPollTimeout = null;
 let _cachedBranches = {};
+let _cachedPipelineDefs = {};
+let _lastSyncedBranch = '';
+let _buildParamsCache = {}; // Global cache: runId → params (survives loadRecentBuilds re-calls)
 
 async function fetchBranches(repository, forceRefresh = false) {
   if (_cachedBranches[repository] && !forceRefresh) return _cachedBranches[repository];
@@ -6715,30 +6710,485 @@ async function fetchBranches(repository, forceRefresh = false) {
   }
 }
 
-function getPipelineConfig(type) {
-  return type === 'sta'
-    ? { pipelineId: settings.azureDevops?.staPipelineId || 5, repository: settings.azureDevops?.staRepository || 'aditum-postef' }
-    : { pipelineId: settings.azureDevops?.a2aPipelineId || 0, repository: settings.azureDevops?.a2aRepository || 'aditum-postef' };
+function _detectPipelineType(branch) {
+  if (!branch) return 'sta';
+  const b = branch.toLowerCase();
+  if (b.includes('a2a') || b.includes('app-to-app') || b.includes('app2app') || b.includes('apptoapp')) return 'a2a';
+  return 'sta';
 }
 
-function setupBranchAutocomplete(inputId, dropdownId, refreshBtnId, type) {
-  const input = document.getElementById(inputId);
-  const dropdown = document.getElementById(dropdownId);
-  const refreshBtn = document.getElementById(refreshBtnId);
-  if (!input || !dropdown) return;
+function getPipelineConfig(type) {
+  return type === 'a2a'
+    ? { pipelineId: settings.azureDevops?.a2aPipelineId || 0, repository: settings.azureDevops?.a2aRepository || 'aditum-postef' }
+    : { pipelineId: settings.azureDevops?.staPipelineId || 5, repository: settings.azureDevops?.staRepository || 'aditum-postef' };
+}
 
-  const config = getPipelineConfig(type);
-  let branches = [];
+// --- Pipeline YAML fetch & render ---
 
-  async function loadBranches(force = false) {
-    branches = await fetchBranches(config.repository, force);
-    renderDropdown(input.value);
+async function fetchPipelineDefinition(repository, branch, forceRefresh = false) {
+  const key = `${repository}:${branch}`;
+  if (_cachedPipelineDefs[key] && !forceRefresh) return _cachedPipelineDefs[key];
+  if (!invoke) throw new Error('Tauri not loaded');
+  const def = await invoke('azure_fetch_pipeline_definition', { repository, branch });
+  _cachedPipelineDefs[key] = def;
+  return def;
+}
+
+function _isSeparatorParam(p) {
+  const def = p.default != null ? String(p.default).trim() : '';
+  return /^-{2,}\s*.*\s*-{2,}$/.test(def);
+}
+
+function _isMainSeparator(p) {
+  const def = p.default != null ? String(p.default).trim() : '';
+  return /^-{4,}/.test(def);
+}
+
+function _isDescriptionParam(p) {
+  const type = (p.type || p.param_type || 'string').toLowerCase();
+  if (type !== 'string') return false;
+  if (p.values && p.values.length > 0) return false;
+  const def = p.default != null ? String(p.default).trim() : '';
+  return def.length > 20 && /\s/.test(def) && !_isSeparatorParam(p);
+}
+
+function _extractSectionName(p) {
+  const def = p.default != null ? String(p.default).trim() : '';
+  return def.replace(/^-+\s*/, '').replace(/\s*-+$/, '').trim();
+}
+
+function _renderParamField(p) {
+  const label = p.displayName || p.display_name || p.name;
+  const name = p.name;
+  const type = (p.type || p.param_type || 'string').toLowerCase();
+  const defaultVal = p.default;
+
+  if (type === 'boolean') {
+    const checked = defaultVal === true || defaultVal === 'true' ? 'checked' : '';
+    return `<div class="build-param-field" data-param-name="${name}" data-param-type="boolean">
+      <label class="toggle-label"><input type="checkbox" ${checked}> ${label}</label>
+    </div>`;
   }
+  if (type === 'string' && p.values && p.values.length > 0) {
+    const options = p.values.map(v => {
+      const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      const selected = String(defaultVal) === val ? 'selected' : '';
+      return `<option value="${val}" ${selected}>${val}</option>`;
+    }).join('');
+    return `<div class="build-param-field" data-param-name="${name}" data-param-type="select">
+      <label>${label}</label>
+      <select>${options}</select>
+    </div>`;
+  }
+  if (type === 'number') {
+    const val = defaultVal != null ? defaultVal : '';
+    return `<div class="build-param-field" data-param-name="${name}" data-param-type="number">
+      <label>${label}</label>
+      <input type="number" value="${val}" />
+    </div>`;
+  }
+  const val = defaultVal != null ? String(defaultVal) : '';
+  return `<div class="build-param-field" data-param-name="${name}" data-param-type="string">
+    <label>${label}</label>
+    <input type="text" value="${val}" />
+  </div>`;
+}
+
+function _renderChipField(p) {
+  const label = p.displayName || p.display_name || p.name;
+  const name = p.name;
+  const checked = p.default === true || p.default === 'true' ? 'checked' : '';
+  return `<label class="platform-chip build-param-field" data-param-name="${name}" data-param-type="boolean">
+    <input type="checkbox" ${checked}><span>${label}</span>
+  </label>`;
+}
+
+function _renderBuildOptionsGrid(boolParams) {
+  const cols = Math.min(4, Math.max(2, Math.ceil(boolParams.length / 4)));
+  const perCol = Math.ceil(boolParams.length / cols);
+  let html = '<div class="build-options-grid">';
+  for (let c = 0; c < cols; c++) {
+    const group = boolParams.slice(c * perCol, (c + 1) * perCol);
+    if (group.length === 0) break;
+    html += '<div class="build-options-group">';
+    html += group.map(p => _renderParamField(p)).join('');
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function _setupBuildParamRules() {
+  const container = document.getElementById('build-params-container');
+  if (!container) return;
+
+  function getField(name) {
+    return container.querySelector(`.build-param-field[data-param-name="${name}"] input[type="checkbox"]`);
+  }
+
+  // Rule: BUILD_INTERNAL_APPS → auto-check/uncheck viewers
+  const internalApps = getField('BUILD_INTERNAL_APPS');
+  if (internalApps) {
+    const children = ['BUILD_DB_VIEWER', 'BUILD_LOG_VIEWER', 'BUILD_INTPOS_CLIENT'].map(getField).filter(Boolean);
+    internalApps.addEventListener('change', () => {
+      children.forEach(cb => { cb.checked = internalApps.checked; });
+    });
+  }
+
+  // Rule: BUILD_TEF_API_SERVICE ↔ BUILD_TEF_LIBRARY mutual exclusion
+  const tefApi = getField('BUILD_TEF_API_SERVICE');
+  const tefLib = getField('BUILD_TEF_LIBRARY');
+  if (tefApi && tefLib) {
+    tefApi.addEventListener('change', () => { if (tefApi.checked) tefLib.checked = false; });
+    tefLib.addEventListener('change', () => { if (tefLib.checked) tefApi.checked = false; });
+  }
+
+  // Rule: ENABLE_DEBUG_LOG ↔ ENABLED_LOG_ENCRYPT mutual exclusion
+  const debugLog = getField('ENABLE_DEBUG_LOG');
+  const logEncrypt = getField('ENABLED_LOG_ENCRYPT');
+  if (debugLog && logEncrypt) {
+    debugLog.addEventListener('change', () => { if (debugLog.checked) logEncrypt.checked = false; });
+    logEncrypt.addEventListener('change', () => { if (logEncrypt.checked) debugLog.checked = false; });
+  }
+}
+
+function _renderBuildSection(section) {
+  const sectionName = section.name || '';
+  const isPlatforms = /platform/i.test(sectionName);
+  const isDevices = /device/i.test(sectionName) || /android/i.test(sectionName);
+  const hasSubGroups = section.subGroups && section.subGroups.length > 0;
+  const isDescription = section.isDescription;
+
+  const selectParams = [];
+  const boolParams = [];
+  const otherParams = [];
+  for (const p of section.params) {
+    const type = (p.type || p.param_type || 'string').toLowerCase();
+    if (type === 'string' && p.values && p.values.length > 0) selectParams.push(p);
+    else if (type === 'boolean') boolParams.push(p);
+    else otherParams.push(p);
+  }
+
+  let html = '<div class="build-section">';
+  const displayName = /internal\s*apps/i.test(sectionName) ? 'BUILD OPTIONS' : sectionName;
+  if (displayName) html += `<h4>${displayName}</h4>`;
+  if (section.subtitle) html += `<p class="build-section-subtitle">${section.subtitle}</p>`;
+
+  // Selects in 2-column grid
+  if (selectParams.length > 0) {
+    html += '<div class="form-grid">';
+    html += selectParams.map(p => _renderParamField(p)).join('');
+    html += '</div>';
+  }
+
+  // Booleans
+  if (boolParams.length > 0) {
+    if (isPlatforms || (isDevices && !hasSubGroups)) {
+      html += '<div class="platform-chips">';
+      html += boolParams.map(p => _renderChipField(p)).join('');
+      html += '</div>';
+    } else if (isDescription && boolParams.length > 4) {
+      html += _renderBuildOptionsGrid(boolParams);
+    } else {
+      html += '<div class="build-checkboxes">';
+      html += boolParams.map(p => _renderParamField(p)).join('');
+      html += '</div>';
+    }
+  }
+
+  // Other params (string/number inputs) — each gets its own sub-section
+  if (otherParams.length > 0) {
+    for (const p of otherParams) {
+      const label = p.displayName || p.display_name || p.name;
+      const name = p.name;
+      const val = p.default != null ? String(p.default) : '';
+      html += `<div class="build-subsection">
+        <h5>${label}</h5>
+        <div class="build-param-field" data-param-name="${name}" data-param-type="string">
+          <input type="text" value="${val}" />
+        </div>
+      </div>`;
+    }
+  }
+
+  // Sub-groups (device sections)
+  if (hasSubGroups) {
+    html += '<div class="build-devices-grid">';
+    html += section.subGroups.map(sub => {
+      // Each device sub-group: checkbox + inline select(s)
+      const bools = [];
+      const selects = [];
+      for (const p of sub.params) {
+        const type = (p.type || p.param_type || 'string').toLowerCase();
+        if (type === 'boolean') bools.push(p);
+        else if (type === 'string' && p.values && p.values.length > 0) selects.push(p);
+      }
+      let subHtml = '<div class="build-device-card">';
+      // Device chip toggle
+      for (const p of bools) {
+        const label = p.displayName || p.display_name || p.name;
+        const checked = p.default === true || p.default === 'true' ? 'checked' : '';
+        subHtml += `<label class="device-chip build-param-field" data-param-name="${p.name}" data-param-type="boolean">
+          <input type="checkbox" ${checked}><span>${label}</span>
+        </label>`;
+      }
+      // Inline selects
+      for (const p of selects) {
+        const label = p.displayName || p.display_name || p.name;
+        const options = p.values.map(v => {
+          const val = typeof v === 'object' ? JSON.stringify(v) : String(v);
+          const selected = String(p.default) === val ? 'selected' : '';
+          return `<option value="${val}" ${selected}>${val}</option>`;
+        }).join('');
+        subHtml += `<div class="device-select build-param-field" data-param-name="${p.name}" data-param-type="select">
+          <select title="${label}">${options}</select>
+        </div>`;
+      }
+      subHtml += '</div>';
+      return subHtml;
+    }).join('');
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderPipelineForm(def) {
+  const container = document.getElementById('build-params-container');
+  const stagesContainer = document.getElementById('build-stages-options');
+  const stagesEmpty = document.getElementById('build-stages-empty');
+  const varList = document.getElementById('build-variables-list');
+
+  // --- Render parameters ---
+  if (container) {
+    if (!def.parameters || def.parameters.length === 0) {
+      container.innerHTML = '<p class="empty-state">No parameters defined in pipeline YAML</p>';
+    } else {
+      // Group parameters into sections using separator params
+      const sections = [];
+      let current = { name: null, params: [], subGroups: [] };
+
+      for (const p of def.parameters) {
+        if (_isSeparatorParam(p)) {
+          if (_isMainSeparator(p)) {
+            if (current.name || current.params.length > 0 || current.subGroups.length > 0) {
+              sections.push(current);
+            }
+            current = { name: _extractSectionName(p), params: [], subGroups: [] };
+          } else {
+            // Sub-separator (device grouping)
+            current.subGroups.push({ name: _extractSectionName(p), params: [] });
+          }
+        } else if (_isDescriptionParam(p)) {
+          if (current.name || current.params.length > 0 || current.subGroups.length > 0) {
+            sections.push(current);
+          }
+          const label = p.displayName || p.display_name || p.name;
+          const subtitle = p.default != null ? String(p.default).trim() : '';
+          current = { name: label, subtitle, params: [], subGroups: [], isDescription: true };
+        } else {
+          if (current.subGroups.length > 0) {
+            current.subGroups[current.subGroups.length - 1].params.push(p);
+          } else {
+            current.params.push(p);
+          }
+        }
+      }
+      if (current.name || current.params.length > 0 || current.subGroups.length > 0) {
+        sections.push(current);
+      }
+
+      container.innerHTML = sections.map(s => _renderBuildSection(s)).join('');
+      initCustomSelects(container);
+      _setupBuildParamRules();
+
+      // Override YAML defaults that differ from desired UI defaults
+      const androidsAllCb = container.querySelector('.build-param-field[data-param-name="androids_all"] input[type="checkbox"]');
+      if (androidsAllCb) androidsAllCb.checked = false;
+      const smartpostefCb = container.querySelector('.build-param-field[data-param-name="BUILD_SMARTPOSTEF"] input[type="checkbox"]');
+      if (smartpostefCb) smartpostefCb.checked = true;
+    }
+  }
+
+  // --- Render stages ---
+  if (stagesContainer) {
+    if (stagesEmpty) stagesEmpty.style.display = 'none';
+    if (!def.stages || def.stages.length === 0) {
+      stagesContainer.innerHTML = '<p class="empty-state">No stages defined in pipeline YAML</p>';
+    } else {
+      stagesContainer.innerHTML = def.stages.map(s => {
+        return `<label class="toggle-label"><input type="checkbox" class="build-stage-checkbox" value="${s.id}" checked> ${s.displayName || s.display_name || s.id}</label>`;
+      }).join('');
+      setupStagesToggle();
+    }
+  }
+
+  // --- Pre-populate variables from YAML (skip system.debug) ---
+  if (varList) {
+    // Remove YAML-injected rows (keep user-added ones)
+    varList.querySelectorAll('.variable-row[data-yaml]').forEach(r => r.remove());
+    if (def.variables && def.variables.length > 0) {
+      def.variables.forEach(v => {
+        if (v.name === 'system.debug') return;
+        // Skip Azure DevOps template expressions (conditional variables)
+        if (v.name.includes('${{')) return;
+        addVariableRow(v.name, v.value || '');
+      });
+    }
+  }
+}
+
+function addVariableRow(name, value, isYaml = true) {
+  const list = document.getElementById('build-variables-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'variable-row';
+  if (isYaml) row.setAttribute('data-yaml', 'true');
+  row.innerHTML = `
+    <input type="text" class="variable-name" placeholder="Variable name" value="${name || ''}" />
+    <input type="text" class="variable-value" placeholder="Value" value="${value || ''}" />
+    <button type="button" class="btn btn-sm btn-danger variable-remove">&times;</button>
+  `;
+  row.querySelector('.variable-remove').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
+function renderFallbackForm() {
+  const container = document.getElementById('build-params-container');
+  const stagesContainer = document.getElementById('build-stages-options');
+  const varList = document.getElementById('build-variables-list');
+
+  if (container) {
+    container.innerHTML = `<div class="build-yaml-warning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      <span>Could not load pipeline parameters from YAML. You can still run the build with no parameters, or click <strong>Sync YAML</strong> to retry.</span>
+    </div>`;
+  }
+  if (stagesContainer) {
+    stagesContainer.innerHTML = '<p class="empty-state">Stages unavailable — build will run all stages</p>';
+  }
+  if (varList) {
+    varList.querySelectorAll('.variable-row[data-yaml]').forEach(r => r.remove());
+  }
+}
+
+async function syncPipelineYaml(forceRefresh = false) {
+  const branchInput = document.getElementById('build-branch-input');
+  const branch = branchInput?.value?.trim();
+  const syncStatus = document.getElementById('build-yaml-sync-status');
+
+  if (!branch) {
+    if (syncStatus) { syncStatus.style.display = ''; syncStatus.innerHTML = '<span class="sync-hint">Select a branch first</span>'; }
+    return;
+  }
+
+  // Auto-detect pipeline type from branch name
+  _activePipeline = _detectPipelineType(branch);
+  const config = getPipelineConfig(_activePipeline);
+
+  if (!branch) {
+    if (syncStatus) { syncStatus.style.display = ''; syncStatus.innerHTML = '<span class="sync-hint">Select a branch first</span>'; }
+    return;
+  }
+
+  // Show loading
+  if (syncStatus) {
+    syncStatus.style.display = '';
+    syncStatus.innerHTML = '<span class="sync-loading"><span class="spinner-sm"></span> Loading pipeline definition...</span>';
+  }
+
+  try {
+    const def = await fetchPipelineDefinition(config.repository, branch, forceRefresh);
+    renderPipelineForm(def);
+    _lastSyncedBranch = branch;
+    if (syncStatus) {
+      syncStatus.innerHTML = '<span class="sync-success">Pipeline definition loaded</span>';
+      setTimeout(() => { if (syncStatus.querySelector('.sync-success')) syncStatus.style.display = 'none'; }, 3000);
+    }
+  } catch (err) {
+    frontendLog('WARN', 'BUILD: Failed to fetch pipeline definition', err.toString());
+    renderFallbackForm();
+    if (syncStatus) {
+      syncStatus.innerHTML = `<span class="sync-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Failed to load YAML — using fallback</span>`;
+    }
+    showToast('warning', 'Could not load pipeline YAML: ' + err);
+  }
+}
+
+// --- Unified init ---
+
+function initBuildPage() {
+
+  if (!_buildInitialized) {
+    _buildInitialized = true;
+
+    // Branch autocomplete
+    setupBuildBranchAutocomplete();
+
+    // Sync YAML button
+    const syncBtn = document.getElementById('build-sync-yaml');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', () => syncPipelineYaml(true));
+    }
+
+    // Stages toggle
+    setupStagesToggle();
+
+    // Variables UI
+    setupVariablesUI();
+
+    // Run Build
+    const runBtn = document.getElementById('build-run-build');
+    if (runBtn) runBtn.addEventListener('click', () => runBuild());
+
+    // Cancel Build
+    const cancelBtn = document.getElementById('build-cancel-build');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => cancelBuild());
+
+    // Restore Defaults
+    const restoreBtn = document.getElementById('build-restore-defaults');
+    if (restoreBtn) restoreBtn.addEventListener('click', () => restoreBuildDefaults());
+
+    // Custom themed dropdowns
+    const buildPage = document.getElementById('page-build');
+    if (buildPage) initCustomSelects(buildPage);
+
+    // Load branches on first init
+    reloadBuildBranches();
+  } else {
+    // On subsequent visits, force reload branches
+    reloadBuildBranches(true);
+  }
+
+  loadRecentBuilds();
+  checkInProgressBuild();
+
+  // If branch is already set, sync YAML
+  const branchInput = document.getElementById('build-branch-input');
+  if (branchInput?.value?.trim() && branchInput.value.trim() !== _lastSyncedBranch) {
+    syncPipelineYaml();
+  }
+}
+
+// --- Branch autocomplete (unified) ---
+
+let _buildBranches = [];
+
+function setupBuildBranchAutocomplete() {
+  const input = document.getElementById('build-branch-input');
+  const dropdown = document.getElementById('build-branch-dropdown');
+  const refreshBtn = document.getElementById('build-refresh-branches');
+  if (!input || !dropdown) return;
 
   function renderDropdown(filter) {
     const filtered = filter
-      ? branches.filter(b => b.toLowerCase().includes(filter.toLowerCase()))
-      : branches;
+      ? _buildBranches.filter(b => b.toLowerCase().includes(filter.toLowerCase()))
+      : _buildBranches;
     if (filtered.length === 0 || !document.activeElement || document.activeElement !== input) {
       dropdown.style.display = 'none';
       return;
@@ -6750,7 +7200,7 @@ function setupBranchAutocomplete(inputId, dropdownId, refreshBtnId, type) {
   }
 
   input.addEventListener('focus', () => {
-    if (branches.length === 0) loadBranches();
+    if (_buildBranches.length === 0) reloadBuildBranches();
     else renderDropdown(input.value);
   });
   input.addEventListener('input', () => renderDropdown(input.value));
@@ -6761,150 +7211,64 @@ function setupBranchAutocomplete(inputId, dropdownId, refreshBtnId, type) {
     if (opt) {
       input.value = opt.dataset.branch;
       dropdown.style.display = 'none';
+      // Auto-sync YAML when branch is selected
+      syncPipelineYaml();
     }
   });
 
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async () => {
       refreshBtn.disabled = true;
-      await loadBranches(true);
+      await reloadBuildBranches(true);
       refreshBtn.disabled = false;
-      showToast('success', `${branches.length} branches loaded`);
+      showToast('success', `${_buildBranches.length} branches loaded`);
     });
   }
 
-  loadBranches();
+  reloadBuildBranches();
 }
 
-// STA Build Page
-function initBuildStaPage() {
-  if (_buildStaInitialized) {
-    loadRecentBuilds('sta');
-    checkInProgressBuild('sta');
-    return;
+async function reloadBuildBranches(force = false) {
+  const staConfig = getPipelineConfig('sta');
+  const a2aConfig = getPipelineConfig('a2a');
+  if (staConfig.repository === a2aConfig.repository) {
+    _buildBranches = await fetchBranches(staConfig.repository, force);
+  } else {
+    const [staBranches, a2aBranches] = await Promise.all([
+      fetchBranches(staConfig.repository, force),
+      fetchBranches(a2aConfig.repository, force)
+    ]);
+    _buildBranches = [...new Set([...staBranches, ...a2aBranches])].sort();
   }
-  _buildStaInitialized = true;
-
-  setupBranchAutocomplete('sta-branch-input', 'sta-branch-dropdown', 'sta-refresh-branches', 'sta');
-
-  // Stages: "Run all stages" toggle
-  setupStagesToggle('sta');
-
-  // Variables: "Add variable" button
-  setupVariablesUI('sta');
-
-  // Build Options rules
-  setupBuildOptionsRules('sta');
-
-  // Platforms: "All" mutual exclusion with individual platforms
-  setupPlatformsRules('sta');
-
-  // Custom themed dropdowns
-  const staPage = document.getElementById('page-build-sta');
-  if (staPage) initCustomSelects(staPage);
-
-  // Run Build
-  const runBtn = document.getElementById('sta-run-build');
-  if (runBtn) {
-    runBtn.addEventListener('click', () => runBuild('sta'));
-  }
-
-  // Cancel Build
-  const cancelBtn = document.getElementById('sta-cancel-build');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => cancelBuild('sta'));
-  }
-
-  // Restore Defaults
-  const restoreBtn = document.getElementById('sta-restore-defaults');
-  if (restoreBtn) {
-    restoreBtn.addEventListener('click', () => restoreBuildDefaults('sta'));
-  }
-
-  loadRecentBuilds('sta');
-  checkInProgressBuild('sta');
 }
 
-// A2A Build Page
-function initBuildA2aPage() {
-  if (_buildA2aInitialized) {
-    loadRecentBuilds('a2a');
-    checkInProgressBuild('a2a');
-    return;
-  }
-  _buildA2aInitialized = true;
+// --- Stages toggle (unified) ---
 
-  setupBranchAutocomplete('a2a-branch-input', 'a2a-branch-dropdown', 'a2a-refresh-branches', 'a2a');
-
-  // Stages: "Run all stages" toggle
-  setupStagesToggle('a2a');
-
-  // Variables: "Add variable" button
-  setupVariablesUI('a2a');
-
-  // Platforms: chip toggle rules
-  setupA2aPlatformsRules();
-
-  // Devices: chip toggle rules
-  setupA2aDevicesRules();
-
-  // Custom themed dropdowns
-  const a2aPage = document.getElementById('page-build-a2a');
-  if (a2aPage) initCustomSelects(a2aPage);
-
-  // Run Build
-  const runBtn = document.getElementById('a2a-run-build');
-  if (runBtn) {
-    runBtn.addEventListener('click', () => runBuild('a2a'));
-  }
-
-  // Cancel Build
-  const cancelBtn = document.getElementById('a2a-cancel-build');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => cancelBuild('a2a'));
-  }
-
-  // Restore Defaults
-  const restoreBtn = document.getElementById('a2a-restore-defaults');
-  if (restoreBtn) {
-    restoreBtn.addEventListener('click', () => restoreBuildDefaults('a2a'));
-  }
-
-  loadRecentBuilds('a2a');
-  checkInProgressBuild('a2a');
-}
-
-function setupStagesToggle(type) {
-  const allCheckbox = document.getElementById(`${type}-stages-all`);
-  const stagesOptions = document.getElementById(`${type}-stages-options`);
+function setupStagesToggle() {
+  const allCheckbox = document.getElementById('build-stages-all');
+  const stagesOptions = document.getElementById('build-stages-options');
   if (!allCheckbox || !stagesOptions) return;
 
   function updateStagesState() {
-    const checkboxes = stagesOptions.querySelectorAll(`.${type}-stage-checkbox`);
+    const checkboxes = stagesOptions.querySelectorAll('.build-stage-checkbox');
     checkboxes.forEach(cb => {
       cb.disabled = allCheckbox.checked;
       if (allCheckbox.checked) cb.checked = true;
     });
   }
-  allCheckbox.addEventListener('change', updateStagesState);
+  // Remove old listener to avoid duplicates
+  allCheckbox.onchange = updateStagesState;
   updateStagesState();
 }
 
-function setupVariablesUI(type) {
-  const addBtn = document.getElementById(`${type}-add-variable`);
-  const list = document.getElementById(`${type}-variables-list`);
-  if (!addBtn || !list) return;
+// --- Variables UI (unified) ---
+
+function setupVariablesUI() {
+  const addBtn = document.getElementById('build-add-variable');
+  if (!addBtn) return;
 
   addBtn.addEventListener('click', () => {
-    const row = document.createElement('div');
-    row.className = 'variable-row';
-    row.innerHTML = `
-      <input type="text" class="variable-name" placeholder="Variable name" />
-      <input type="text" class="variable-value" placeholder="Value" />
-      <button type="button" class="btn btn-sm btn-danger variable-remove">&times;</button>
-    `;
-    row.querySelector('.variable-remove').addEventListener('click', () => row.remove());
-    list.appendChild(row);
+    addVariableRow('', '', false);
   });
 }
 
@@ -6952,7 +7316,6 @@ function initCustomSelects(container) {
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Close all other open selects
       document.querySelectorAll('.custom-select.open').forEach(s => {
         if (s !== wrapper) s.classList.remove('open');
       });
@@ -6972,188 +7335,70 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
 });
 
-function restoreBuildDefaults(type) {
-  const page = document.getElementById(`page-build-${type}`);
-  if (!page) return;
+// --- Restore defaults ---
 
-  // Reset all inputs to their HTML defaults to keep one true source of state.
-  page.querySelectorAll('input, select, textarea').forEach(el => {
-    if ('disabled' in el) {
-      el.disabled = false;
-    }
+function restoreBuildDefaults() {
+  const container = document.getElementById('build-params-container');
+  const stagesContainer = document.getElementById('build-stages-options');
+  const varList = document.getElementById('build-variables-list');
+  const debugCb = document.getElementById('build-var-debug');
+  const stagesAll = document.getElementById('build-stages-all');
 
-    if (el.tagName === 'INPUT') {
-      const inputType = (el.type || '').toLowerCase();
-      if (inputType === 'checkbox' || inputType === 'radio') {
-        el.checked = el.defaultChecked;
-      } else if (inputType !== 'file') {
-        el.value = el.defaultValue || '';
-      }
-      return;
-    }
+  // Reset params to defaults from YAML cache
+  const config = getPipelineConfig(_activePipeline);
+  const branchInput = document.getElementById('build-branch-input');
+  const branch = branchInput?.value?.trim();
+  const key = `${config.repository}:${branch}`;
 
-    if (el.tagName === 'SELECT') {
-      let defaultIndex = 0;
-      for (let i = 0; i < el.options.length; i++) {
-        if (el.options[i].defaultSelected) {
-          defaultIndex = i;
-          break;
-        }
-      }
-      el.selectedIndex = defaultIndex;
-      return;
-    }
+  if (branch && _cachedPipelineDefs[key]) {
+    renderPipelineForm(_cachedPipelineDefs[key]);
+  } else {
+    if (container) container.innerHTML = '<p class="empty-state">Select a branch to load pipeline parameters</p>';
+    if (stagesContainer) stagesContainer.innerHTML = '<p class="empty-state">Select a branch to load stages</p>';
+  }
 
-    if (el.tagName === 'TEXTAREA') {
-      el.value = el.defaultValue || '';
-    }
-  });
-
-  // Clear custom variables
-  const varList = document.getElementById(`${type}-variables-list`);
+  // Reset variables
   if (varList) varList.innerHTML = '';
-
-  // Re-apply all dependent rules and custom-select visuals.
-  page.querySelectorAll('select, input[type="checkbox"], input[type="radio"]').forEach(el => {
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  if (debugCb) debugCb.checked = false;
+  if (stagesAll) stagesAll.checked = false;
 
   showToast('info', 'Options restored to defaults');
 }
 
-function setupPlatformsRules(type) {
-  const allCheckbox = document.getElementById(`${type}-platforms-all`);
-  const individualIds = [
-    `${type}-platforms-android`,
-    `${type}-platforms-android-tefsdk`,
-    `${type}-platforms-linux64`,
-    `${type}-platforms-linux32`,
-    `${type}-platforms-win-cross`,
-    `${type}-platforms-pax`,
-    `${type}-platforms-win`
-  ];
-  const individuals = individualIds.map(id => document.getElementById(id)).filter(Boolean);
+// --- Collect parameters (generic) ---
 
-  if (!allCheckbox || !individuals.length) return;
+function collectParameters() {
+  const params = {};
+  const container = document.getElementById('build-params-container');
+  if (!container) return params;
 
-  // When "All" is checked, uncheck all individual platforms
-  allCheckbox.addEventListener('change', () => {
-    if (allCheckbox.checked) {
-      individuals.forEach(cb => { cb.checked = false; });
+  container.querySelectorAll('.build-param-field[data-param-name]').forEach(field => {
+    const name = field.dataset.paramName;
+    const type = field.dataset.paramType;
+
+    if (type === 'boolean') {
+      const cb = field.querySelector('input[type="checkbox"]');
+      params[name] = cb?.checked ? 'true' : 'false';
+    } else if (type === 'select') {
+      const sel = field.querySelector('select');
+      params[name] = sel?.value || '';
+    } else if (type === 'number') {
+      const inp = field.querySelector('input[type="number"]');
+      params[name] = inp?.value || '0';
+    } else {
+      const inp = field.querySelector('input[type="text"]');
+      params[name] = inp?.value || '';
     }
   });
 
-  // When any individual platform is checked, uncheck "All"
-  individuals.forEach(cb => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        allCheckbox.checked = false;
-      }
-    });
-  });
+  return params;
 }
 
-function setupA2aPlatformsRules() {
-  const allCheckbox = document.getElementById('a2a-platforms-all');
-  const individuals = [
-    document.getElementById('a2a-platforms-android'),
-    document.getElementById('a2a-platforms-tefsdk')
-  ].filter(Boolean);
-  const tefsdkOptions = document.getElementById('a2a-tefsdk-options');
-
-  if (!allCheckbox || !individuals.length) return;
-
-  function updateTefSdkVisibility() {
-    if (!tefsdkOptions) return;
-    const tefsdkChecked = document.getElementById('a2a-platforms-tefsdk')?.checked;
-    tefsdkOptions.style.display = (allCheckbox.checked || tefsdkChecked) ? '' : 'none';
-  }
-
-  allCheckbox.addEventListener('change', () => {
-    if (allCheckbox.checked) {
-      individuals.forEach(cb => { cb.checked = false; });
-    }
-    updateTefSdkVisibility();
-  });
-
-  individuals.forEach(cb => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        allCheckbox.checked = false;
-      }
-      updateTefSdkVisibility();
-    });
-  });
-
-  updateTefSdkVisibility();
-}
-
-function setupA2aDevicesRules() {
-  const allCheckbox = document.getElementById('a2a-androids-all');
-  const grid = document.getElementById('a2a-devices-grid');
-  if (!allCheckbox || !grid) return;
-
-  const individuals = Array.from(grid.querySelectorAll('input[type="checkbox"]'))
-    .filter(cb => cb.id !== 'a2a-androids-all');
-
-  allCheckbox.addEventListener('change', () => {
-    if (allCheckbox.checked) {
-      individuals.forEach(cb => { cb.checked = false; });
-    }
-  });
-
-  individuals.forEach(cb => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        allCheckbox.checked = false;
-      }
-    });
-  });
-}
-
-function setupBuildOptionsRules(type) {
-  const tefApi = document.getElementById(`${type}-build-tef-api-service`);
-  const tefLib = document.getElementById(`${type}-build-tef-library`);
-  const internalApps = document.getElementById(`${type}-build-internal-apps`);
-  const intposClient = document.getElementById(`${type}-build-intpos-client`);
-  const dbViewer = document.getElementById(`${type}-build-db-viewer`);
-  const logViewer = document.getElementById(`${type}-build-log-viewer`);
-  const debugLog = document.getElementById(`${type}-enable-debug-log`);
-  const logEncrypt = document.getElementById(`${type}-enabled-log-encrypt`);
-
-  // Rule: TEF API and TEF Library are mutually exclusive
-  if (tefApi && tefLib) {
-    tefApi.addEventListener('change', () => { if (tefApi.checked) tefLib.checked = false; });
-    tefLib.addEventListener('change', () => { if (tefLib.checked) tefApi.checked = false; });
-  }
-
-  // Rule: BUILD_INTERNAL_APPS checks intpos, db, log viewer. Unchecking any child unchecks parent.
-  const internalChildren = [intposClient, dbViewer, logViewer].filter(Boolean);
-  if (internalApps && internalChildren.length) {
-    internalApps.addEventListener('change', () => {
-      if (internalApps.checked) {
-        internalChildren.forEach(cb => cb.checked = true);
-      }
-    });
-    internalChildren.forEach(child => {
-      child.addEventListener('change', () => {
-        if (!child.checked) internalApps.checked = false;
-      });
-    });
-  }
-
-  // Rule: Debug log and log encrypt are mutually exclusive
-  if (debugLog && logEncrypt) {
-    debugLog.addEventListener('change', () => { if (debugLog.checked) logEncrypt.checked = false; });
-    logEncrypt.addEventListener('change', () => { if (logEncrypt.checked) debugLog.checked = false; });
-  }
-}
-
-function collectStagesToSkip(type) {
-  const allCheckbox = document.getElementById(`${type}-stages-all`);
+function collectStagesToSkip() {
+  const allCheckbox = document.getElementById('build-stages-all');
   if (allCheckbox?.checked) return [];
 
-  const checkboxes = document.querySelectorAll(`.${type}-stage-checkbox`);
+  const checkboxes = document.querySelectorAll('.build-stage-checkbox');
   const skipped = [];
   checkboxes.forEach(cb => {
     if (!cb.checked) skipped.push(cb.value);
@@ -7161,15 +7406,13 @@ function collectStagesToSkip(type) {
   return skipped;
 }
 
-function collectVariables(type) {
+function collectVariables() {
   const vars = {};
-  // system.debug
-  const debugCb = document.getElementById(`${type}-var-debug`);
+  const debugCb = document.getElementById('build-var-debug');
   if (debugCb?.checked) {
     vars['system.debug'] = 'true';
   }
-  // Custom variables
-  const list = document.getElementById(`${type}-variables-list`);
+  const list = document.getElementById('build-variables-list');
   if (list) {
     list.querySelectorAll('.variable-row').forEach(row => {
       const name = row.querySelector('.variable-name')?.value?.trim();
@@ -7180,142 +7423,62 @@ function collectVariables(type) {
   return vars;
 }
 
-function collectStaParameters() {
-  const params = {};
-  params.customer = document.getElementById('sta-customer')?.value || 'Aditum';
-  params.environment = document.getElementById('sta-environment')?.value || 'DEFAULT';
-  params.ENABLED_SSF = document.getElementById('sta-enabled-ssf')?.checked ? 'true' : 'false';
-  params.USE_AUTHORIZER = document.getElementById('sta-use-authorizer')?.checked ? 'true' : 'false';
-  params.linux_ci_03 = document.getElementById('sta-linux-ci-03')?.checked ? 'true' : 'false';
-  params.linux_ci_04 = document.getElementById('sta-linux-ci-04')?.checked ? 'true' : 'false';
-  params.platforms_All = document.getElementById('sta-platforms-all')?.checked ? 'true' : 'false';
-  params.platforms_Android = document.getElementById('sta-platforms-android')?.checked ? 'true' : 'false';
-  params.platforms_AndroidTefSdk = document.getElementById('sta-platforms-android-tefsdk')?.checked ? 'true' : 'false';
-  params.platforms_Linux_64 = document.getElementById('sta-platforms-linux64')?.checked ? 'true' : 'false';
-  params.platforms_Linux_32 = document.getElementById('sta-platforms-linux32')?.checked ? 'true' : 'false';
-  params.platforms_Windows_x86_crosscompiler = document.getElementById('sta-platforms-win-cross')?.checked ? 'true' : 'false';
-  params.platforms_PAX_S920 = document.getElementById('sta-platforms-pax')?.checked ? 'true' : 'false';
-  params.platforms_Windows_x86 = document.getElementById('sta-platforms-win')?.checked ? 'true' : 'false';
+// --- Run Build ---
 
-  // Android devices
-  params.androids_all = document.getElementById('sta-androids-all')?.checked ? 'true' : 'false';
-  const devices = ['a910', 'dx8000', 'dx4000', 'ex4000', 'gpos700', 'gpos720', 'gpos760', 'l3', 'l3-2024', 'p2mini', 'p2', 'p2-lite-se', 'l400', 'x990-pro', 'x990-ux'];
-  const deviceParamNames = ['androids_A910', 'androids_DX8000', 'androids_DX4000', 'androids_EX4000', 'androids_GPOS700', 'androids_GPOS720', 'androids_GPOS760', 'androids_L3', 'androids_L3_2024', 'androids_P2MINI', 'androids_P2', 'androids_P2_LITE_SE', 'androids_L400', 'androids_X990_PRO', 'androids_X990_UX'];
-  const intentParamNames = ['a910AppIntentCategory', 'dx8000AppIntentCategory', 'dx4000AppIntentCategory', 'ex4000AppIntentCategory', 'gpos700AppIntentCategory', 'gpos720AppIntentCategory', 'gpos760AppIntentCategory', 'l3AppIntentCategory', 'l3_2024AppIntentCategory', 'p2miniAppIntentCategory', 'p2AppIntentCategory', 'p2_lite_seAppIntentCategory', 'l400AppIntentCategory', 'x990_ProAppIntentCategory', 'x990_UXAppIntentCategory'];
-
-  devices.forEach((d, i) => {
-    params[deviceParamNames[i]] = document.getElementById(`sta-android-${d}`)?.checked ? 'true' : 'false';
-    params[intentParamNames[i]] = document.getElementById(`sta-intent-${d}`)?.value || 'Launcher';
-  });
-
-  // Internal apps
-  params.BUILD_INTERNAL_APPS = document.getElementById('sta-build-internal-apps')?.checked ? 'true' : 'false';
-  params.BUILD_BODY_VIEWER = document.getElementById('sta-build-body-viewer')?.checked ? 'true' : 'false';
-  params.BUILD_CRYPTFILE = document.getElementById('sta-build-cryptfile')?.checked ? 'true' : 'false';
-  params.BUILD_DB_VIEWER = document.getElementById('sta-build-db-viewer')?.checked ? 'true' : 'false';
-  params.BUILD_LOG_VIEWER = document.getElementById('sta-build-log-viewer')?.checked ? 'true' : 'false';
-  params.BUILD_INTPOS_CLIENT = document.getElementById('sta-build-intpos-client')?.checked ? 'true' : 'false';
-  params.BUILD_TEF_LIBRARY = document.getElementById('sta-build-tef-library')?.checked ? 'true' : 'false';
-  params.BUILD_TEF_API_SERVICE = document.getElementById('sta-build-tef-api-service')?.checked ? 'true' : 'false';
-  params.BUILD_SMARTPOSTEF = document.getElementById('sta-build-smartpostef')?.checked ? 'true' : 'false';
-  params.ENABLE_DEBUG_LOG = document.getElementById('sta-enable-debug-log')?.checked ? 'true' : 'false';
-  params.BUILD_PACKAGE_MANAGER = document.getElementById('sta-build-package-manager')?.checked ? 'true' : 'false';
-  params.ENABLED_LOG_ENCRYPT = document.getElementById('sta-enabled-log-encrypt')?.checked ? 'true' : 'false';
-  params.ENABLED_HTTP_PROXY = document.getElementById('sta-enabled-http-proxy')?.checked ? 'true' : 'false';
-  params.ENABLED_LOG_CAPTURE = document.getElementById('sta-enabled-log-capture')?.checked ? 'true' : 'false';
-
-  return params;
-}
-
-function collectA2aParameters() {
-  const params = {};
-  params.customer = document.getElementById('a2a-customer')?.value || 'Aditum';
-  params.environment = document.getElementById('a2a-environment')?.value || 'DEFAULT';
-  params.ENABLED_SSF = document.getElementById('a2a-enabled-ssf')?.checked ? 'true' : 'false';
-  params.USE_AUTHORIZER = document.getElementById('a2a-use-authorizer')?.checked ? 'true' : 'false';
-  params.linux_ci_03 = document.getElementById('a2a-linux-ci-03')?.checked ? 'true' : 'false';
-  params.linux_ci_04 = document.getElementById('a2a-linux-ci-04')?.checked ? 'true' : 'false';
-  params.platforms_All = document.getElementById('a2a-platforms-all')?.checked ? 'true' : 'false';
-  params.platforms_Android = document.getElementById('a2a-platforms-android')?.checked ? 'true' : 'false';
-  params.platforms_TefSdk = document.getElementById('a2a-platforms-tefsdk')?.checked ? 'true' : 'false';
-  params.tefSdkStartupType = document.getElementById('a2a-tefsdk-startup')?.value || 'Auto';
-
-  // Android devices
-  params.androids_all = document.getElementById('a2a-androids-all')?.checked ? 'true' : 'false';
-  const deviceMap = {
-    'a910': 'androids_A910', 'dx8000': 'androids_DX8000', 'dx4000': 'androids_DX4000',
-    'gpos700': 'androids_GPOS700', 'gpos720': 'androids_GPOS720', 'gpos760': 'androids_GPOS760',
-    'l3': 'androids_L3', 'l3-2024': 'androids_L3_2024', 'l400': 'androids_L400',
-    'p2': 'androids_P2', 'p2mini': 'androids_P2MINI', 'p2-lite-se': 'androids_P2_LITE_SE',
-    'x990-pro': 'androids_X990_PRO', 'x990-ux': 'androids_X990_UX'
-  };
-  Object.entries(deviceMap).forEach(([htmlId, paramName]) => {
-    params[paramName] = document.getElementById(`a2a-android-${htmlId}`)?.checked ? 'true' : 'false';
-  });
-
-  return params;
-}
-
-async function runBuild(type) {
+async function runBuild() {
   if (!invoke) return;
-  const page = document.getElementById(`page-build-${type}`);
+  const page = document.getElementById('page-build');
   if (page) {
-    // Ensure custom UI wrappers and native controls are consistent before collect.
     page.querySelectorAll('select').forEach(sel => {
       sel.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
 
-  const branchInput = document.getElementById(`${type}-branch-input`);
+  const branchInput = document.getElementById('build-branch-input');
   const branch = branchInput?.value?.trim();
   if (!branch) {
     showToast('warning', 'Please select a branch');
     return;
   }
 
-  const buildSnapshot = {
-    parameters: type === 'sta' ? collectStaParameters() : collectA2aParameters(),
-    stagesToSkip: collectStagesToSkip(type),
-    variables: collectVariables(type)
-  };
-
-  const parameters = buildSnapshot.parameters;
-  const stagesToSkip = buildSnapshot.stagesToSkip;
-  const variables = buildSnapshot.variables;
-  const config = getPipelineConfig(type);
-  const runBtn = document.getElementById(`${type}-run-build`);
+  const parameters = collectParameters();
+  const stagesToSkip = collectStagesToSkip();
+  const variables = collectVariables();
+  const config = getPipelineConfig(_activePipeline);
+  const runBtn = document.getElementById('build-run-build');
   if (runBtn) runBtn.disabled = true;
 
   try {
-    frontendLog('INFO', `BUILD: Running ${type.toUpperCase()} build`, `Branch: ${branch}, Pipeline: ${config.pipelineId}`);
+    frontendLog('INFO', `BUILD: Running ${_activePipeline.toUpperCase()} build`, `Branch: ${branch}, Pipeline: ${config.pipelineId}`);
     const result = await invoke('azure_run_pipeline', { branch, parameters, stagesToSkip, variables, pipelineId: config.pipelineId });
     const runId = result.id;
     const webUrl = result._links?.web?.href || '';
 
     showToast('success', `Build started (Run #${runId})`);
-    frontendLog('INFO', `BUILD: ${type.toUpperCase()} build started`, `Run ID: ${runId}`);
+    frontendLog('INFO', `BUILD: ${_activePipeline.toUpperCase()} build started`, `Run ID: ${runId}`);
+
+    // Cache the params globally so they're available in Recent Builds
+    _buildParamsCache[runId] = result.templateParameters || parameters;
 
     // Show status card
-    const statusCard = document.getElementById(`${type}-build-status`);
-    const statusText = document.getElementById(`${type}-status-text`);
-    const statusLink = document.getElementById(`${type}-status-link`);
-    const statusIndicator = document.getElementById(`${type}-status-indicator`);
-    const cancelBtn2 = document.getElementById(`${type}-cancel-build`);
+    const statusCard = document.getElementById('build-build-status');
+    const statusText = document.getElementById('build-status-text');
+    const statusLink = document.getElementById('build-status-link');
+    const statusIndicator = document.getElementById('build-status-indicator');
+    const cancelBtn2 = document.getElementById('build-cancel-build');
 
     if (statusCard) statusCard.style.display = '';
     if (statusText) statusText.textContent = 'In Progress...';
     if (statusLink && webUrl) statusLink.href = webUrl;
     if (statusIndicator) statusIndicator.className = 'build-status-indicator status-running';
 
-    // Show cancel button
     if (cancelBtn2) {
       cancelBtn2.style.display = '';
       cancelBtn2.disabled = false;
       cancelBtn2.dataset.buildId = runId;
     }
 
-    // Populate build details from pipeline run response
-    populateBuildDetails(type, {
+    populateBuildDetails({
       id: runId,
       buildNumber: result.name || '-',
       startTime: result.createdDate || null,
@@ -7323,10 +7486,9 @@ async function runBuild(type) {
       templateParameters: result.templateParameters || parameters
     });
 
-    // Start polling
-    startPolling(type, runId);
+    startPolling(runId);
   } catch (err) {
-    frontendLog('ERROR', `BUILD: Failed to run ${type.toUpperCase()} build`, err.toString());
+    frontendLog('ERROR', `BUILD: Failed to run ${_activePipeline.toUpperCase()} build`, err.toString());
     let errorMsg = String(err);
     try {
       const jsonMatch = errorMsg.match(/\{[\s\S]*\}/);
@@ -7341,45 +7503,48 @@ async function runBuild(type) {
   }
 }
 
-async function cancelBuild(type) {
-  const cancelBtn = document.getElementById(`${type}-cancel-build`);
+// --- Cancel Build ---
+
+async function cancelBuild() {
+  const cancelBtn = document.getElementById('build-cancel-build');
   const buildId = cancelBtn?.dataset.buildId;
   if (!buildId || !invoke) return;
 
   cancelBtn.disabled = true;
-  const statusText = document.getElementById(`${type}-status-text`);
+  const statusText = document.getElementById('build-status-text');
   if (statusText) statusText.textContent = 'Canceling...';
 
   try {
     await invoke('azure_cancel_build', { buildId: parseInt(buildId) });
-    frontendLog('INFO', `BUILD: Cancel requested for ${type}`, `Build ID: ${buildId}`);
+    frontendLog('INFO', `BUILD: Cancel requested`, `Build ID: ${buildId}`);
     cancelBtn.style.display = 'none';
   } catch (err) {
-    frontendLog('ERROR', `BUILD: Failed to cancel ${type} build`, err.toString());
+    frontendLog('ERROR', 'BUILD: Failed to cancel build', err.toString());
     if (statusText) statusText.textContent = 'Cancel failed';
     cancelBtn.disabled = false;
   }
 }
 
-async function checkInProgressBuild(type) {
+// --- Check in-progress build ---
+
+async function checkInProgressBuild() {
   if (!invoke) return;
-  const config = getPipelineConfig(type);
+  const config = getPipelineConfig(_activePipeline);
   try {
     const data = await invoke('azure_get_recent_builds', { top: 1, pipelineId: config.pipelineId });
     const runs = data.value || [];
     if (runs.length === 0) return;
     const run = runs[0];
     const buildStatus = (run.status || '').toLowerCase();
-    frontendLog('DEBUG', `BUILD: checkInProgressBuild ${type}`, `status="${run.status}", result="${run.result}", id=${run.id}`);
-    // Detect any active build (not completed, not canceled)
+    frontendLog('DEBUG', `BUILD: checkInProgressBuild`, `status="${run.status}", result="${run.result}", id=${run.id}`);
     if (buildStatus !== 'completed') {
       const runId = run.id;
       const webUrl = run._links?.web?.href || '#';
-      const statusCard = document.getElementById(`${type}-build-status`);
-      const statusText = document.getElementById(`${type}-status-text`);
-      const statusLink = document.getElementById(`${type}-status-link`);
-      const statusIndicator = document.getElementById(`${type}-status-indicator`);
-      const cancelBtn = document.getElementById(`${type}-cancel-build`);
+      const statusCard = document.getElementById('build-build-status');
+      const statusText = document.getElementById('build-status-text');
+      const statusLink = document.getElementById('build-status-link');
+      const statusIndicator = document.getElementById('build-status-indicator');
+      const cancelBtn = document.getElementById('build-cancel-build');
 
       if (statusCard) statusCard.style.display = '';
       if (buildStatus === 'notstarted') {
@@ -7392,29 +7557,28 @@ async function checkInProgressBuild(type) {
       if (statusLink && webUrl) statusLink.href = webUrl;
       if (statusIndicator) statusIndicator.className = 'build-status-indicator status-running';
 
-      // Show cancel button for active builds
       if (cancelBtn && buildStatus !== 'cancelling') {
         cancelBtn.style.display = '';
         cancelBtn.disabled = false;
         cancelBtn.dataset.buildId = runId;
       }
 
-      // Populate build details
-      populateBuildDetails(type, run);
-
-      startPolling(type, runId);
+      populateBuildDetails(run);
+      startPolling(runId);
     }
   } catch (err) {
-    frontendLog('WARN', `BUILD: Failed to check in-progress build for ${type}`, err.toString());
+    frontendLog('WARN', 'BUILD: Failed to check in-progress build', err.toString());
   }
 }
 
-function populateBuildDetails(type, run) {
-  const buildIdEl = document.getElementById(`${type}-build-id`);
-  const buildNumberEl = document.getElementById(`${type}-build-number`);
-  const buildStartEl = document.getElementById(`${type}-build-start-time`);
-  const buildBranchEl = document.getElementById(`${type}-build-branch`);
-  const paramsBtn = document.getElementById(`${type}-build-params-btn`);
+// --- Build details ---
+
+function populateBuildDetails(run) {
+  const buildIdEl = document.getElementById('build-build-id');
+  const buildNumberEl = document.getElementById('build-build-number');
+  const buildStartEl = document.getElementById('build-build-start-time');
+  const buildBranchEl = document.getElementById('build-build-branch');
+  const paramsBtn = document.getElementById('build-build-params-btn');
 
   if (buildIdEl) buildIdEl.textContent = run.id || '-';
   if (buildNumberEl) buildNumberEl.textContent = run.buildNumber || '-';
@@ -7427,7 +7591,7 @@ function populateBuildDetails(type, run) {
     buildBranchEl.textContent = branch;
   }
 
-  // Parameters button
+  // Parse params from run data
   let params = null;
   if (run.parameters) {
     try { params = typeof run.parameters === 'string' ? JSON.parse(run.parameters) : run.parameters; } catch (_) { }
@@ -7435,10 +7599,20 @@ function populateBuildDetails(type, run) {
   if (run.templateParameters) {
     params = run.templateParameters;
   }
+  // Update global cache (never downgrade)
+  const runId = run.id;
+  if (runId && params) {
+    const cachedKeys = _buildParamsCache[runId] ? Object.keys(_buildParamsCache[runId]).length : 0;
+    if (Object.keys(params).length > cachedKeys) {
+      _buildParamsCache[runId] = params;
+    }
+  }
+  // Use richest source available
+  const displayParams = (runId && _buildParamsCache[runId]) || params;
   if (paramsBtn) {
-    if (params && Object.keys(params).length > 0) {
+    if (displayParams && Object.keys(displayParams).length > 0) {
       paramsBtn.style.display = '';
-      paramsBtn.onclick = () => openBuildParamsModal(params, `Build #${run.buildNumber || run.id || ''}`);
+      paramsBtn.onclick = () => openBuildParamsModal(_buildParamsCache[runId] || displayParams, `Build #${run.buildNumber || run.id || ''}`);
     } else {
       paramsBtn.style.display = 'none';
     }
@@ -7465,7 +7639,7 @@ function openBuildParamsModal(params, title) {
   // Filter out separator/description entries
   function shouldSkip(key, val) {
     const valStr = String(val);
-    if (/^-{2,}.*-{2,}$/.test(key)) return true;
+    if (/^-{2,}.*-{2,}$/.test(valStr)) return true;
     if (valStr.length > 30 && /[.!]/.test(valStr)) return true;
     if (key.endsWith('AppIntentCategory')) return true;
     return false;
@@ -7497,7 +7671,7 @@ function openBuildParamsModal(params, title) {
     if (key.startsWith('BUILD_')) return 'Build Options';
     if (key.startsWith('ENABLED_') || key.startsWith('ENABLE_') || key === 'USE_AUTHORIZER') return 'Features';
     if (key === 'customer' || key === 'environment' || key.startsWith('linux_ci') || key === 'stages') return 'General';
-    return null; // skip uncategorized
+    return 'Other';
   }
 
   const entries = Object.entries(params);
@@ -7508,9 +7682,8 @@ function openBuildParamsModal(params, title) {
     const filtered = entries.filter(([k, v]) => {
       if (shouldSkip(k, v)) return false;
       const cat = categorize(k);
-      if (!cat) return false; // skip "Other"
+      if (!cat) return false;
       const valStr = String(v);
-      // For booleans, only keep true
       if (valStr === 'false') return false;
       return true;
     });
@@ -7523,7 +7696,7 @@ function openBuildParamsModal(params, title) {
       groups[cat].push([key, val]);
     });
 
-    const groupOrder = ['General', 'Platforms', 'Build Options', 'Features', 'Android Devices'];
+    const groupOrder = ['General', 'Platforms', 'Build Options', 'Features', 'Android Devices', 'Other'];
     const sortedGroups = groupOrder.filter(g => groups[g] && groups[g].length > 0).map(g => [g, groups[g]]);
 
     if (sortedGroups.length === 0) {
@@ -7539,7 +7712,7 @@ function openBuildParamsModal(params, title) {
             if (valStr === 'true') {
               return `<span class="build-param-chip chip-active">${label}</span>`;
             }
-            return `<span class="build-param-chip"><span class="chip-label">${label}</span><span class="chip-value">${valStr}</span></span>`;
+            return `<span class="build-param-chip chip-active"><span class="chip-label">${label}</span> <span class="chip-value">${valStr}</span></span>`;
           }).join('')}</div>`;
         } else if (groupName === 'Android Devices') {
           // Show only checked devices with their intent
@@ -7561,7 +7734,7 @@ function openBuildParamsModal(params, title) {
             return `<span class="build-param-tag"><span class="chip-label">${label}:</span> ${valStr}</span>`;
           }).join('')}</div>`;
         }
-        return `<div class="build-param-group"><h4 class="build-param-group-title">${groupName}</h4>${rows}</div>`;
+        return `<div class="build-section"><h4>${groupName}</h4>${rows}</div>`;
       }).join('');
     }
   }
@@ -7571,23 +7744,31 @@ function openBuildParamsModal(params, title) {
   modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
 }
 
-function startPolling(type, runId) {
-  const intervalRef = type === 'sta' ? '_staPollInterval' : '_a2aPollInterval';
-  const timeoutRef = type === 'sta' ? '_staPollTimeout' : '_a2aPollTimeout';
-  const config = getPipelineConfig(type);
-  // Clear existing
-  if (window[intervalRef]) clearInterval(window[intervalRef]);
-  if (window[timeoutRef]) { clearTimeout(window[timeoutRef]); window[timeoutRef] = null; }
+// --- Polling ---
 
-  window[intervalRef] = setInterval(async () => {
+function startPolling(runId) {
+  const config = getPipelineConfig(_activePipeline);
+  if (_buildPollInterval) clearInterval(_buildPollInterval);
+  if (_buildPollTimeout) { clearTimeout(_buildPollTimeout); _buildPollTimeout = null; }
+
+  _buildPollInterval = setInterval(async () => {
     try {
       const status = await invoke('azure_get_build_status', { runId, pipelineId: config.pipelineId });
       const state = status.state || 'unknown';
       const result = status.result || '';
 
-      const statusText = document.getElementById(`${type}-status-text`);
-      const statusIndicator = document.getElementById(`${type}-status-indicator`);
-      const cancelBtn = document.getElementById(`${type}-cancel-build`);
+      // Cache full templateParameters from Pipelines API while build is active
+      if (status.templateParameters) {
+        const tpKeys = Object.keys(status.templateParameters).length;
+        const cachedKeys = _buildParamsCache[runId] ? Object.keys(_buildParamsCache[runId]).length : 0;
+        if (tpKeys > cachedKeys) {
+          _buildParamsCache[runId] = status.templateParameters;
+        }
+      }
+
+      const statusText = document.getElementById('build-status-text');
+      const statusIndicator = document.getElementById('build-status-indicator');
+      const cancelBtn = document.getElementById('build-cancel-build');
 
       if (state === 'completed') {
         if (statusText) statusText.textContent = `Completed: ${result}`;
@@ -7596,13 +7777,12 @@ function startPolling(type, runId) {
         }
         if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = true; }
 
-        // Continue polling for 60s after completion to confirm final state
-        if (!window[timeoutRef]) {
-          window[timeoutRef] = setTimeout(() => {
-            clearInterval(window[intervalRef]);
-            window[intervalRef] = null;
-            window[timeoutRef] = null;
-            loadRecentBuilds(type);
+        if (!_buildPollTimeout) {
+          _buildPollTimeout = setTimeout(() => {
+            clearInterval(_buildPollInterval);
+            _buildPollInterval = null;
+            _buildPollTimeout = null;
+            loadRecentBuilds();
           }, 60000);
         }
       } else if (state === 'canceling') {
@@ -7612,17 +7792,19 @@ function startPolling(type, runId) {
         if (statusText) statusText.textContent = 'In Progress...';
       }
     } catch (err) {
-      frontendLog('ERROR', `BUILD: Poll error for ${type}`, err.toString());
+      frontendLog('ERROR', 'BUILD: Poll error', err.toString());
     }
-  }, 30000); // 30s poll interval
+  }, 30000);
 }
 
-async function loadRecentBuilds(type) {
+// --- Recent builds ---
+
+async function loadRecentBuilds() {
   if (!invoke) return;
-  const container = document.getElementById(`${type}-recent-builds`);
+  const container = document.getElementById('build-recent-builds');
   if (!container) return;
 
-  const config = getPipelineConfig(type);
+  const config = getPipelineConfig(_activePipeline);
   try {
     const data = await invoke('azure_get_recent_builds', { top: 5, pipelineId: config.pipelineId });
     const runs = (data.value || []).slice(0, 5);
@@ -7630,7 +7812,7 @@ async function loadRecentBuilds(type) {
       container.innerHTML = '<p class="empty-state">No recent builds</p>';
       return;
     }
-    const paramsMap = {};
+    const paramsMap = Object.assign({}, _buildParamsCache);
     container.innerHTML = runs.map(run => {
       const status = run.status || 'unknown';
       const result = run.result || '';
@@ -7667,10 +7849,12 @@ async function loadRecentBuilds(type) {
       if (!parsedParams && run.templateParameters) {
         parsedParams = run.templateParameters;
       }
-      if (parsedParams && Object.keys(parsedParams).length > 0) {
-        paramsMap[runId] = parsedParams;
+      const cachedKeys = _buildParamsCache[runId] ? Object.keys(_buildParamsCache[runId]).length : 0;
+      const newKeys = parsedParams ? Object.keys(parsedParams).length : 0;
+      if (newKeys > cachedKeys) {
+        _buildParamsCache[runId] = parsedParams;
       }
-      const hasParams = parsedParams && Object.keys(parsedParams).length > 0;
+      paramsMap[runId] = _buildParamsCache[runId] || parsedParams;
       let badge = 'badge-neutral';
       let label = status;
       let statusClass = '';
@@ -7718,19 +7902,33 @@ async function loadRecentBuilds(type) {
         const rid = btn.getAttribute('data-run-id');
         const bnum = btn.getAttribute('data-build-number') || rid;
         const modalTitle = `Build #${bnum}`;
+
         if (paramsMap[rid]) {
           openBuildParamsModal(paramsMap[rid], modalTitle);
           return;
         }
-        // Fetch params on-demand via Pipelines Runs API
         try {
           btn.style.opacity = '0.5';
           const runData = await invoke('azure_get_build_status', { runId: parseInt(rid), pipelineId: config.pipelineId });
           btn.style.opacity = '';
-          let params = runData.templateParameters || null;
-          if (params && Object.keys(params).length > 0) {
-            paramsMap[rid] = params;
-            openBuildParamsModal(params, modalTitle);
+          let params = null;
+          if (runData.parameters) {
+            try { params = typeof runData.parameters === 'string' ? JSON.parse(runData.parameters) : runData.parameters; } catch (_) { }
+          }
+          if (runData.templateParameters) {
+            params = runData.templateParameters;
+          }
+          // Never downgrade cache
+          if (params) {
+            const cachedKeys = _buildParamsCache[rid] ? Object.keys(_buildParamsCache[rid]).length : 0;
+            if (Object.keys(params).length > cachedKeys) {
+              _buildParamsCache[rid] = params;
+            }
+          }
+          const display = _buildParamsCache[rid] || params;
+          if (display && Object.keys(display).length > 0) {
+            paramsMap[rid] = display;
+            openBuildParamsModal(display, modalTitle);
           } else {
             openBuildParamsModal({}, modalTitle);
           }

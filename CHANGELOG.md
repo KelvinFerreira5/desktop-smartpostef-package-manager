@@ -5,6 +5,48 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2026-07-24
+
+### Changed
+
+- **Linux bundle targets added**: Added `deb` and `appimage` to bundle targets in `tauri.conf.json`, enabling production builds for Ubuntu/Linux desktop installation.
+
+## [3.8.0] - 2026-07-03
+
+### Added
+
+- **Unified YAML-driven Build page**: Merged the separate STA and A2A build pages into a single unified Build page. Pipeline parameters, stages, and variables are now dynamically loaded from the `azure-pipelines-build.yml` file of the selected branch via a new Rust backend command (`azure_fetch_pipeline_definition`), eliminating the need for hardcoded HTML forms.
+
+- **Rust backend: `azure_fetch_pipeline_definition` command**: New Tauri command that fetches the pipeline YAML from Azure DevOps Git API, parses it with `serde_yaml`, and extracts parameters (with types, defaults, allowed values), stages, and variables into a structured `PipelineDefinition` object returned to the frontend.
+
+- **Auto-detect pipeline type from branch name**: The app now automatically determines whether to use the STA or A2A pipeline configuration based on the branch name (branches containing `a2a`, `app-to-app`, etc. use A2A; all others default to STA).
+
+- **Sync YAML button**: A "Sync YAML" button next to the branch input allows manual re-fetching of the pipeline definition, with loading spinner and status feedback.
+
+- **Dynamic section grouping**: Parameters are grouped into sections (General, Platforms, Android Devices, Build Options, Features) using separator entries detected from YAML default values (dash patterns like `-----SECTION-----`).
+
+- **Device card rendering**: Android device parameters with sub-separators are rendered as chip + inline select cards within a responsive grid.
+
+- **Build interaction rules from YAML**: Mutual exclusion rules (TEF API vs TEF Library, Debug Log vs Log Encrypt) and parent-child rules (INTERNAL_APPS → viewers) are applied dynamically when the corresponding parameters exist in the YAML.
+
+- **UI default overrides**: `androids_all` is unchecked and `BUILD_SMARTPOSTEF` is checked on form load, overriding YAML defaults to match the most common build configuration.
+
+### Changed
+
+- **Sidebar navigation simplified**: Replaced the expandable Build nav group (STA/A2A sub-items) with a single "Build" nav item.
+
+- **HTML reduced by ~800 lines**: Removed all hardcoded STA and A2A build form HTML. The unified page contains only a branch input, a dynamic params container, variables card, stages card, and action buttons.
+
+- **Parameter collection is now generic**: `collectParameters()` iterates all `.build-param-field` elements with `data-param-name`/`data-param-type` attributes instead of using hardcoded ID-based collection functions.
+
+- **View Parameters modal restored to semantic display**: The `openBuildParamsModal` uses key-based categorization (prefix matching on parameter names) with a `deviceToIntent` mapping to show Android devices with their intent category (e.g., "A910 — Launcher") and checkmark badges. Parameters are grouped into General (chips), Platforms/Build Options/Features (tags), and Android Devices (list with checkmarks).
+
+- **CSS additions**: New styles for `.build-param-field`, `.build-device-card`, `.device-chip`, `.device-select`, YAML sync status indicators (`.sync-loading`, `.sync-success`, `.sync-warning`), spinner animation, and warning banner.
+
+- **Version bumped**: 3.7.3 → 3.8.0 across `package.json`, `Cargo.toml`, and `tauri.conf.json`.
+
+- **Dependency added**: `serde_yaml = "0.9"` added to Rust backend for YAML parsing.
+
 ## [3.7.3] - 2026-07-02
 
 ### Changed
