@@ -5812,28 +5812,16 @@ function initAsciiToHexPage() {
     decimal: document.getElementById('conv-decimal')
   };
 
-  let lastEditedField = 'text';
-
-  // Track which field was last edited
-  Object.keys(fields).forEach(key => {
-    if (fields[key]) {
-      fields[key].addEventListener('input', () => { lastEditedField = key; });
-      fields[key].addEventListener('focus', () => { lastEditedField = key; });
-    }
-  });
-
-  // Convert button
-  const btnConvert = document.getElementById('btn-convert');
-  if (btnConvert) {
-    const newBtn = btnConvert.cloneNode(true);
-    btnConvert.parentNode.replaceChild(newBtn, btnConvert);
-    newBtn.addEventListener('click', (e) => {
+  // Per-field convert buttons
+  document.querySelectorAll('#page-tools-ascii .btn-convert-field').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
+      const sourceKey = btn.dataset.source;
       const errorDiv = document.getElementById('converter-error');
       if (errorDiv) { errorDiv.style.display = 'none'; errorDiv.textContent = ''; }
 
       try {
-        const source = fields[lastEditedField]?.value || '';
+        const source = fields[sourceKey]?.value || '';
         const values = {
           text: '',
           hex: '',
@@ -5841,7 +5829,7 @@ function initAsciiToHexPage() {
           decimal: ''
         };
 
-        switch (lastEditedField) {
+        switch (sourceKey) {
           case 'text':
             values.text = source;
             values.hex = textToHex(source);
@@ -5869,12 +5857,12 @@ function initAsciiToHexPage() {
         }
 
         Object.entries(fields).forEach(([key, field]) => {
-          if (field && key !== lastEditedField) {
+          if (field && key !== sourceKey) {
             field.value = values[key];
           }
         });
 
-        frontendLog('INFO', 'TOOLS: Conversion done', `Source: ${lastEditedField}`);
+        frontendLog('INFO', 'TOOLS: Conversion done', `Source: ${sourceKey}`);
       } catch (err) {
         if (errorDiv) {
           errorDiv.style.display = 'block';
@@ -5883,7 +5871,7 @@ function initAsciiToHexPage() {
         frontendLog('ERROR', 'TOOLS: Conversion failed', err.message);
       }
     });
-  }
+  });
 
   // Copy buttons
   document.querySelectorAll('#page-tools-ascii .btn-copy-field').forEach(btn => {
@@ -5918,7 +5906,7 @@ function initAsciiToHexPage() {
   });
 
   // Clear All button
-  const btnClearAll = document.getElementById('btn-clear-all');
+  const btnClearAll = document.getElementById('btn-converter-clear-all');
   if (btnClearAll) {
     const newClearAll = btnClearAll.cloneNode(true);
     btnClearAll.parentNode.replaceChild(newClearAll, btnClearAll);

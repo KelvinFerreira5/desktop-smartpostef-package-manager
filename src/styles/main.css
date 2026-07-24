@@ -4302,6 +4302,10 @@ select::-webkit-scrollbar-thumb {
   gap: 0.25rem;
 }
 
+.btn-convert-field {
+  font-weight: 600;
+}
+
 .converter-textarea {
   width: 100%;
   min-height: 120px;

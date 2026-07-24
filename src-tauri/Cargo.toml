@@ -1,6 +1,6 @@
 [package]
 name = "smartpostef-package-manager"
-version = "3.8.1"
+version = "3.8.2"
 description = "SmartPosTEF Package Manager - Desktop application for managing and deploying packages to JFrog"
 authors = ["Aditum Pagamentos"]
 license = "MIT"

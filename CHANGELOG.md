@@ -5,6 +5,12 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.2] - 2026-07-24
+
+### Changed
+
+- **ASCII to Hex converter: per-field convert buttons**: Replaced the single global "Convert" button with individual convert buttons on each field (Text, Hex, Base64, Decimal). Clicking a field's convert button uses that field's value as source and populates the other 3 fields.
+
 ## [3.8.1] - 2026-07-24
 
 ### Changed
