@@ -1,6 +1,34 @@
-# SmartPosTEF Package Manager v3.8.0 (Tauri Edition)
+# SmartPosTEF Package Manager v3.8.1 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+  - [Core Functionality](#core-functionality)
+  - [Package Detection](#package-detection)
+  - [Special Upload Handling](#special-upload-handling)
+  - [Client Mapping](#client-mapping)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Development](#development)
+- [Building](#building)
+  - [Build Scripts](#build-scripts)
+  - [Build for Linux](#build-for-linux)
+  - [Build for Windows (Cross-Compilation)](#build-for-windows-cross-compilation-from-linux)
+  - [Build for Windows (Native)](#build-for-windows-native)
+  - [Build Commands Summary](#build-commands-summary)
+  - [Troubleshooting](#troubleshooting)
+- [Installing on Linux Desktop](#installing-on-linux-desktop)
+  - [Install via .deb](#install-via-deb)
+  - [Install via AppImage](#install-via-appimage)
+  - [Desktop Integration (AppImage)](#desktop-integration-appimage)
+- [Project Structure](#project-structure)
+- [Performance Comparison](#performance-comparison)
+- [Version History](#version-history)
+- [Documentation](#documentation)
+- [License](#license)
 
 ## Overview
 
@@ -208,94 +236,156 @@ cargo tauri dev
 
 ## Building
 
-### Build para Linux
+### Build Scripts
 
-**Apenas executável (sem bundle):**
+The project includes parameterized build scripts for both Linux and Windows:
+
+#### Linux / macOS — `build.sh`
+
+```bash
+./build.sh [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-t, --target TARGET` | Build target: `deb`, `appimage`, `msi`, `nsis`, `all-linux`, `all-windows`, `all` (default: `all-linux`) |
+| `-p, --platform PLAT` | Cross-compile platform: `linux`, `windows` (default: `linux`) |
+| `-m, --mode MODE` | Build mode: `release`, `debug` (default: `release`) |
+| `-i, --install` | Install after build (`.deb` only, requires sudo) |
+| `-I, --integrate` | Integrate AppImage into desktop (icon, `.desktop` file, PATH). Can be used standalone to integrate an existing build |
+| `-c, --clean` | Clean before build |
+| `-v, --verbose` | Verbose output |
+| `-h, --help` | Show help |
+
+**Examples:**
+
+```bash
+./build.sh                            # Build all Linux targets (deb + appimage)
+./build.sh -t deb                     # Build .deb only
+./build.sh -t appimage                # Build AppImage only
+./build.sh -t deb -i                  # Build .deb and install it
+./build.sh -t appimage -I             # Build AppImage + integrate into desktop
+./build.sh -I                         # Integrate existing AppImage (no build)
+./build.sh -t all-windows -p windows  # Cross-compile for Windows (msi + nsis)
+./build.sh -t all -c                  # Clean + build everything
+./build.sh -m debug -t deb            # Debug build
+```
+
+#### Windows — `build.ps1`
+
+```powershell
+.\build.ps1 [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-Target <string>` | Build target: `msi`, `nsis`, `all-windows`, `deb`, `appimage`, `all-linux`, `all` (default: `all-windows`) |
+| `-Mode <string>` | Build mode: `release`, `debug` (default: `release`) |
+| `-Clean` | Clean before build |
+| `-VerboseOutput` | Verbose output |
+| `-Help` | Show help |
+
+**Examples:**
+
+```powershell
+.\build.ps1                          # Build MSI + NSIS
+.\build.ps1 -Target msi             # Build MSI only
+.\build.ps1 -Target nsis            # Build NSIS installer only
+.\build.ps1 -Clean                  # Clean + build all Windows targets
+.\build.ps1 -Mode debug -Target msi # Debug build
+```
+
+> If execution policy blocks the script, run: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+### Build for Linux
+
+**Executable only (no bundle):**
 
 ```bash
 cargo tauri build --no-bundle
 ```
 
-O executável será gerado em:
+Output: `src-tauri/target/release/smartpostef-package-manager`
 
-```
-src-tauri/target/release/smartpostef-package-manager
-```
-
-**Com bundles (.deb, .AppImage, .rpm):**
+**With bundles (.deb, .AppImage):**
 
 ```bash
 cargo tauri build
 ```
 
-Os pacotes serão gerados em:
+Output:
 
 ```
 src-tauri/target/release/bundle/
 ├── deb/
-│   └── smartpostef-package-manager_x.x.x_amd64.deb
-├── appimage/
-│   └── smartpostef-package-manager_x.x.x_amd64.AppImage
-└── rpm/
-    └── smartpostef-package-manager-x.x.x-1.x86_64.rpm
+│   └── SmartPosTEF Package Manager_x.x.x_amd64.deb
+└── appimage/
+    └── SmartPosTEF Package Manager_x.x.x_amd64.AppImage
 ```
 
-### Build para Windows (Cross-Compilation a partir do Linux)
+### Build for Windows (Cross-Compilation from Linux)
 
-A cross-compilation do Linux para Windows gera um instalador NSIS (`.exe`). Instaladores MSI **não** podem ser gerados via cross-compilation.
+Cross-compilation generates an NSIS installer (`.exe`). MSI installers **cannot** be generated via cross-compilation.
 
-**1. Instalar dependências de cross-compilation:**
+**1. Install cross-compilation dependencies:**
 
 ```bash
 sudo apt install -y nsis lld llvm clang
 ```
 
-> **Importante:** O pacote `clang` é necessário pois o `cargo-xwin` usa `clang-cl` como compilador C/C++ compatível com MSVC para compilar dependências nativas. Sem ele, o build falhará com o erro `failed to find tool "clang-cl"`.
+> `clang` is required because `cargo-xwin` uses `clang-cl` as the MSVC-compatible C/C++ compiler.
 
-**2. Adicionar o target Windows ao Rust:**
+**2. Add Windows target to Rust:**
 
 ```bash
 rustup target add x86_64-pc-windows-msvc
 ```
 
-**3. Instalar cargo-xwin:**
+**3. Install cargo-xwin:**
 
 ```bash
 cargo install --locked cargo-xwin
 ```
 
-**4. Compilar para Windows:**
+**4. Build:**
 
 ```bash
 cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc
 ```
 
-O instalador NSIS será gerado em:
+Output:
 
 ```
 src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
-└── smartpostef-package-manager_x.x.x_x64-setup.exe
+└── SmartPosTEF Package Manager_x.x.x_x64-setup.exe
 ```
 
-O executável standalone (sem instalador) estará em:
+### Build for Windows (Native)
 
+When building directly on Windows, both MSI and NSIS targets are available:
+
+```powershell
+.\build.ps1                    # Builds both MSI + NSIS
+.\build.ps1 -Target msi       # MSI only
+.\build.ps1 -Target nsis      # NSIS only
 ```
-src-tauri/target/x86_64-pc-windows-msvc/release/smartpostef-package-manager.exe
-```
 
-### Resumo dos Comandos de Build
+### Build Commands Summary
 
-| Objetivo | Comando |
-|----------|---------|
-| Dev mode (Linux) | `cargo tauri dev` |
-| Build Linux (executável) | `cargo tauri build --no-bundle` |
-| Build Linux (com bundles) | `cargo tauri build` |
-| Build Windows (cross-compile) | `cargo tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc` |
-
-### Solução de Problemas
-
-| Erro | Solução |
+| Goal | Command |
 |------|---------|
+| Dev mode (Linux) | `cargo tauri dev` |
+| Build Linux (executable only) | `cargo tauri build --no-bundle` |
+| Build Linux (deb + appimage) | `./build.sh` or `cargo tauri build` |
+| Build + install .deb | `./build.sh -t deb -i` |
+| Build + integrate AppImage | `./build.sh -t appimage -I` |
+| Build Windows (cross-compile) | `./build.sh -t all-windows -p windows` |
+| Build Windows (native) | `.\build.ps1` |
+
+### Troubleshooting
+
+| Error | Solution |
+|-------|---------|
 | `webkit2gtk-4.1 not found` | `sudo apt install libwebkit2gtk-4.1-dev` |
 | `failed to run custom build command for openssl-sys` | `sudo apt install libssl-dev pkg-config` |
 | `linker 'cc' not found` | `sudo apt install build-essential` |
@@ -304,7 +394,59 @@ src-tauri/target/x86_64-pc-windows-msvc/release/smartpostef-package-manager.exe
 | `failed to find tool "clang-cl"` | `sudo apt install clang` |
 | `version mismatched Tauri packages` | `rm -rf node_modules package-lock.json && npm install` |
 | `failed to read plugin permissions` | `cd src-tauri && cargo clean && cd .. && cargo tauri build` |
-| Primeira compilação muito lenta | Normal — baixa e compila todas as dependências Rust (5-15 min). Builds subsequentes são rápidos. |
+| First build very slow | Normal — downloads and compiles all Rust dependencies (5-15 min). Subsequent builds are fast. |
+
+## Installing on Linux Desktop
+
+### Install via .deb
+
+The `.deb` package provides full system integration out of the box (icon, app menu entry, PATH):
+
+```bash
+sudo dpkg -i src-tauri/target/release/bundle/deb/SmartPosTEF\ Package\ Manager_3.8.1_amd64.deb
+```
+
+Or using the build script:
+
+```bash
+./build.sh -t deb -i
+```
+
+### Install via AppImage
+
+AppImage requires no installation — just make it executable and run:
+
+```bash
+chmod +x "SmartPosTEF Package Manager_3.8.1_amd64.AppImage"
+./"SmartPosTEF Package Manager_3.8.1_amd64.AppImage"
+```
+
+### Desktop Integration (AppImage)
+
+To add the AppImage to your application launcher (KDE Plasma, GNOME, XFCE, etc.) with icon and terminal access, use the `-I` flag:
+
+```bash
+# Build and integrate in one step
+./build.sh -t appimage -I
+
+# Or integrate an already-built AppImage
+./build.sh -I
+```
+
+This performs XDG-compliant integration (no sudo required):
+
+| What | Location |
+|------|----------|
+| Binary | `~/.local/bin/smartpostef-package-manager` |
+| Icons (32, 128, 256px) | `~/.local/share/icons/hicolor/{size}/apps/` |
+| Desktop entry | `~/.local/share/applications/smartpostef-package-manager.desktop` |
+
+**After integration:**
+
+- The app appears in your application launcher (KDE Kickoff, GNOME Activities, etc.) with its icon
+- Run from any terminal with: `smartpostef-package-manager`
+- The integration is **permanent** — survives reboots and DE restarts
+- Ensure `~/.local/bin` is in your PATH (add `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc` if needed)
 
 ## Project Structure
 
@@ -324,6 +466,8 @@ smartpostef-package-manager-tauri/
 │   ├── capabilities/           # Tauri security capabilities
 │   ├── Cargo.toml              # Rust dependencies
 │   └── tauri.conf.json         # Tauri configuration
+├── build.sh                    # Linux/macOS build script (parameterized)
+├── build.ps1                   # Windows build script (PowerShell)
 ├── package.json                # Node.js dependencies
 ├── CHANGELOG.md                # Version history
 ├── README.md                   # This file
@@ -350,6 +494,8 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 3.8.1 | 2026-07-24 | Linux bundle targets (`deb`, `appimage`), build scripts (`build.sh`, `build.ps1`), AppImage desktop integration (`-I` flag) |
+| 3.8.0 | 2026-07-03 | Unified YAML-driven Build page, dynamic pipeline parameters from Azure DevOps YAML, auto-detect STA/A2A from branch |
 | 3.2.2 | 2026-04-09 | Purge button (delete all packages from JFrog), release description field, search icon fix, A2A client extraction bugfix |
 | 3.2.1 | 2026-04-09 | v2 package naming support (`+hexhash`), 23 new regex patterns, Linux `.tar` support |
 | 3.2.0 | 2026-04-09 | 8-theme system (4 dark + 4 light), glassmorphism UI, vertical settings navigation, colorful accents |
