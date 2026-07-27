@@ -337,6 +337,7 @@ fn ensure_directories() {
     let _ = fs::create_dir_all(app_dir.join("html"));
     let _ = fs::create_dir_all(app_dir.join("logs"));
     let _ = fs::create_dir_all(app_dir.join("spf"));
+    let _ = fs::create_dir_all(app_dir.join("staging"));
 }
 
 /// Migrate existing releases to include spfFileName if missing.
@@ -2571,6 +2572,85 @@ mod commands {
         })
     }
 
+    /// Like scan_folder but walks the directory tree recursively (no depth limit).
+    /// Used for scanning extracted Azure DevOps build artifacts which have nested folder structures.
+    #[tauri::command]
+    pub fn scan_folder_deep(folder_path: String) -> Result<ScanResult, String> {
+        log_to_file("INFO", "SCAN_FOLDER_DEEP: Starting deep folder scan", Some(&format!(
+            "Folder path: {}", folder_path
+        )));
+
+        let path = Path::new(&folder_path);
+        if !path.exists() {
+            return Err("Folder does not exist".to_string());
+        }
+
+        let settings = load_settings();
+        let mut packages = Vec::new();
+        let extensions = ["apk", "aar", "dll", "so", "zip", "lib", "exe"];
+
+        for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+            let file_path = entry.path();
+            if file_path.is_file() {
+                let file_name = file_path.file_name().unwrap_or_default().to_string_lossy();
+
+                let has_valid_ext = file_path.extension()
+                    .map(|ext| extensions.contains(&ext.to_string_lossy().to_lowercase().as_str()))
+                    .unwrap_or(false);
+
+                let is_linux_installer = file_name.contains("-online") || file_name.contains("-offline");
+
+                if has_valid_ext || is_linux_installer {
+                    let pkg_info = parse_package(
+                        &file_name,
+                        &file_path.to_string_lossy(),
+                        &settings
+                    );
+                    packages.push(pkg_info);
+                }
+            }
+        }
+
+        // Version detection (same logic as scan_folder)
+        let mut detected_version: Option<String> = None;
+        let version_error: Option<String> = None;
+        let companion_warnings: Vec<String> = Vec::new();
+
+        let version_re = regex::Regex::new(r"(\d+\.\d+\.\d+)").unwrap();
+        let mut base_versions = std::collections::HashSet::new();
+
+        for pkg in &packages {
+            let handling = pkg.special_handling.as_deref().unwrap_or("");
+            if handling.starts_with("extract-") && handling != "extract-s920-root" {
+                continue;
+            }
+            if let Some(ver) = &pkg.version {
+                if let Some(caps) = version_re.captures(ver) {
+                    base_versions.insert(caps[1].to_string());
+                }
+            }
+        }
+
+        if base_versions.len() == 1 {
+            detected_version = base_versions.into_iter().next();
+        }
+
+        let is_valid = version_error.is_none();
+
+        log_to_file("INFO", "SCAN_FOLDER_DEEP: Scan completed", Some(&format!(
+            "Packages found: {}, Detected version: {:?}",
+            packages.len(), detected_version
+        )));
+
+        Ok(ScanResult {
+            packages,
+            detected_version,
+            version_error,
+            companion_warnings,
+            is_valid,
+        })
+    }
+
     #[tauri::command]
     pub fn scan_files(file_paths: Vec<String>) -> Result<Vec<PackageInfo>, String> {
         log_to_file("INFO", "SCAN_FILES: Starting manual file scan operation", Some(&format!(
@@ -3337,6 +3417,174 @@ mod commands {
         let hash = format!("{:x}", digest);
         log_to_file("DEBUG", "MD5: Hash calculated", Some(&format!("File: {}\n  MD5: {}", file_path, hash)));
         Ok(hash)
+    }
+
+    /// Zip a folder's contents into a zip file. The zip will contain a root folder
+    /// with the same name as the source folder (mimicking Azure DevOps artifact zip structure).
+    #[tauri::command]
+    pub fn create_zip_from_folder(folder_path: String, zip_path: String) -> Result<String, String> {
+        log_to_file("INFO", "ZIP: Creating ZIP from folder", Some(&format!(
+            "Folder: {}\n  Output: {}", folder_path, zip_path
+        )));
+        let source = Path::new(&folder_path);
+        if !source.exists() || !source.is_dir() {
+            return Err("Source folder does not exist".to_string());
+        }
+
+        let dest = Path::new(&zip_path);
+        let file = File::create(dest).map_err(|e| {
+            log_to_file("ERROR", "ZIP: Failed to create zip file", Some(&e.to_string()));
+            e.to_string()
+        })?;
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::FileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+
+        for entry in WalkDir::new(source).into_iter().filter_map(|e| e.ok()) {
+            let path = entry.path();
+            let relative = path.strip_prefix(source).unwrap_or(path);
+
+            if path.is_dir() {
+                if relative.to_string_lossy().is_empty() {
+                    continue;
+                }
+                let dir_name = format!("{}/", relative.to_string_lossy());
+                zip.add_directory(&dir_name, options).ok();
+            } else {
+                let file_name = relative.to_string_lossy().to_string();
+                zip.start_file(&file_name, options).map_err(|e| e.to_string())?;
+                let content = fs::read(path).map_err(|e| e.to_string())?;
+                zip.write_all(&content).map_err(|e| e.to_string())?;
+            }
+        }
+
+        zip.finish().map_err(|e| e.to_string())?;
+        log_to_file("INFO", "ZIP: Folder zipped successfully", Some(&format!("Output: {}", zip_path)));
+        Ok(zip_path)
+    }
+
+    /// Consolidate Azure DevOps staging artifacts into the staging root for scanning.
+    /// Copies all package files directly into staging root, zipping companion subfolders
+    /// with the correct internal structure, then removes original artifact subfolders.
+    #[tauri::command]
+    pub fn consolidate_staging(staging_dir: String) -> Result<String, String> {
+        log_to_file("INFO", "CONSOLIDATE: Starting artifact consolidation", Some(&format!(
+            "Staging dir: {}", staging_dir
+        )));
+
+        let staging_path = Path::new(&staging_dir);
+        if !staging_path.exists() || !staging_path.is_dir() {
+            return Err("Staging directory does not exist".to_string());
+        }
+
+        // Companion folder mapping: folder name → (zip filename, inner subfolder name, zip prefix)
+        // zip_prefix is the path inside the zip where content should be placed
+        let companion_map: std::collections::HashMap<&str, (&str, &str, &str)> = [
+            ("Windows-x86", ("x86.zip", "x86", "x86/")),
+            ("Linux_64-Gui-Installer", ("Linux_64-Gui-Installer.zip", "x86_64", "Linux_64-Gui-Installer/x86_64/")),
+            ("Linux_i386-Installer", ("Linux_i386-Installer.zip", "i386", "Linux_i386-Installer/i386/")),
+        ].iter().cloned().collect();
+
+        // Collect folder names to remove after processing
+        let mut folders_to_remove: Vec<PathBuf> = Vec::new();
+
+        // Iterate each artifact subfolder in the staging dir
+        let entries = fs::read_dir(staging_path).map_err(|e| e.to_string())?;
+        for entry in entries.filter_map(|e| e.ok()) {
+            let entry_path = entry.path();
+            if !entry_path.is_dir() {
+                continue;
+            }
+            let folder_name = entry_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+
+            if let Some(&(zip_name, subfolder_name, zip_prefix)) = companion_map.get(folder_name.as_str()) {
+                // Companion folder: copy loose files + zip the inner subfolder
+                log_to_file("DEBUG", "CONSOLIDATE: Processing companion folder", Some(&format!(
+                    "Folder: {}, Zip: {}, Subfolder: {}, Prefix: {}", folder_name, zip_name, subfolder_name, zip_prefix
+                )));
+
+                // Copy loose files (exe, installers) to staging root
+                for file_entry in fs::read_dir(&entry_path).into_iter().flatten().filter_map(|e| e.ok()) {
+                    let file_path = file_entry.path();
+                    if file_path.is_file() {
+                        let file_name = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let dest = staging_path.join(&file_name);
+                        fs::copy(&file_path, &dest).map_err(|e| {
+                            log_to_file("ERROR", "CONSOLIDATE: Failed to copy file", Some(&format!("{}: {}", file_name, e)));
+                            e.to_string()
+                        })?;
+                        log_to_file("DEBUG", "CONSOLIDATE: Copied file", Some(&format!("{} → root", file_name)));
+                    }
+                }
+
+                // Zip the inner subfolder with correct prefix structure
+                let subfolder_path = entry_path.join(subfolder_name);
+                if subfolder_path.exists() && subfolder_path.is_dir() {
+                    let zip_path = staging_path.join(zip_name);
+                    let zip_file = File::create(&zip_path).map_err(|e| {
+                        log_to_file("ERROR", "CONSOLIDATE: Failed to create companion zip", Some(&e.to_string()));
+                        e.to_string()
+                    })?;
+                    let mut zip = zip::ZipWriter::new(zip_file);
+                    let options = zip::write::FileOptions::default()
+                        .compression_method(zip::CompressionMethod::Deflated);
+
+                    for walk_entry in WalkDir::new(&subfolder_path).into_iter().filter_map(|e| e.ok()) {
+                        let path = walk_entry.path();
+                        let relative = path.strip_prefix(&subfolder_path).unwrap_or(path);
+
+                        if path.is_dir() {
+                            if relative.to_string_lossy().is_empty() {
+                                continue;
+                            }
+                            let dir_name = format!("{}{}/", zip_prefix, relative.to_string_lossy());
+                            zip.add_directory(&dir_name, options).ok();
+                        } else {
+                            let file_name = format!("{}{}", zip_prefix, relative.to_string_lossy());
+                            zip.start_file(&file_name, options).map_err(|e| e.to_string())?;
+                            let content = fs::read(path).map_err(|e| e.to_string())?;
+                            zip.write_all(&content).map_err(|e| e.to_string())?;
+                        }
+                    }
+
+                    zip.finish().map_err(|e| e.to_string())?;
+                    log_to_file("INFO", "CONSOLIDATE: Companion subfolder zipped", Some(&format!(
+                        "{}/{} → {}", folder_name, subfolder_name, zip_name
+                    )));
+                } else {
+                    log_to_file("WARNING", "CONSOLIDATE: Companion subfolder not found", Some(&format!(
+                        "Expected: {}/{}", folder_name, subfolder_name
+                    )));
+                }
+
+                folders_to_remove.push(entry_path);
+            } else {
+                // Regular folder: copy all files to staging root
+                log_to_file("DEBUG", "CONSOLIDATE: Processing regular folder", Some(&format!("Folder: {}", folder_name)));
+                for file_entry in fs::read_dir(&entry_path).into_iter().flatten().filter_map(|e| e.ok()) {
+                    let file_path = file_entry.path();
+                    if file_path.is_file() {
+                        let file_name = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let dest = staging_path.join(&file_name);
+                        fs::copy(&file_path, &dest).map_err(|e| {
+                            log_to_file("ERROR", "CONSOLIDATE: Failed to copy file", Some(&format!("{}: {}", file_name, e)));
+                            e.to_string()
+                        })?;
+                        log_to_file("DEBUG", "CONSOLIDATE: Copied file", Some(&format!("{}/{} → root", folder_name, file_name)));
+                    }
+                }
+                folders_to_remove.push(entry_path);
+            }
+        }
+
+        // Remove original artifact subfolders
+        for folder in &folders_to_remove {
+            fs::remove_dir_all(folder).ok();
+        }
+
+        let result_path = staging_path.to_string_lossy().to_string();
+        log_to_file("INFO", "CONSOLIDATE: Consolidation complete", Some(&format!("Output: {}", result_path)));
+        Ok(result_path)
     }
 
     #[tauri::command]
@@ -5509,6 +5757,200 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
         log_to_file("INFO", "AZURE: Build cancel requested", Some(&format!("Build ID: {}", build_id)));
         Ok(json)
     }
+
+    #[tauri::command]
+    pub async fn azure_get_build_artifacts(build_id: u64) -> Result<serde_json::Value, String> {
+        log_to_file("DEBUG", "AZURE: Getting build artifacts", Some(&format!("Build ID: {}", build_id)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let url = format!(
+            "{}/{}/_apis/build/builds/{}/artifacts?api-version=7.1",
+            settings.azure_devops.org_url.trim_end_matches('/'),
+            settings.azure_devops.project,
+            build_id
+        );
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to get build artifacts", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Build artifacts returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        let count = json.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        log_to_file("DEBUG", "AZURE: Build artifacts fetched", Some(&format!(
+            "Build ID: {}, Artifact count: {}", build_id, count
+        )));
+        Ok(json)
+    }
+
+    #[tauri::command]
+    pub async fn azure_download_artifact(build_id: u64, build_number: String, artifact_name: String, download_url: String) -> Result<String, String> {
+        log_to_file("INFO", "AZURE: Downloading artifact", Some(&format!(
+            "Build ID: {}, Build Number: {}, Artifact: {}", build_id, build_number, artifact_name
+        )));
+
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        // Create staging directory — extract to staging/{buildNumber}/ directly;
+        // the zip already contains the artifact folder (e.g., P2_Launcher/file.apk)
+        let staging_dir = get_app_data_dir().join("staging").join(&build_number);
+        fs::create_dir_all(&staging_dir).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to create staging directory", Some(&e.to_string()));
+            format!("Failed to create staging directory: {}", e)
+        })?;
+
+        // Download the artifact zip
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&download_url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to download artifact", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Artifact download returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Azure DevOps API error ({}): {}", status, body));
+        }
+
+        let bytes = resp.bytes().await.map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to read artifact bytes", Some(&e.to_string()));
+            format!("Failed to read response: {}", e)
+        })?;
+
+        // Save zip temporarily
+        let zip_path = get_app_data_dir().join("staging").join(format!("{}_{}.zip", build_id, artifact_name));
+        {
+            let mut file = File::create(&zip_path).map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to create temp zip file", Some(&e.to_string()));
+                format!("Failed to create zip file: {}", e)
+            })?;
+            file.write_all(&bytes).map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to write zip file", Some(&e.to_string()));
+                format!("Failed to write zip file: {}", e)
+            })?;
+        }
+
+        log_to_file("DEBUG", "AZURE: Artifact downloaded, extracting", Some(&format!(
+            "Zip size: {} bytes, Extracting to: {}", bytes.len(), staging_dir.display()
+        )));
+
+        // Extract the zip
+        let file = File::open(&zip_path).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to open zip for extraction", Some(&e.to_string()));
+            format!("Failed to open zip: {}", e)
+        })?;
+
+        let mut archive = zip::ZipArchive::new(file).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to read zip archive", Some(&e.to_string()));
+            format!("Failed to read zip archive: {}", e)
+        })?;
+
+        let mut extracted_count = 0;
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+            let entry_name = entry.name().to_string();
+
+            // Security: prevent path traversal
+            if entry_name.contains("..") {
+                log_to_file("WARN", "AZURE: Skipping zip entry with path traversal", Some(&entry_name));
+                continue;
+            }
+
+            let outpath = staging_dir.join(&entry_name);
+
+            if entry.is_dir() {
+                fs::create_dir_all(&outpath).ok();
+            } else {
+                if let Some(parent) = outpath.parent() {
+                    fs::create_dir_all(parent).ok();
+                }
+                let mut outfile = File::create(&outpath).map_err(|e| e.to_string())?;
+                std::io::copy(&mut entry, &mut outfile).map_err(|e| e.to_string())?;
+                extracted_count += 1;
+            }
+        }
+
+        // Remove temporary zip file
+        let _ = fs::remove_file(&zip_path);
+
+        // Return the path to the artifact's own subfolder inside staging
+        let artifact_dir = staging_dir.join(&artifact_name);
+        log_to_file("INFO", "AZURE: Artifact extracted successfully", Some(&format!(
+            "Build ID: {}, Artifact: {}, Files: {}, Path: {}",
+            build_id, artifact_name, extracted_count, artifact_dir.display()
+        )));
+
+        Ok(artifact_dir.to_string_lossy().to_string())
+    }
+
+    #[tauri::command]
+    pub async fn cleanup_staging(build_id: Option<u64>) -> Result<(), String> {
+        let staging_base = get_app_data_dir().join("staging");
+        if let Some(id) = build_id {
+            let target = staging_base.join(id.to_string());
+            if target.exists() {
+                fs::remove_dir_all(&target).map_err(|e| {
+                    log_to_file("ERROR", "STAGING: Failed to clean up staging directory", Some(&e.to_string()));
+                    format!("Failed to clean staging: {}", e)
+                })?;
+                log_to_file("INFO", "STAGING: Cleaned up staging directory", Some(&format!("Build ID: {}", id)));
+            }
+        } else {
+            if staging_base.exists() {
+                fs::remove_dir_all(&staging_base).map_err(|e| {
+                    log_to_file("ERROR", "STAGING: Failed to clean up all staging", Some(&e.to_string()));
+                    format!("Failed to clean staging: {}", e)
+                })?;
+                log_to_file("INFO", "STAGING: Cleaned up all staging directories", None);
+            }
+        }
+        // Also remove any leftover zip files in staging root
+        let staging_root = get_app_data_dir().join("staging");
+        if staging_root.exists() {
+            if let Ok(entries) = fs::read_dir(&staging_root) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().map_or(false, |ext| ext == "zip") {
+                        let _ = fs::remove_file(&path);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -5545,12 +5987,14 @@ pub fn run() {
             commands::save_release,
             commands::delete_release,
             commands::scan_folder,
+            commands::scan_folder_deep,
             commands::scan_files,
             commands::upload_to_jfrog,
             commands::extract_and_upload_to_jfrog,
             commands::extract_root_and_upload_to_jfrog,
             commands::calculate_md5,
             commands::create_zip,
+            commands::create_zip_from_folder,
             commands::generate_spf_content,
             commands::save_spf_file,
             commands::generate_html,
@@ -5578,6 +6022,10 @@ pub fn run() {
             commands::azure_get_build_status,
             commands::azure_get_recent_builds,
             commands::azure_cancel_build,
+            commands::azure_get_build_artifacts,
+            commands::azure_download_artifact,
+            commands::cleanup_staging,
+            commands::consolidate_staging,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

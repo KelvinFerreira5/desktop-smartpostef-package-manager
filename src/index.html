@@ -1448,6 +1448,16 @@
               </div>
               <button class="btn btn-sm build-params-btn" id="build-build-params-btn" style="display:none;">View
                 Parameters</button>
+              <button class="btn btn-sm build-create-release-btn" id="build-create-release-btn" style="display:none;"
+                title="Create release from build artifacts">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
+                  <path
+                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+                Create Release
+              </button>
             </div>
           </div>
 
@@ -1474,6 +1484,30 @@
         <button class="modal-close">&times;</button>
       </div>
       <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Build Artifacts Modal -->
+  <div class="modal" id="build-artifacts-modal">
+    <div class="modal-content" style="max-width:560px;">
+      <div class="modal-header">
+        <h3 id="build-artifacts-modal-title">Build Artifacts</h3>
+        <button class="modal-close" id="build-artifacts-modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="build-artifacts-modal-body" style="max-height:450px;overflow-y:auto;">
+        <p class="empty-state">Loading artifacts...</p>
+      </div>
+      <div class="modal-footer" id="build-artifacts-modal-footer" style="display:none;">
+        <button class="btn btn-secondary" id="build-artifacts-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="build-artifacts-download-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download &amp; Create Release
+        </button>
+      </div>
     </div>
   </div>
 

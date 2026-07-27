@@ -1847,6 +1847,7 @@ async function handleFinalizeDeployOnly() {
 
     // Reset deploy state
     currentDeployPurpose = null;
+    _sourceBuild = null;
 
     // Step 5: Navigate to Releases page
     frontendLog('INFO', 'DEPLOY_ONLY: Step 5 - Navigating to Releases page');
@@ -2257,6 +2258,17 @@ async function handleGenerateSpf() {
 
     frontendLog('INFO', 'SPF: Release saved successfully', `Version: ${spfVersion}`);
     showToast('success', 'Release saved successfully');
+
+    // Clean up staging directory if release was created from build artifacts
+    if (_sourceBuild && _sourceBuild.id) {
+      try {
+        await invoke('cleanup_staging', { buildId: _sourceBuild.id });
+        frontendLog('INFO', 'SPF: Staging directory cleaned up', `Build ID: ${_sourceBuild.id}`);
+      } catch (cleanupErr) {
+        frontendLog('WARN', 'SPF: Failed to clean staging', cleanupErr.toString());
+      }
+      _sourceBuild = null;
+    }
   } catch (error) {
     console.error('Failed to generate SPF:', error);
     frontendLog('ERROR', 'SPF: Failed to generate SPF', error.toString());
@@ -2398,6 +2410,17 @@ async function handleFinalizeRelease() {
 
     // Reset deploy state
     currentDeployPurpose = null;
+
+    // Clean up staging directory if release was created from build artifacts
+    if (_sourceBuild && _sourceBuild.id) {
+      try {
+        await invoke('cleanup_staging', { buildId: _sourceBuild.id });
+        frontendLog('INFO', 'FINALIZE: Staging directory cleaned up', `Build ID: ${_sourceBuild.id}`);
+      } catch (cleanupErr) {
+        frontendLog('WARN', 'FINALIZE: Failed to clean staging', cleanupErr.toString());
+      }
+      _sourceBuild = null;
+    }
 
     // Step 6: Navigate to Releases page
     frontendLog('INFO', 'FINALIZE: Step 6 - Navigating to Releases page');
@@ -6684,6 +6707,8 @@ let _cachedBranches = {};
 let _cachedPipelineDefs = {};
 let _lastSyncedBranch = '';
 let _buildParamsCache = {}; // Global cache: runId → params (survives loadRecentBuilds re-calls)
+let _buildArtifactsCache = {}; // Global cache: buildId → artifacts array
+let _sourceBuild = null; // Stores build metadata when creating release from artifacts
 
 async function fetchBranches(repository, forceRefresh = false) {
   if (_cachedBranches[repository] && !forceRefresh) return _cachedBranches[repository];
@@ -7553,6 +7578,27 @@ async function checkInProgressBuild() {
 
       populateBuildDetails(run);
       startPolling(runId);
+    } else {
+      // Show status card for completed builds too (for "Create Release" button)
+      const runId = run.id;
+      const webUrl = run._links?.web?.href || '#';
+      const buildResult = (run.result || '').toLowerCase();
+      const statusCard = document.getElementById('build-build-status');
+      const statusText = document.getElementById('build-status-text');
+      const statusLink = document.getElementById('build-status-link');
+      const statusIndicator = document.getElementById('build-status-indicator');
+      const cancelBtn = document.getElementById('build-cancel-build');
+
+      if (statusCard) statusCard.style.display = '';
+      if (statusText) statusText.textContent = `Completed: ${run.result || 'unknown'}`;
+      if (statusLink && webUrl) statusLink.href = webUrl;
+      if (statusIndicator) {
+        statusIndicator.className = `build-status-indicator status-${buildResult === 'succeeded' ? 'succeeded' : buildResult === 'failed' ? 'failed' : 'canceled'}`;
+      }
+      if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = true; }
+
+      populateBuildDetails(run);
+      checkAndShowCreateReleaseBtn(runId);
     }
   } catch (err) {
     frontendLog('WARN', 'BUILD: Failed to check in-progress build', err.toString());
@@ -7765,6 +7811,9 @@ function startPolling(runId) {
         }
         if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = true; }
 
+        // Check for artifacts and show "Create Release" button
+        checkAndShowCreateReleaseBtn(runId);
+
         if (!_buildPollTimeout) {
           _buildPollTimeout = setTimeout(() => {
             clearInterval(_buildPollInterval);
@@ -7877,6 +7926,9 @@ async function loadRecentBuilds() {
           <button class="build-history-params-btn" data-run-id="${runId}" data-build-number="${buildNumber}" title="View Parameters">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           </button>
+          ${status === 'completed' ? `<button class="build-history-release-btn" data-build-id="${runId}" data-build-number="${buildNumber}" data-branch="${branch}" data-commit="${sourceVersion}" title="Create Release from Artifacts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </button>` : ''}
           <a href="${webUrl}" target="_blank" class="build-history-view-btn" title="View in Azure DevOps">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
@@ -7926,7 +7978,339 @@ async function loadRecentBuilds() {
         }
       });
     });
+
+    // Bind click events for "Create Release" buttons in history
+    container.querySelectorAll('.build-history-release-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const buildId = parseInt(btn.getAttribute('data-build-id'));
+        const buildNumber = btn.getAttribute('data-build-number') || '';
+        const branch = btn.getAttribute('data-branch') || '';
+        const commit = btn.getAttribute('data-commit') || '';
+        openArtifactsModal(buildId, buildNumber, branch, commit);
+      });
+    });
   } catch (err) {
     container.innerHTML = `<p class="empty-state">Failed to load: ${err}</p>`;
   }
+}
+
+// ========== Build → Release: Artifact Integration ==========
+
+// Check for artifacts and show/hide the "Create Release" button on the status card
+async function checkAndShowCreateReleaseBtn(buildId) {
+  const btn = document.getElementById('build-create-release-btn');
+  if (!btn || !invoke) return;
+
+  try {
+    const data = await invoke('azure_get_build_artifacts', { buildId: parseInt(buildId) });
+    const artifacts = data.value || [];
+    _buildArtifactsCache[buildId] = artifacts;
+
+    if (artifacts.length > 0) {
+      btn.style.display = 'inline-flex';
+      btn.onclick = () => {
+        const buildIdEl = document.getElementById('build-build-id');
+        const buildNumberEl = document.getElementById('build-build-number');
+        const buildBranchEl = document.getElementById('build-build-branch');
+        const bid = buildIdEl ? buildIdEl.textContent : buildId;
+        const bnum = buildNumberEl ? buildNumberEl.textContent : '';
+        const branch = buildBranchEl ? buildBranchEl.textContent : '';
+        openArtifactsModal(parseInt(bid), bnum, branch, '');
+      };
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch (err) {
+    frontendLog('WARN', 'BUILD: Failed to check artifacts', err.toString());
+    btn.style.display = 'none';
+  }
+}
+
+// Open the artifacts preview modal
+async function openArtifactsModal(buildId, buildNumber, branch, commit) {
+  const modal = document.getElementById('build-artifacts-modal');
+  const body = document.getElementById('build-artifacts-modal-body');
+  const footer = document.getElementById('build-artifacts-modal-footer');
+  const titleEl = document.getElementById('build-artifacts-modal-title');
+  const closeBtn = document.getElementById('build-artifacts-modal-close');
+  const cancelBtn = document.getElementById('build-artifacts-cancel-btn');
+  const downloadBtn = document.getElementById('build-artifacts-download-btn');
+  if (!modal || !body) return;
+
+  if (titleEl) titleEl.textContent = `Build #${buildNumber || buildId} — Artifacts`;
+  body.innerHTML = '<p class="empty-state">Loading artifacts...</p>';
+  if (footer) footer.style.display = 'none';
+  modal.classList.add('active');
+
+  // Close handlers
+  const closeModal = () => modal.classList.remove('active');
+  if (closeBtn) closeBtn.onclick = closeModal;
+  if (cancelBtn) cancelBtn.onclick = closeModal;
+  modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+  try {
+    let artifacts = _buildArtifactsCache[buildId];
+    if (!artifacts) {
+      const data = await invoke('azure_get_build_artifacts', { buildId });
+      artifacts = data.value || [];
+      _buildArtifactsCache[buildId] = artifacts;
+    }
+
+    if (artifacts.length === 0) {
+      body.innerHTML = '<p class="empty-state">No artifacts found for this build</p>';
+      return;
+    }
+
+    // Build info header
+    const pipelineType = _detectPipelineType(branch);
+    let html = `<div class="artifact-build-info">
+      <span><strong>Build:</strong> #${buildNumber || buildId}</span>
+      <span><strong>Branch:</strong> ${branch || '-'}</span>
+      <span><strong>Pipeline:</strong> ${pipelineType.toUpperCase()}</span>
+      ${commit ? `<span><strong>Commit:</strong> ${commit}</span>` : ''}
+    </div>`;
+
+    // Artifact list with checkboxes
+    html += '<div class="artifact-list">';
+    artifacts.forEach((art, idx) => {
+      const name = art.name || `Artifact ${idx + 1}`;
+      const size = art.resource?.properties?.artifactsize || art.resource?.properties?.size || '';
+      const sizeStr = size ? formatBytes(parseInt(size)) : '';
+      html += `<label class="artifact-item">
+        <input type="checkbox" class="artifact-checkbox" data-idx="${idx}" checked>
+        <div class="artifact-item-info">
+          <div class="artifact-item-name">${escapeHtml(name)}</div>
+          <div class="artifact-item-meta">${sizeStr ? `Size: ${sizeStr}` : 'Size unknown'}</div>
+        </div>
+        <span class="artifact-status artifact-status-pending" id="artifact-status-${idx}">Ready</span>
+      </label>`;
+    });
+    html += '</div>';
+
+    body.innerHTML = html;
+    if (footer) footer.style.display = 'flex';
+
+    // Download button handler
+    if (downloadBtn) {
+      downloadBtn.onclick = () => downloadArtifactsAndCreateRelease(buildId, buildNumber, branch, commit, artifacts);
+    }
+  } catch (err) {
+    body.innerHTML = `<p class="empty-state">Failed to load artifacts: ${escapeHtml(err.toString())}</p>`;
+    frontendLog('ERROR', 'BUILD: Failed to load artifacts', err.toString());
+  }
+}
+
+// Format bytes to human-readable string
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes)) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+// Download selected artifacts, scan them, and navigate to deploy page
+async function downloadArtifactsAndCreateRelease(buildId, buildNumber, branch, commit, artifacts) {
+  const modal = document.getElementById('build-artifacts-modal');
+  const downloadBtn = document.getElementById('build-artifacts-download-btn');
+  const cancelBtn = document.getElementById('build-artifacts-cancel-btn');
+
+  // Get selected artifact indices
+  const checkboxes = modal.querySelectorAll('.artifact-checkbox:checked');
+  const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.idx));
+
+  if (selectedIndices.length === 0) {
+    showToast('warning', 'Please select at least one artifact');
+    return;
+  }
+
+  // Disable buttons during download
+  if (downloadBtn) downloadBtn.disabled = true;
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  const stagingPaths = [];
+  let hasError = false;
+
+  for (const idx of selectedIndices) {
+    const art = artifacts[idx];
+    const statusEl = document.getElementById(`artifact-status-${idx}`);
+    const name = art.name || `Artifact ${idx}`;
+    const downloadUrl = art.resource?.downloadUrl;
+
+    if (!downloadUrl) {
+      if (statusEl) {
+        statusEl.textContent = 'No URL';
+        statusEl.className = 'artifact-status artifact-status-error';
+      }
+      continue;
+    }
+
+    // Update status: downloading
+    if (statusEl) {
+      statusEl.textContent = 'Downloading...';
+      statusEl.className = 'artifact-status artifact-status-downloading';
+    }
+
+    try {
+      const extractedPath = await invoke('azure_download_artifact', {
+        buildId,
+        buildNumber,
+        artifactName: name,
+        downloadUrl
+      });
+      stagingPaths.push(extractedPath);
+
+      if (statusEl) {
+        statusEl.textContent = 'Done';
+        statusEl.className = 'artifact-status artifact-status-done';
+      }
+      frontendLog('INFO', `BUILD_RELEASE: Artifact downloaded`, `Name: ${name}, Path: ${extractedPath}`);
+    } catch (err) {
+      hasError = true;
+      if (statusEl) {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'artifact-status artifact-status-error';
+      }
+      frontendLog('ERROR', `BUILD_RELEASE: Failed to download artifact`, `Name: ${name}, Error: ${err}`);
+    }
+  }
+
+  if (stagingPaths.length === 0) {
+    showToast('error', 'No artifacts were downloaded successfully');
+    if (downloadBtn) downloadBtn.disabled = false;
+    if (cancelBtn) cancelBtn.disabled = false;
+    return;
+  }
+
+  if (hasError) {
+    showToast('warning', `Some artifacts failed to download. Continuing with ${stagingPaths.length} artifact(s).`);
+  }
+
+  // Close the modal
+  modal.classList.remove('active');
+  if (downloadBtn) downloadBtn.disabled = false;
+  if (cancelBtn) cancelBtn.disabled = false;
+
+  // Scan downloaded artifacts and create release
+  await createReleaseFromStagingPaths(stagingPaths, buildId, buildNumber, branch, commit);
+}
+
+// Scan staging folders and navigate to deploy page with pre-filled data
+async function createReleaseFromStagingPaths(stagingPaths, buildId, buildNumber, branch, commit) {
+  if (!invoke) return;
+
+  showToast('info', 'Preparing downloaded packages...');
+  frontendLog('INFO', 'BUILD_RELEASE: Scanning staging folders', `Paths: ${stagingPaths.length}`);
+
+  // Consolidate all artifact files into a single flat folder (staging/{buildId}/all/)
+  // This copies loose files (APKs, EXEs, Linux installers) and zips companion subfolders
+  const stagingDir = stagingPaths.length > 0 ? stagingPaths[0].substring(0, stagingPaths[0].lastIndexOf('/')) : '';
+  if (!stagingDir) {
+    showToast('error', 'Could not determine staging directory');
+    return;
+  }
+
+  let consolidatedPath;
+  try {
+    consolidatedPath = await invoke('consolidate_staging', { stagingDir });
+    frontendLog('INFO', 'BUILD_RELEASE: Artifacts consolidated', `Output: ${consolidatedPath}`);
+  } catch (err) {
+    frontendLog('ERROR', 'BUILD_RELEASE: Failed to consolidate staging', `${err}`);
+    showToast('error', 'Failed to prepare packages for scanning');
+    return;
+  }
+
+  // Scan the consolidated folder once — exactly like user-selected folder flow
+  let allPackages = [];
+  let detectedVersion = null;
+
+  try {
+    const scanResult = await invoke('scan_folder', { folderPath: consolidatedPath });
+
+    if (scanResult.packages && scanResult.packages.length > 0) {
+      allPackages = scanResult.packages;
+    }
+
+    if (scanResult.detectedVersion) {
+      detectedVersion = scanResult.detectedVersion;
+    }
+
+    if (scanResult.companionWarnings && scanResult.companionWarnings.length > 0) {
+      for (const warning of scanResult.companionWarnings) {
+        showToast('warning', warning);
+      }
+    }
+  } catch (err) {
+    frontendLog('ERROR', 'BUILD_RELEASE: Failed to scan consolidated folder', `Path: ${consolidatedPath}, Error: ${err}`);
+  }
+
+  if (allPackages.length === 0) {
+    showToast('error', 'No packages found in the downloaded artifacts');
+    return;
+  }
+
+  frontendLog('INFO', 'BUILD_RELEASE: Packages detected', `Count: ${allPackages.length}, Version: ${detectedVersion || 'none'}`);
+
+  // Store source build metadata
+  _sourceBuild = {
+    id: buildId,
+    buildNumber: buildNumber || '',
+    branch: branch || '',
+    pipeline: _activePipeline || 'sta',
+    commit: commit || ''
+  };
+
+  // Set packages globally
+  packages = allPackages;
+  uploadedUrls = {};
+
+  // Navigate to deploy page in release mode
+  switchPage('deploy-new');
+
+  // Wait a tick for the page to initialize, then pre-fill fields
+  setTimeout(() => {
+    // Pre-fill version
+    if (detectedVersion) {
+      const versionInput = document.getElementById('deploy-version');
+      if (versionInput) versionInput.value = detectedVersion;
+    }
+
+    // Pre-fill date to today
+    const dateInput = document.getElementById('deploy-date');
+    if (dateInput) {
+      const today = new Date().toISOString().split('T')[0];
+      dateInput.value = today;
+    }
+
+    // Auto-detect release type from branch name
+    const typeSelect = document.getElementById('deploy-type');
+    if (typeSelect && branch) {
+      const branchLower = branch.toLowerCase();
+      if (branchLower.startsWith('release/') || branchLower.startsWith('hotfix/')) {
+        typeSelect.value = 'Production';
+      } else {
+        typeSelect.value = 'Development';
+      }
+    }
+
+    // Also auto-detect from package dev/prod flags
+    autoDetectReleaseType();
+
+    // Pre-fill release notes with build info
+    const notesInput = document.getElementById('deploy-notes');
+    if (notesInput) {
+      const parts = [`Built from Azure DevOps pipeline #${buildNumber || buildId}`];
+      if (branch) parts.push(`Branch: ${branch}`);
+      if (commit) parts.push(`Commit: ${commit}`);
+      notesInput.value = parts.join(' | ');
+    }
+
+    // Render packages and update UI
+    renderPackages();
+    updateSummary();
+    updateActionButtons();
+
+    showToast('success', `${allPackages.length} packages loaded from build #${buildNumber || buildId}`);
+    frontendLog('INFO', 'BUILD_RELEASE: Deploy page pre-filled from build artifacts', `Build: ${buildId}, Packages: ${allPackages.length}`);
+  }, 100);
 }

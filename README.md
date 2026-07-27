@@ -55,7 +55,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 **Import Release** allows importing existing `.spf` files or editing saved releases:
 
 | Feature | Description |
-|---------|-------------|
+| --------- | ------------- |
 | **SPF Import** | Drag-and-drop or file picker to import `.spf` files with automatic parsing |
 | **Edit Release** | Modify version, date, type, release notes, and packages of existing releases |
 | **Upload Parity** | Edit Release uploads use the same package processing pipeline as New Release, including special handling (online companions extraction, S920 extract-root flow, and APK zip rules) |
@@ -73,7 +73,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 **Build (Azure DevOps)** provides a unified, YAML-driven interface for running pipeline builds:
 
 | Feature | Description |
-|---------|-------------|
+| --------- | ------------- |
 | **Unified Build Page** | Single page for both STA and A2A pipelines, auto-detected from branch name |
 | **Dynamic Parameters** | Parameters, stages, and variables loaded from the pipeline YAML of the selected branch |
 | **Sync YAML** | Manual re-fetch of pipeline definition with loading feedback |
@@ -81,6 +81,8 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 | **Device Cards** | Android devices rendered as chip toggles with inline intent category selects |
 | **Interaction Rules** | Mutual exclusion and parent-child checkbox rules applied dynamically |
 | **View Parameters** | Modal showing active build parameters grouped with chips, tags, and device lists |
+| **Build-to-Release** | Download artifacts from completed builds, consolidate into a flat folder, and navigate to deploy page with pre-filled data |
+| **Artifact Selection** | Preview modal with checkboxes to select which artifacts to download before creating a release |
 
 **Additional Features** include releases management (view, manage, search, purge, and delete saved releases), release descriptions (optional subtitle for each release), HTML generation for landing pages, comprehensive settings management (including custom device platforms), data export/import (v2 with SPF portability) for backup and migration, and an 8-theme system (4 dark + 4 light themes with glassmorphism UI).
 
@@ -89,7 +91,7 @@ The SmartPosTEF Package Manager streamlines the process of uploading software pa
 The application automatically detects and categorizes packages based on file naming conventions:
 
 | Package Type | Prefix Pattern | Example |
-|--------------|----------------|---------|
+| -------------- | ---------------- | --------- |
 | STA Android Production | LP, AP | SmartPosTef-LP-DX4000-2.5.1.289844-release.apk |
 | STA Android Development | LD, AD | AditumTef-LD-P2-2.5.1.289844-debug.zip |
 | Windows Installer/Library | P, D | AditumTEF-installer-P-2.5.1.289844-x86-offline.exe |
@@ -112,7 +114,7 @@ Some packages require extraction before upload rather than direct file upload:
 **Windows Online Installer Companions** are ZIP files that accompany online installers. Their contents are extracted and the inner folder is uploaded:
 
 | File Name | Action | JFrog Destination |
-|-----------|--------|-------------------|
+| ----------- | -------- | ------------------- |
 | Linux_64-Gui-Installer.zip | Extract `x86_64/` folder and upload | `packages/{path}/x86_64/` |
 | Linux_i386-Installer.zip | Extract `i386/` folder and upload | `packages/{path}/i386/` |
 | x86.zip | Extract contents into `x86/` folder and upload | `packages/{path}/x86/` |
@@ -122,7 +124,7 @@ These companion files are automatically excluded from SPF export since they are 
 **S920 Unsigned Packages** require special extraction handling. The ZIP file (which may or may not contain an intermediate folder like `PAX_S920/`) is always extracted to a **flat folder** named after the ZIP file (without the `.zip` extension). Only files are placed in the destination folder; any intermediate directory structure inside the ZIP is stripped.
 
 | Scenario | ZIP Contents | Upload Result |
-|----------|-------------|---------------|
+| ---------- | ------------- | --------------- |
 | Production unsigned | `SmartPosTef-P-S920-2.5.1.138693.zip` | `packages/unsigned/pax/s920/SmartPosTef-P-S920-2.5.1.138693/{files}` |
 | Dev unsigned | `SmartPosTef-D-S920-2.5.1.138693.zip` | `packages/dev/pax/s920/SmartPosTef-D-S920-2.5.1.138693.zip` (direct upload) |
 | Production signed | `SmartPosTef-P-S920-2.5.1.138693_sign.zip` | `packages/pax/s920/SmartPosTef-P-S920-2.5.1.138693_sign.zip` (direct upload) |
@@ -247,7 +249,7 @@ The project includes parameterized build scripts for both Linux and Windows:
 ```
 
 | Option | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `-t, --target TARGET` | Build target: `deb`, `appimage`, `msi`, `nsis`, `all-linux`, `all-windows`, `all` (default: `all-linux`) |
 | `-p, --platform PLAT` | Cross-compile platform: `linux`, `windows` (default: `linux`) |
 | `-m, --mode MODE` | Build mode: `release`, `debug` (default: `release`) |
@@ -278,7 +280,7 @@ The project includes parameterized build scripts for both Linux and Windows:
 ```
 
 | Option | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `-Target <string>` | Build target: `msi`, `nsis`, `all-windows`, `deb`, `appimage`, `all-linux`, `all` (default: `all-windows`) |
 | `-Mode <string>` | Build mode: `release`, `debug` (default: `release`) |
 | `-Clean` | Clean before build |
@@ -373,7 +375,7 @@ When building directly on Windows, both MSI and NSIS targets are available:
 ### Build Commands Summary
 
 | Goal | Command |
-|------|---------|
+| ------ | --------- |
 | Dev mode (Linux) | `cargo tauri dev` |
 | Build Linux (executable only) | `cargo tauri build --no-bundle` |
 | Build Linux (deb + appimage) | `./build.sh` or `cargo tauri build` |
@@ -385,7 +387,7 @@ When building directly on Windows, both MSI and NSIS targets are available:
 ### Troubleshooting
 
 | Error | Solution |
-|-------|---------|
+| ------- | --------- |
 | `webkit2gtk-4.1 not found` | `sudo apt install libwebkit2gtk-4.1-dev` |
 | `failed to run custom build command for openssl-sys` | `sudo apt install libssl-dev pkg-config` |
 | `linker 'cc' not found` | `sudo apt install build-essential` |
@@ -436,7 +438,7 @@ To add the AppImage to your application launcher (KDE Plasma, GNOME, XFCE, etc.)
 This performs XDG-compliant integration (no sudo required):
 
 | What | Location |
-|------|----------|
+| ------ | ---------- |
 | Binary | `~/.local/bin/smartpostef-package-manager` |
 | Icons (32, 128, 256px) | `~/.local/share/icons/hicolor/{size}/apps/` |
 | Desktop entry | `~/.local/share/applications/smartpostef-package-manager.desktop` |
@@ -480,7 +482,7 @@ smartpostef-package-manager-tauri/
 The migration from Electron to Tauri resulted in significant improvements:
 
 | Metric | Electron | Tauri | Improvement |
-|--------|----------|-------|-------------|
+| -------- | ---------- | ------- | ------------- |
 | Bundle Size | ~170 MB | ~18 MB | 89% smaller |
 | Memory Usage | ~200 MB | ~50 MB | 75% less |
 | Startup Time | Slow | Fast | Significant |
@@ -493,7 +495,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 ### Recent Versions
 
 | Version | Date | Highlights |
-|---------|------|------------|
+| --------- | ------ | ------------ |
 | 3.8.1 | 2026-07-24 | Linux bundle targets (`deb`, `appimage`), build scripts (`build.sh`, `build.ps1`), AppImage desktop integration (`-I` flag) |
 | 3.8.0 | 2026-07-03 | Unified YAML-driven Build page, dynamic pipeline parameters from Azure DevOps YAML, auto-detect STA/A2A from branch |
 | 3.2.2 | 2026-04-09 | Purge button (delete all packages from JFrog), release description field, search icon fix, A2A client extraction bugfix |
