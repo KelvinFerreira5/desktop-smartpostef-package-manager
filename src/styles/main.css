@@ -6490,6 +6490,122 @@ select[data-customized] {
   color: var(--primary);
 }
 
+.build-history-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.build-history-card-header h3 {
+  margin: 0;
+}
+
+.build-history-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.build-history-refresh-btn:hover {
+  background: var(--accent-bg);
+  color: var(--primary);
+  border-color: var(--accent-border);
+}
+
+.build-history-refresh-btn.spinning {
+  animation: spin-refresh 0.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin-refresh {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.build-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.build-history-page-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--accent-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--accent-border);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.build-history-page-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.build-history-page-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.build-history-page-indicator {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  min-width: 3rem;
+  text-align: center;
+}
+
+.build-history-cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+  flex-shrink: 0;
+}
+
+.build-history-cancel-btn:hover {
+  background: #ef4444;
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.build-history-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .build-android-section .build-options-grid {
   margin-top: 0.75rem;
 }

@@ -363,6 +363,14 @@
                 </svg>
                 <span>Add Manually</span>
               </button>
+              <button class="deploy-mode-btn" data-mode="build">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>From Build</span>
+              </button>
             </div>
 
             <!-- Folder Scan Mode -->
@@ -407,6 +415,23 @@
               <p id="manual-version-hint" class="help-text"
                 style="margin-top: 0.5rem; color: var(--warning); display: none;">Enter the Main Version above to enable
                 adding packages</p>
+            </div>
+
+            <!-- From Build Mode -->
+            <div id="deploy-mode-build" class="deploy-mode-content">
+              <div class="action-bar" style="margin-top: 0; margin-bottom: 1rem; gap: 0.5rem;">
+                <input type="text" id="deploy-build-query" class="input"
+                  placeholder="Build ID or number (e.g. 20260727.1)" style="flex: 1;" />
+                <button id="btn-fetch-build-artifacts" class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Fetch Artifacts
+                </button>
+              </div>
+              <p id="deploy-build-status" class="help-text" style="margin-bottom: 1rem; display: none;"></p>
             </div>
 
             <div id="packages-list" class="packages-list">
@@ -1463,9 +1488,31 @@
 
           <!-- Recent Builds -->
           <div class="card build-history-card">
-            <h3>Recent Builds</h3>
+            <div class="build-history-card-header">
+              <h3>Recent Builds</h3>
+              <button id="build-history-refresh-btn" class="build-history-refresh-btn" title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16">
+                  <polyline points="23 4 23 10 17 10" />
+                  <polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                </svg>
+              </button>
+            </div>
             <div id="build-recent-builds" class="build-history-list">
               <p class="empty-state">No recent builds</p>
+            </div>
+            <div id="build-history-pagination" class="build-history-pagination" style="display: none;">
+              <button id="build-history-prev" class="build-history-page-btn" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <span id="build-history-page-indicator" class="build-history-page-indicator">1 / 1</span>
+              <button id="build-history-next" class="build-history-page-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>

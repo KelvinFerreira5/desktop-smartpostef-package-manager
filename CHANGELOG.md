@@ -5,13 +5,23 @@ All notable changes to SmartPosTEF Package Manager will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.8.3] - 2026-07-27
+## [3.8.3] - 2026-07-29
 
 ### Added
 
 - **Build-to-Release integration**: After a pipeline build completes, a "Create Release" button appears on the build status card and in the recent builds history. Clicking it opens an artifact selection modal where you can pick which artifacts to download. Once downloaded, the app consolidates all files into a flat folder (mirroring the manual folder structure), scans them, and navigates to the deploy page with pre-filled version, date, and package list — ready for one-click upload to JFrog.
 
 - **Artifact preview modal**: Displays all available artifacts for a completed build with checkboxes, file sizes, and a download button. Supports selecting/deselecting individual artifacts before download.
+
+- **Deploy "From Build" mode**: Third deploy mode button (alongside Scan Folder and Add Manually) that lets you enter a build ID or build number (e.g. `20260727.1`), look it up in Azure DevOps, and open the same artifact selection modal used by the Build page — enabling release creation from any past build directly from the deploy page. Shows inline lookup status feedback (found / not found / error) and respects the active pipeline (STA/A2A) for the lookup.
+
+- **`azure_lookup_build` Rust command**: Looks up a build by numeric ID or build number string. Queries containing a dot are treated as build numbers (Builds API filtered by `buildNumber`, first match returned); otherwise the numeric ID endpoint is queried directly. Registered in the Tauri command handler alongside the other Azure commands.
+
+- **Recent Builds pagination**: The Recent Builds card now pages through the full build history (5 per page) with Previous/Next buttons and a page indicator, powered by Azure DevOps continuation tokens. A token stack (`_recentBuildsTokens`) tracks visited pages, enabling backward navigation; pagination controls are hidden when there is only one page.
+
+- **Recent Builds refresh button**: Circular refresh button in the Recent Builds card header that resets pagination to page 1 and reloads the list, with a spinning animation while loading.
+
+- **Cancel build from history**: Running or queued builds (`inProgress`/`notStarted`) in the Recent Builds list now show a red cancel (✕) button that calls `azure_cancel_build`, shows a toast notification, and auto-refreshes the list after 2 seconds.
 
 - **`consolidate_staging` Rust command**: After downloading Azure artifacts (which arrive in separate subfolders), consolidates all package files into a single flat directory. Handles companion folders specially — copies loose files (`.exe`, Linux installers) and zips inner subfolders with the correct internal zip structure expected by `extract_and_upload_to_jfrog`.
 
@@ -20,6 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Companion zip correct structure**: Companion zips are created with the proper internal paths: `x86.zip` → `x86/<content>`, `Linux_64-Gui-Installer.zip` → `Linux_64-Gui-Installer/x86_64/<content>`, `Linux_i386-Installer.zip` → `Linux_i386-Installer/i386/<content>`.
 
 - **Staging cleanup**: After finalizing a release or generating an SPF file, the staging folder is automatically cleaned up.
+
+### Changed
+
+- **`azure_get_recent_builds` supports continuation tokens**: The command now accepts an optional `continuation_token` parameter, appends it to the Azure Builds API query, reads the `x-ms-continuationtoken` response header before consuming the body, and returns it in the JSON payload as `continuationToken` for frontend pagination.
+
+- **Deploy mode switching simplified**: Mode content visibility now uses `classList.toggle` per mode (`folder`/`manual`/`build`) instead of if/else branches, making it trivial to add new deploy modes.
+
+- **README: Windows build prerequisites**: New "Prerequisites (Windows)" section covering Microsoft C++ Build Tools (MSVC), WebView2 Runtime, Rust (MSVC toolchain), Node.js LTS, Tauri CLI, and the VBSCRIPT optional feature required by the MSI target (with status check via `Get-WindowsCapability` and install paths via Settings GUI, PowerShell, and DISM) — including `winget` alternatives and environment verification via `cargo tauri info`. Existing Linux instructions regrouped under "Prerequisites (Linux)"; the "Build for Windows (Native)" section now links to the new prerequisites.
+
+- **CSS additions**: New styles for `.build-history-card-header`, `.build-history-refresh-btn` (with `spin-refresh` animation), `.build-history-pagination`, `.build-history-page-btn`, `.build-history-page-indicator`, and `.build-history-cancel-btn` (red danger styling with hover scale effect).
+
+- **Version bumped**: 3.8.2 → 3.8.3 across `package.json`, `Cargo.toml`, `Cargo.lock`, and `tauri.conf.json`.
 
 ## [3.8.2] - 2026-07-24
 

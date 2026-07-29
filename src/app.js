@@ -845,7 +845,7 @@ function initDeployUploadPage() {
 function initDeployShared() {
   console.log('Initializing deploy page...');
 
-  // Deploy mode buttons (Scan Folder / Add Manually)
+  // Deploy mode buttons (Scan Folder / Add Manually / From Build)
   const deployModeBtns = document.querySelectorAll('.deploy-mode-btn');
   deployModeBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -857,16 +857,53 @@ function initDeployShared() {
 
       const folderContent = document.getElementById('deploy-mode-folder');
       const manualContent = document.getElementById('deploy-mode-manual');
+      const buildContent = document.getElementById('deploy-mode-build');
 
-      if (mode === 'folder') {
-        if (folderContent) folderContent.classList.add('active');
-        if (manualContent) manualContent.classList.remove('active');
-      } else {
-        if (folderContent) folderContent.classList.remove('active');
-        if (manualContent) manualContent.classList.add('active');
-      }
+      if (folderContent) folderContent.classList.toggle('active', mode === 'folder');
+      if (manualContent) manualContent.classList.toggle('active', mode === 'manual');
+      if (buildContent) buildContent.classList.toggle('active', mode === 'build');
     });
   });
+
+  // From Build: fetch artifacts button
+  const btnFetchBuild = document.getElementById('btn-fetch-build-artifacts');
+  if (btnFetchBuild) {
+    btnFetchBuild.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const queryInput = document.getElementById('deploy-build-query');
+      const statusEl = document.getElementById('deploy-build-status');
+      const query = (queryInput ? queryInput.value.trim() : '');
+
+      if (!query) {
+        if (statusEl) { statusEl.textContent = 'Please enter a build ID or number'; statusEl.style.display = 'block'; statusEl.style.color = 'var(--warning)'; }
+        return;
+      }
+
+      if (statusEl) { statusEl.textContent = 'Looking up build...'; statusEl.style.display = 'block'; statusEl.style.color = 'var(--text-secondary)'; }
+      btnFetchBuild.disabled = true;
+
+      try {
+        const pipelineId = _activePipeline === 'a2a' ? (settings?.azure_devops?.a2a_pipeline_id || 0) : (settings?.azure_devops?.sta_pipeline_id || 5);
+        const build = await invoke('azure_lookup_build', { query, pipelineId });
+
+        const buildId = build.id;
+        const buildNumber = build.buildNumber || '';
+        const branch = (build.sourceBranch || '').replace('refs/heads/', '');
+        const commit = build.sourceVersion || '';
+
+        if (statusEl) { statusEl.textContent = `Found: #${buildNumber} (${branch})`; statusEl.style.color = 'var(--success)'; }
+        frontendLog('INFO', 'DEPLOY: Build lookup success', `ID: ${buildId}, Number: ${buildNumber}, Branch: ${branch}`);
+
+        // Open the same artifact selection modal used by Build page
+        openArtifactsModal(buildId, buildNumber, branch, commit);
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = `Error: ${err}`; statusEl.style.color = 'var(--error)'; }
+        frontendLog('ERROR', 'DEPLOY: Build lookup failed', `Query: ${query}, Error: ${err}`);
+      } finally {
+        btnFetchBuild.disabled = false;
+      }
+    });
+  }
 
   // Select folder button
   const btnSelectFolder = document.getElementById('btn-select-folder');
@@ -6709,6 +6746,8 @@ let _lastSyncedBranch = '';
 let _buildParamsCache = {}; // Global cache: runId → params (survives loadRecentBuilds re-calls)
 let _buildArtifactsCache = {}; // Global cache: buildId → artifacts array
 let _sourceBuild = null; // Stores build metadata when creating release from artifacts
+let _recentBuildsCurrentPage = 0;
+let _recentBuildsTokens = [null]; // Token stack: index=page, value=continuationToken to fetch that page (page 0 = null)
 
 async function fetchBranches(repository, forceRefresh = false) {
   if (_cachedBranches[repository] && !forceRefresh) return _cachedBranches[repository];
@@ -7179,6 +7218,7 @@ function initBuildPage() {
   }
 
   loadRecentBuilds();
+  initRecentBuildsControls();
   checkInProgressBuild();
 
   // If branch is already set, sync YAML
@@ -7836,17 +7876,22 @@ function startPolling(runId) {
 
 // --- Recent builds ---
 
-async function loadRecentBuilds() {
+async function loadRecentBuilds(page) {
+  if (page !== undefined) _recentBuildsCurrentPage = page;
   if (!invoke) return;
   const container = document.getElementById('build-recent-builds');
   if (!container) return;
 
   const config = getPipelineConfig(_activePipeline);
   try {
-    const data = await invoke('azure_get_recent_builds', { top: 5, pipelineId: config.pipelineId });
+    const token = _recentBuildsTokens[_recentBuildsCurrentPage] || null;
+    const data = await invoke('azure_get_recent_builds', { top: 5, continuationToken: token, pipelineId: config.pipelineId });
+    const nextToken = data.continuationToken || null;
+    if (nextToken) _recentBuildsTokens[_recentBuildsCurrentPage + 1] = nextToken;
     const runs = (data.value || []).slice(0, 5);
     if (runs.length === 0) {
-      container.innerHTML = '<p class="empty-state">No recent builds</p>';
+      container.innerHTML = '<p class="empty-state">No more builds</p>';
+      updateRecentBuildsPagination(0, null);
       return;
     }
     const paramsMap = Object.assign({}, _buildParamsCache);
@@ -7929,6 +7974,9 @@ async function loadRecentBuilds() {
           ${status === 'completed' ? `<button class="build-history-release-btn" data-build-id="${runId}" data-build-number="${buildNumber}" data-branch="${branch}" data-commit="${sourceVersion}" title="Create Release from Artifacts">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
           </button>` : ''}
+          ${(status === 'inProgress' || status === 'notStarted') ? `<button class="build-history-cancel-btn" data-build-id="${runId}" title="Cancel Build">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>` : ''}
           <a href="${webUrl}" target="_blank" class="build-history-view-btn" title="View in Azure DevOps">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
@@ -7989,8 +8037,83 @@ async function loadRecentBuilds() {
         openArtifactsModal(buildId, buildNumber, branch, commit);
       });
     });
+
+    // Bind click events for cancel buttons on running/queued builds
+    container.querySelectorAll('.build-history-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const buildId = btn.getAttribute('data-build-id');
+        if (!buildId) return;
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        try {
+          await invoke('azure_cancel_build', { buildId: parseInt(buildId) });
+          frontendLog('INFO', 'BUILD: Cancel requested from history', `Build ID: ${buildId}`);
+          showToast('info', `Build #${buildId} cancel requested`);
+          setTimeout(() => loadRecentBuilds(), 2000);
+        } catch (err) {
+          frontendLog('ERROR', 'BUILD: Failed to cancel build from history', err.toString());
+          showToast('error', `Failed to cancel: ${err}`);
+          btn.disabled = false;
+          btn.style.opacity = '';
+        }
+      });
+    });
+
+    // Update pagination controls
+    updateRecentBuildsPagination(runs.length, nextToken);
   } catch (err) {
     container.innerHTML = `<p class="empty-state">Failed to load: ${err}</p>`;
+  }
+}
+
+function updateRecentBuildsPagination(resultCount, continuationToken) {
+  const pagination = document.getElementById('build-history-pagination');
+  const prevBtn = document.getElementById('build-history-prev');
+  const nextBtn = document.getElementById('build-history-next');
+  const indicator = document.getElementById('build-history-page-indicator');
+  if (!pagination) return;
+
+  if (_recentBuildsCurrentPage === 0 && !continuationToken) {
+    pagination.style.display = 'none';
+    return;
+  }
+
+  pagination.style.display = 'flex';
+  if (prevBtn) prevBtn.disabled = _recentBuildsCurrentPage === 0;
+  if (nextBtn) nextBtn.disabled = !continuationToken;
+  if (indicator) indicator.textContent = `Page ${_recentBuildsCurrentPage + 1}`;
+}
+
+let _recentBuildsControlsInitialized = false;
+function initRecentBuildsControls() {
+  if (_recentBuildsControlsInitialized) return;
+  _recentBuildsControlsInitialized = true;
+  const refreshBtn = document.getElementById('build-history-refresh-btn');
+  const prevBtn = document.getElementById('build-history-prev');
+  const nextBtn = document.getElementById('build-history-next');
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      _recentBuildsCurrentPage = 0;
+      _recentBuildsTokens = [null];
+      refreshBtn.classList.add('spinning');
+      await loadRecentBuilds(0);
+      refreshBtn.classList.remove('spinning');
+    });
+  }
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (_recentBuildsCurrentPage > 0) {
+        loadRecentBuilds(_recentBuildsCurrentPage - 1);
+      }
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (_recentBuildsTokens[_recentBuildsCurrentPage + 1]) {
+        loadRecentBuilds(_recentBuildsCurrentPage + 1);
+      }
+    });
   }
 }
 

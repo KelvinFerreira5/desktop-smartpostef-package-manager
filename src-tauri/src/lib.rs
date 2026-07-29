@@ -5666,9 +5666,12 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
     }
 
     #[tauri::command]
-    pub async fn azure_get_recent_builds(top: Option<u32>, pipeline_id: u32) -> Result<serde_json::Value, String> {
+    pub async fn azure_get_recent_builds(top: Option<u32>, continuation_token: Option<String>, pipeline_id: u32) -> Result<serde_json::Value, String> {
         let count = top.unwrap_or(10);
-        log_to_file("DEBUG", "AZURE: Getting recent builds", Some(&format!("Top: {}, Pipeline: {}", count, pipeline_id)));
+        log_to_file("DEBUG", "AZURE: Getting recent builds", Some(&format!(
+            "Top: {}, ContinuationToken: {}, Pipeline: {}",
+            count, continuation_token.as_deref().unwrap_or("none"), pipeline_id
+        )));
         let settings = load_settings();
         let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
             log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
@@ -5679,13 +5682,16 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
         }
 
         let pid = if pipeline_id > 0 { pipeline_id } else { settings.azure_devops.sta_pipeline_id };
-        let url = format!(
+        let mut url = format!(
             "{}/{}/_apis/build/builds?definitions={}&$top={}&queryOrder=queueTimeDescending&api-version=7.1",
             settings.azure_devops.org_url.trim_end_matches('/'),
             settings.azure_devops.project,
             pid,
             count
         );
+        if let Some(ref token) = continuation_token {
+            url.push_str(&format!("&continuationToken={}", token));
+        }
 
         let auth = BASE64.encode(format!(":{}", pat).as_bytes());
         let client = reqwest::Client::new();
@@ -5705,11 +5711,87 @@ function copyUrl(btn,url){{navigator.clipboard.writeText(url).then(function(){{b
             return Err(format!("Azure DevOps API error ({}): {}", status, body));
         }
 
+        // Read continuation token from response header before consuming body
+        let next_token = resp.headers()
+            .get("x-ms-continuationtoken")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+
         let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
         log_to_file("DEBUG", "AZURE: Recent builds fetched", Some(&format!(
-            "Count: {}", json.get("count").and_then(|v| v.as_u64()).unwrap_or(0)
+            "Count: {}, HasNextToken: {}",
+            json.get("count").and_then(|v| v.as_u64()).unwrap_or(0),
+            next_token.is_some()
         )));
-        Ok(json)
+
+        // Wrap response with continuation token
+        let mut result = json;
+        result["continuationToken"] = match next_token {
+            Some(t) => serde_json::Value::String(t),
+            None => serde_json::Value::Null,
+        };
+        Ok(result)
+    }
+
+    /// Lookup a build by numeric ID or build number string.
+    /// If query contains a dot, it's treated as a build number; otherwise as a numeric ID.
+    #[tauri::command]
+    pub async fn azure_lookup_build(query: String, pipeline_id: u32) -> Result<serde_json::Value, String> {
+        log_to_file("INFO", "AZURE: Looking up build", Some(&format!("Query: {}, Pipeline: {}", query, pipeline_id)));
+        let settings = load_settings();
+        let pat = decrypt_api_key(&settings.azure_devops.pat).map_err(|e| {
+            log_to_file("ERROR", "AZURE: Failed to decrypt PAT", Some(&e));
+            format!("Failed to decrypt PAT: {}", e)
+        })?;
+        if pat.is_empty() {
+            return Err("Azure DevOps PAT not configured.".to_string());
+        }
+
+        let pid = if pipeline_id > 0 { pipeline_id } else { settings.azure_devops.sta_pipeline_id };
+        let base = format!("{}/{}", settings.azure_devops.org_url.trim_end_matches('/'), settings.azure_devops.project);
+
+        let url = if query.contains('.') {
+            // Query by build number
+            format!("{}/_apis/build/builds?definitions={}&buildNumber={}&api-version=7.1", base, pid, query)
+        } else {
+            // Query by numeric ID directly
+            format!("{}/_apis/build/builds/{}?api-version=7.1", base, query)
+        };
+
+        let auth = BASE64.encode(format!(":{}", pat).as_bytes());
+        let client = reqwest::Client::new();
+        let resp = client.get(&url)
+            .header("Authorization", format!("Basic {}", auth))
+            .send()
+            .await
+            .map_err(|e| {
+                log_to_file("ERROR", "AZURE: Failed to lookup build", Some(&e.to_string()));
+                format!("HTTP request failed: {}", e)
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            log_to_file("ERROR", "AZURE: Build lookup returned error", Some(&format!("Status: {}, Body: {}", status, body)));
+            return Err(format!("Build not found ({})", status));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+
+        // If queried by build number, the response is a list — extract the first result
+        if query.contains('.') {
+            let builds = json.get("value").and_then(|v| v.as_array());
+            if let Some(arr) = builds {
+                if arr.is_empty() {
+                    return Err(format!("No build found with number '{}'", query));
+                }
+                Ok(arr[0].clone())
+            } else {
+                Err("Unexpected response format".to_string())
+            }
+        } else {
+            Ok(json)
+        }
     }
 
     #[tauri::command]
@@ -6021,6 +6103,7 @@ pub fn run() {
             commands::azure_run_pipeline,
             commands::azure_get_build_status,
             commands::azure_get_recent_builds,
+            commands::azure_lookup_build,
             commands::azure_cancel_build,
             commands::azure_get_build_artifacts,
             commands::azure_download_artifact,

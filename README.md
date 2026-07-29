@@ -1,4 +1,4 @@
-# SmartPosTEF Package Manager v3.8.1 (Tauri Edition)
+# SmartPosTEF Package Manager v3.8.3 (Tauri Edition)
 
 A lightweight desktop application for managing and deploying SmartPosTEF packages to JFrog Artifactory. Built with **Tauri** for dramatically smaller bundle size (~18MB vs ~170MB with Electron) and improved performance.
 
@@ -11,6 +11,8 @@ A lightweight desktop application for managing and deploying SmartPosTEF package
   - [Special Upload Handling](#special-upload-handling)
   - [Client Mapping](#client-mapping)
 - [Prerequisites](#prerequisites)
+  - [Prerequisites (Linux)](#prerequisites-linux)
+  - [Prerequisites (Windows)](#prerequisites-windows)
 - [Installation](#installation)
 - [Development](#development)
 - [Building](#building)
@@ -169,7 +171,9 @@ The layout of each mapping row is: **[Client Name] [→] [Client Number] [✕]**
 
 ## Prerequisites
 
-### System Dependencies (Ubuntu 22.04 / Debian)
+### Prerequisites (Linux)
+
+#### System Dependencies (Ubuntu 22.04 / Debian)
 
 ```bash
 sudo apt update
@@ -185,7 +189,7 @@ sudo apt install -y \
   librsvg2-dev
 ```
 
-### Rust
+#### Rust
 
 ```bash
 curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
@@ -199,7 +203,7 @@ rustc --version
 cargo --version
 ```
 
-### Node.js (LTS)
+#### Node.js (LTS)
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -213,11 +217,100 @@ node -v
 npm -v
 ```
 
-### Tauri CLI
+#### Tauri CLI
 
 ```bash
 cargo install tauri-cli --version "^2"
 ```
+
+### Prerequisites (Windows)
+
+Para buildar nativamente no Windows (targets `msi` e `nsis`), instale as dependências abaixo. Recomenda-se Windows 10 (1803+) ou Windows 11.
+
+| Dependência | Obrigatória | Finalidade |
+| ------------- | ------------- | ------------ |
+| Microsoft C++ Build Tools (MSVC) | Sim | Compilar o backend Rust (toolchain MSVC) |
+| Microsoft Edge WebView2 Runtime | Sim (já incluso no Win10 1803+ / Win11) | Renderizar a interface da aplicação |
+| Rust (rustup) | Sim | Toolchain de compilação do Tauri |
+| Node.js LTS | Sim | Dependências do frontend (`npm install`) |
+| Tauri CLI v2 | Sim | Comandos `cargo tauri dev` / `cargo tauri build` |
+| VBSCRIPT (recurso opcional do Windows) | Somente para target `msi` | Requerido pelo WiX (`light.exe`) |
+
+#### 1. Microsoft C++ Build Tools (MSVC)
+
+Baixe o instalador do [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) e, durante a instalação, marque a workload **"Desktop development with C++"** (inclui o compilador MSVC e o Windows SDK).
+
+Alternativamente, via `winget`:
+
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+#### 2. Microsoft Edge WebView2
+
+> O WebView2 já vem instalado no Windows 10 (a partir da versão 1803) e no Windows 11 — nesses casos, pule esta etapa.
+
+Se necessário, baixe o **Evergreen Bootstrapper** na [página de download do WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/), ou instale via `winget`:
+
+```powershell
+winget install Microsoft.EdgeWebView2Runtime
+```
+
+#### 3. Rust (toolchain MSVC)
+
+Baixe e execute o [rustup-init.exe](https://www.rust-lang.org/tools/install) — no Windows, o toolchain padrão já é o `x86_64-pc-windows-msvc`. Ou instale via `winget`:
+
+```powershell
+winget install Rustlang.Rustup
+```
+
+Reinicie o terminal e verifique a instalação:
+
+```powershell
+rustc --version
+cargo --version
+```
+
+#### 4. Node.js (LTS)
+
+Baixe o instalador LTS no [site do Node.js](https://nodejs.org), ou instale via `winget`:
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+Verifique:
+
+```powershell
+node -v
+npm -v
+```
+
+#### 5. Tauri CLI
+
+```powershell
+cargo install tauri-cli --version "^2"
+```
+
+#### 6. VBSCRIPT (apenas para instaladores MSI)
+
+O target `msi` (WiX) requer o recurso opcional **VBSCRIPT** do Windows habilitado. Ele vem habilitado por padrão na maioria das instalações, mas pode ter sido desativado. Se ocorrer o erro `failed to run light.exe` ao buildar MSI:
+
+1. Abra **Configurações** → **Aplicativos** → **Recursos opcionais** → **Mais recursos do Windows**
+2. Localize **VBSCRIPT** na lista e garanta que esteja marcado
+3. Clique em **Avançar** e reinicie o computador se solicitado
+
+> O target `nsis` não depende do VBSCRIPT. A Tauri CLI baixa automaticamente as ferramentas WiX e NSIS na primeira build — não é necessário instalá-las manualmente.
+
+#### Verificação do ambiente
+
+Após instalar tudo, confirme que o ambiente está pronto:
+
+```powershell
+cargo tauri info
+```
+
+A saída deve indicar o WebView2 e o Visual Studio Build Tools detectados. Em seguida, siga para [Installation](#installation) e [Build for Windows (Native)](#build-for-windows-native).
 
 ## Installation
 
@@ -363,6 +456,8 @@ src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
 ```
 
 ### Build for Windows (Native)
+
+> Requires the dependencies listed in [Prerequisites (Windows)](#prerequisites-windows).
 
 When building directly on Windows, both MSI and NSIS targets are available:
 
